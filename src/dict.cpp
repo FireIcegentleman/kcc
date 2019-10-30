@@ -51,6 +51,19 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"_Noreturn", Tag::kNoreturn});
   keywords_.insert({"_Static_assert", Tag::kStaticAssert});
   keywords_.insert({"_Thread_local", Tag::kThreadLocal});
+
+  keywords_.insert({"__alignof__", Tag::kAlignof});
+  keywords_.insert({"__const__", Tag::kConst});
+  keywords_.insert({"__inline__", Tag::kInline});
+  keywords_.insert({"__restrict", Tag::kRestrict});
+  keywords_.insert({"__restrict__", Tag::kRestrict});
+  keywords_.insert({"__signed__", Tag::kSigned});
+  keywords_.insert({"__volatile__", Tag::kVolatile});
+
+  keywords_.insert({"asm", Tag::kAsm});
+  keywords_.insert({"__asm__", Tag::kAsm});
+  keywords_.insert({"__asm", Tag::kAsm});
+  keywords_.insert({"__attribute__", Tag::kAttribute});
 }
 
 Tag KeywordsDictionary::Find(const std::string& name) const {

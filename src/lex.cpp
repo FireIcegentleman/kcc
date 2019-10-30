@@ -44,11 +44,10 @@ std::vector<Token> Scanner::Tokenize() {
 
   while (true) {
     auto token{Scan()};
+    token_sequence.push_back(token);
 
     if (token.TagIs(Tag::kEof)) {
       break;
-    } else {
-      token_sequence.push_back(token);
     }
   }
 
@@ -236,6 +235,7 @@ Token Scanner::Scan() {
       SkipComment();
       return Scan();
     case '\0':
+      buffer_.clear();
       return MakeToken(Tag::kEof);
     default: {
       return MakeToken(Tag::kInvalid);

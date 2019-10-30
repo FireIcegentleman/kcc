@@ -17,7 +17,7 @@ class Preprocessor {
   std::string Run(const std::string &input_file);
 
  private:
-  std::string cmd_{"gcc -E -std=c17 "};
+  std::string cmd_{"gcc -E -std=c17 -Wall -Wextra -Wpedantic -Werror "};
 };
 
 }  // namespace kcc

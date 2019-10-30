@@ -20,6 +20,12 @@ struct SourceLocation {
   std::string::size_type line_begin{};
   std::int32_t row{1};
   std::int32_t column{1};
+
+  SourceLocation NextColumn() const {
+    auto copy{*this};
+    ++copy.column;
+    return copy;
+  }
 };
 
 class TokenTag : public QObject {
@@ -70,6 +76,9 @@ class TokenTag : public QObject {
     kNoreturn,      // C11
     kStaticAssert,  // C11
     kThreadLocal,   // C11
+
+    kAsm,
+    kAttribute,
 
     kIdentifier,
 
