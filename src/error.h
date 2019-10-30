@@ -5,12 +5,12 @@
 #ifndef KCC_SRC_ERROR_H_
 #define KCC_SRC_ERROR_H_
 
+#include <fmt/color.h>
+#include <fmt/core.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
-
-#include <fmt/color.h>
-#include <fmt/core.h>
 
 #include "token.h"
 

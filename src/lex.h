@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "dict.h"
 #include "token.h"
 
 namespace kcc {
@@ -50,6 +51,8 @@ class Scanner {
 
   std::string::size_type curr_index_{};
   std::string buffer_;
+
+  KeywordsDictionary keywords_;
 };
 
 }  // namespace kcc

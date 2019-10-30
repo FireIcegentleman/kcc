@@ -23,7 +23,12 @@ void Token::SetSourceLocation(const SourceLocation& location) {
 }
 
 std::string Token::ToString() const {
-  return fmt::format("{:<30}str: {:<30}", kcc::ToString(tag_), str_);
+  std::string loc("<" + location_.file_name + ":" +
+                  std::to_string(location_.row) + ":" +
+                  std::to_string(location_.column) + ">");
+
+  return fmt::format("{:<25}str: {:<25}loc: {:<25}", kcc::ToString(tag_), str_,
+                     loc);
 }
 
 }  // namespace kcc

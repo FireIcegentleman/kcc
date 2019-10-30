@@ -1,12 +1,14 @@
-Identifier                    str: int                           
-Identifier                    str: main                          
-LeftParen                     str: (                             
-Identifier                    str: void                          
-RightParen                    str: )                             
-LeftCurly                     str: {                             
-Identifier                    str: printf                        
-LeftParen                     str: (                             
-StringLiteral                 str: "fuck you"                    
-RightParen                    str: )                             
-Semicolon                     str: ;                             
-RightCurly                    str: }                             
+Identifier               str: printf                   loc: <test.c:1:1>             
+LeftParen                str: (                        loc: <test.c:1:7>             
+StringLiteral            str: "15.0     = %a\n"        loc: <test.c:1:8>             
+Comma                    str: ,                        loc: <test.c:1:25>            
+FloatingConstant         str: 15.0                     loc: <test.c:1:27>            
+RightParen               str: )                        loc: <test.c:1:31>            
+Semicolon                str: ;                        loc: <test.c:1:32>            
+Identifier               str: printf                   loc: <test.c:2:1>             
+LeftParen                str: (                        loc: <test.c:2:7>             
+StringLiteral            str: "0x1.ep+3 = %f\n"        loc: <test.c:2:8>             
+Comma                    str: ,                        loc: <test.c:2:25>            
+FloatingConstant         str: 0x1.ep+3                 loc: <test.c:2:27>            
+RightParen               str: )                        loc: <test.c:2:35>            
+Semicolon                str: ;                        loc: <test.c:2:36>            

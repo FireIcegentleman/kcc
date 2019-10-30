@@ -5,14 +5,14 @@
 #ifndef KCC_SRC_TOKEN_H_
 #define KCC_SRC_TOKEN_H_
 
+#include <QMetaEnum>
+#include <QObject>
 #include <cstdint>
 #include <string>
 #include <unordered_set>
 
-#include <QMetaEnum>
-#include <QObject>
-
 namespace kcc {
+
 struct SourceLocation {
   std::string file_name;
   const char *line_content;
@@ -83,57 +83,56 @@ class TokenTag : public QObject {
     kRightSquare,  // ]
     kLeftParen,    // (
     kRightParen,   // )
-    kLeftCurly,    // {
-    kRightCurly,   // }
-    kDot,          // .
+    kLeftBrace,    // {
+    kRightBrace,   // }
+    kPeriod,       // .
     kArrow,        // ->
 
-    kInc,       // ++
-    kDec,       // --
-    kAnd,       // &
-    kMul,       // *
-    kAdd,       // +
-    kSub,       // -
-    kNot,       // ~
-    kLogicNot,  // !
+    kPlusPlus,    // ++
+    kMinusMinus,  // --
+    kAmp,         // &
+    kStar,        // *
+    kPlus,        // +
+    kMinus,       // -
+    kTilde,       // ~
+    kExclaim,     // !
 
-    kDiv,           // /
-    kMod,           // %
-    kShl,           // <<
-    kShr,           // >>
-    kLess,          // <
-    kGreater,       // >
-    kLessEqual,     // <=
-    kGreaterEqual,  // >=
-    kEqual,         // ==
-    kNotEqual,      // !=
-    kXor,           // ^
-    kOr,            // |
-    kLogicAnd,      // &&
-    kLogicOr,       // ||
+    kSlash,           // /
+    kPercent,         // %
+    kLessLess,        // <<
+    kGreaterGreater,  // >>
+    kLess,            // <
+    kGreater,         // >
+    kLessEqual,       // <=
+    kGreaterEqual,    // >=
+    kEqualEqual,      // ==
+    kExclaimEqual,    // !=
+    kCaret,           // ^
+    kPipe,            // |
+    kAmpAmp,          // &&
+    kPipePipe,        // ||
 
-    kQuestionMark,  // ?
-    kColon,         // :
-    kSemicolon,     // ;
-    kEllipsis,      // ...
+    kQuestion,   // ?
+    kColon,      // :
+    kSemicolon,  // ;
+    kEllipsis,   // ...
 
-    kAssign,     // =
-    kMulAssign,  // *=
-    kDivAssign,  // /=
-    kModAssign,  // %=
-    kAddAssign,  // +=
-    kSubAssign,  // -=
-    kShlAssign,  // <<=
-    kShrAssign,  // >>=
-    kAndAssign,  // &=
-    kXorAssign,  // ^=
-    kOrAssign,   // |=
+    kEqual,                // =
+    kStarEqual,            // *=
+    kSlashEqual,           // /=
+    kPercentEqual,         // %=
+    kPlusEqual,            // +=
+    kMinusEqual,           // -=
+    kLessLessEqual,        // <<=
+    kGreaterGreaterEqual,  // >>=
+    kAmpEqual,             // &=
+    kCaretEqual,           // ^=
+    kPipeEqual,            // |=
 
     kComma,  // ,
 
     kNone,
-    kNewLine,
-    kEnd,
+    kEof,
     kInvalid,
   };
 

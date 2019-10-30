@@ -21,13 +21,13 @@ set(sanitizer
       STRING
       "Compile with a sanitizer. Options are: Address, Thread, Undefined, None")
 
-file(GLOB cppsrc src/*.cpp)
+file(GLOB cppsrc src/*.cpp src/*.h)
 file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-#include(clang-tidy)
+# include(clang-tidy)
 include(compiler-options)
-#include(sanitizers)
+include(sanitizers)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -41,7 +41,7 @@ add_definitions(-DAPP_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
 
 add_executable(${PROJECT_NAME} ${cppsrc})
 
-#include(format)
+include(format)
 
 llvm_map_components_to_libnames(
   llvm_libs

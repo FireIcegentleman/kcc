@@ -7,9 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
-#include <fstream>
 #include <iostream>
-#include <iterator>
 
 #include "error.h"
 
@@ -47,7 +45,7 @@ std::vector<Token> Scanner::Tokenize() {
   while (true) {
     auto token{Scan()};
 
-    if (token.TagIs(Tag::kEnd)) {
+    if (token.TagIs(Tag::kEof)) {
       break;
     } else {
       token_sequence.push_back(token);
@@ -72,9 +70,9 @@ Token Scanner::Scan() {
     case ')':
       return MakeToken(Tag::kRightParen);
     case '{':
-      return MakeToken(Tag::kLeftCurly);
+      return MakeToken(Tag::kLeftBrace);
     case '}':
-      return MakeToken(Tag::kRightCurly);
+      return MakeToken(Tag::kRightBrace);
     case '.':
       if (std::isdigit(Peek())) {
         return SkipNumber();
@@ -85,54 +83,54 @@ Token Scanner::Scan() {
           return MakeToken(Tag::kEllipsis);
         } else {
           PutBack();
-          return MakeToken(Tag::kDot);
+          return MakeToken(Tag::kPeriod);
         }
       } else {
-        return MakeToken(Tag::kDot);
+        return MakeToken(Tag::kPeriod);
       }
     case '+':
       if (Try('+')) {
-        return MakeToken(Tag::kInc);
+        return MakeToken(Tag::kPlusPlus);
       } else if (Try('=')) {
-        return MakeToken(Tag::kAddAssign);
+        return MakeToken(Tag::kPlusEqual);
       } else {
-        return MakeToken(Tag::kAdd);
+        return MakeToken(Tag::kPlus);
       }
     case '-':
       if (Try('>')) {
         return MakeToken(Tag::kArrow);
       } else if (Try('-')) {
-        return MakeToken(Tag::kDec);
+        return MakeToken(Tag::kMinusMinus);
       } else if (Try('=')) {
-        return MakeToken(Tag::kSubAssign);
+        return MakeToken(Tag::kMinusEqual);
       } else {
-        return MakeToken(Tag::kSub);
+        return MakeToken(Tag::kMinus);
       }
     case '&':
       if (Try('&')) {
-        return MakeToken(Tag::kLogicAnd);
+        return MakeToken(Tag::kAmpAmp);
       } else if (Try('=')) {
-        return MakeToken(Tag::kAndAssign);
+        return MakeToken(Tag::kAmpEqual);
       } else {
-        return MakeToken(Tag::kAnd);
+        return MakeToken(Tag::kAmp);
       }
     case '*':
-      return MakeToken(Try('=') ? Tag::kMulAssign : Tag::kMul);
+      return MakeToken(Try('=') ? Tag::kStarEqual : Tag::kStar);
     case '~':
-      return MakeToken(Tag::kNot);
+      return MakeToken(Tag::kTilde);
     case '!':
-      return MakeToken(Try('=') ? Tag::kNotEqual : Tag::kLogicNot);
+      return MakeToken(Try('=') ? Tag::kExclaimEqual : Tag::kExclaim);
     case '/':
-      return MakeToken(Try('=') ? Tag::kDivAssign : Tag::kDiv);
+      return MakeToken(Try('=') ? Tag::kSlashEqual : Tag::kSlash);
     case '%':
       if (Try('=')) {
-        return MakeToken(Tag::kModAssign);
+        return MakeToken(Tag::kPercentEqual);
       } else {
-        return MakeToken(Tag::kMod);
+        return MakeToken(Tag::kPercent);
       }
     case '<':
       if (Try('<')) {
-        return MakeToken(Try('=') ? Tag::kShlAssign : Tag::kShl);
+        return MakeToken(Try('=') ? Tag::kLessLessEqual : Tag::kLessLess);
       } else if (Try('=')) {
         return MakeToken(Tag::kLessEqual);
       } else {
@@ -140,24 +138,25 @@ Token Scanner::Scan() {
       }
     case '>':
       if (Try('>')) {
-        return MakeToken(Try('=') ? Tag::kShrAssign : Tag::kShr);
+        return MakeToken(Try('=') ? Tag::kGreaterGreaterEqual
+                                  : Tag::kGreaterGreater);
       } else {
         return MakeToken(Try('=') ? Tag::kGreaterEqual : Tag::kGreater);
       }
     case '=':
-      return MakeToken(Try('=') ? Tag::kEqual : Tag::kAssign);
+      return MakeToken(Try('=') ? Tag::kEqualEqual : Tag::kEqual);
     case '^':
-      return MakeToken(Try('=') ? Tag::kXorAssign : Tag::kXor);
+      return MakeToken(Try('=') ? Tag::kCaretEqual : Tag::kCaret);
     case '|':
       if (Try('|')) {
-        return MakeToken(Tag::kLogicOr);
+        return MakeToken(Tag::kPipePipe);
       } else if (Try('=')) {
-        return MakeToken(Tag::kOrAssign);
+        return MakeToken(Tag::kPipeEqual);
       } else {
-        return MakeToken(Tag::kOr);
+        return MakeToken(Tag::kPipe);
       }
     case '?':
-      return MakeToken(Tag::kQuestionMark);
+      return MakeToken(Tag::kQuestion);
     case ':':
       return MakeToken(Try(Tag::kGreater) ? Tag::kRightSquare : Tag::kColon);
     case ';':
@@ -237,7 +236,7 @@ Token Scanner::Scan() {
       SkipComment();
       return Scan();
     case '\0':
-      return MakeToken(Tag::kEnd);
+      return MakeToken(Tag::kEof);
     default: {
       return MakeToken(Tag::kInvalid);
     }
@@ -317,13 +316,15 @@ void Scanner::SkipComment() {
 
   // eat first number
   Next();
-  location_.row = std::stoi(SkipNumber().GetStr());
+  // # 后的数字指示的是下一行的行号
+  location_.row = std::stoi(SkipNumber().GetStr()) - 1;
   // eat space
   Next(false);
 
   // eat "
   Next();
-  location_.file_name = SkipStringLiteral().GetStr();
+  auto file_name{SkipStringLiteral().GetStr()};
+  location_.file_name = file_name.substr(1, std::size(file_name) - 2);
 
   while (HasNext() && Next(false) != '\n') {
   }
@@ -403,7 +404,7 @@ Token Scanner::SkipIdentifier() {
   } while (std::isalnum(ch) || ch == '_');
   PutBack();
 
-  return MakeToken(Tag::kIdentifier);
+  return MakeToken(keywords_.Find(buffer_));
 }
 
 std::int32_t Scanner::HandleEscape() {
