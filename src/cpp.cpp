@@ -14,7 +14,7 @@ namespace kcc {
 
 void EnsureFileExists(const std::string &input_file) {
   if (!std::filesystem::exists(input_file)) {
-    ErrorReportAndExit("no such file: '{}'", input_file);
+    Error("no such file: '{}'", input_file);
   }
 }
 

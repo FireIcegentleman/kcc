@@ -154,11 +154,12 @@ class Token {
  public:
   bool TagIs(Tag tag) const;
   void SetTag(Tag tag);
+  Tag GetTag() const { return tag_; }
 
   std::string GetStr() const;
   void SetStr(const std::string &str);
 
-  SourceLocation GetSourceLocation() const;
+  SourceLocation GetLoc() const;
   void SetSourceLocation(const SourceLocation &location);
 
   std::string ToString() const;

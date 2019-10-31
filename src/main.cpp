@@ -3,7 +3,9 @@
 #include <iterator>
 
 #include "cpp.h"
+#include "error.h"
 #include "lex.h"
+#include "parse.h"
 
 using namespace kcc;
 
@@ -19,4 +21,9 @@ int main() {
   std::transform(std::begin(tokens), std::end(tokens),
                  std::ostream_iterator<std::string>{tokens_file, "\n"},
                  std::mem_fn(&Token::ToString));
+
+  Parser parser{std::move(tokens)};
+  auto unit{parser.Parse()};
+
+  PrintWarnings();
 }

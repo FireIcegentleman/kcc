@@ -16,7 +16,7 @@ std::string Token::GetStr() const { return str_; }
 
 void Token::SetStr(const std::string& str) { str_ = str; }
 
-SourceLocation Token::GetSourceLocation() const { return location_; }
+SourceLocation Token::GetLoc() const { return location_; }
 
 void Token::SetSourceLocation(const SourceLocation& location) {
   location_ = location;

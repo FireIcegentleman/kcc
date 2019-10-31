@@ -33,7 +33,7 @@ Scanner::Scanner(const std::string& preprocessed_code)
   if (std::empty(preprocessed_code) ||
       std::all_of(std::begin(preprocessed_code), std::end(preprocessed_code),
                   [](char ch) { return ch == '\n'; })) {
-    ErrorReportAndExit("ISO C forbids an empty translation unit");
+    Error("ISO C forbids an empty translation unit");
   }
 
   location_.line_content = source_.data();
@@ -374,7 +374,7 @@ Token Scanner::SkipCharacter() {
   }
 
   if (ch != '\'') {
-    ErrorReportAndExit(location_, "missing terminating ' character");
+    Error(location_, "missing terminating ' character");
   }
 
   return MakeToken(Tag::kCharacterConstant);
@@ -390,7 +390,7 @@ Token Scanner::SkipStringLiteral() {
   }
 
   if (ch != '\"') {
-    ErrorReportAndExit(location_, "missing terminating \" character");
+    Error(location_, "missing terminating \" character");
   }
 
   return MakeToken(Tag::kStringLiteral);
@@ -442,7 +442,7 @@ std::int32_t Scanner::HandleEscape() {
     case '7':
       return HandleOctEscape(ch);
     default: {
-      ErrorReportAndExit(location_, "unknown escape sequence '\\{}'", ch);
+      Error(location_, "unknown escape sequence '\\{}'", ch);
     }
   }
 }
@@ -451,8 +451,7 @@ std::int32_t Scanner::HandleHexEscape() {
   std::int32_t value{};
 
   if (auto peek{Peek()}; !std::isxdigit(peek)) {
-    ErrorReportAndExit(location_, "\\x used with no following hex digits: '{}'",
-                       peek);
+    Error(location_, "\\x used with no following hex digits: '{}'", peek);
   }
 
   for (std::int32_t i{0}; i < 2; ++i) {
@@ -471,7 +470,7 @@ std::int32_t Scanner::HandleOctEscape(char ch) {
   std::int32_t value{CharToDigit(ch)};
 
   if (!IsOctDigit(ch)) {
-    ErrorReportAndExit(location_, "expect oct digit, but got {}", ch);
+    Error(location_, "expect oct digit, but got {}", ch);
   }
 
   for (std::int32_t i{0}; i < 3; ++i) {
