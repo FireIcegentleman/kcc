@@ -485,4 +485,15 @@ std::int32_t Scanner::HandleOctEscape(char ch) {
   return value;
 }
 
+std::string Scanner::ScanStringLiteral() {
+  // eat "
+  Next(false);
+
+  while (!Test('"')) {
+    Next();
+  }
+
+  return buffer_;
+}
+
 }  // namespace kcc

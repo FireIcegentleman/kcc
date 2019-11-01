@@ -16,9 +16,37 @@ namespace kcc {
 class Parser {
  public:
   explicit Parser(std::vector<Token> tokens);
-  std::shared_ptr<TranslationUnit> Parse();
+  std::shared_ptr<TranslationUnit> ParseTranslationUnit();
 
  private:
+  std::shared_ptr<Stmt> ParseExternalDecl();
+  std::shared_ptr<Type> ParseStructUnionSpec(bool is_struct);
+  std::shared_ptr<Type> ParseEnumSpec();
+  std::int32_t ParseAlignas();
+
+  std::shared_ptr<CompoundStmt> ParseDecl();
+  void ParseStaticAssertDecl();
+  std::shared_ptr<Type> ParseDeclSpec(std::uint32_t &storage_class_spec,
+                                      std::uint32_t &func_spec,
+                                      std::int32_t &align);
+  void ParseDeclarator(std::string &name, std::shared_ptr<Type> &base_type);
+  void ParseDirectDeclarator(std::string &name,
+                             std::shared_ptr<Type> &base_type);
+  void ParseDirectDeclaratorTail(std::shared_ptr<Type> &base_type);
+  std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(
+      std::shared_ptr<Type> &base_type, std::uint32_t storage_class_spec,
+      std::uint32_t func_spec, std::int32_t align);
+  std::shared_ptr<Decl> ParseInitDeclarator(std::shared_ptr<Type> &base_type,
+                                            std::uint32_t storage_class_spec,
+                                            std::uint32_t func_spec,
+                                            std::int32_t align);
+  std::shared_ptr<Decl> MakeDeclarator(const std::string &name,
+                                       const std::shared_ptr<Type> &base_type,
+                                       std::uint32_t storage_class_spec,
+                                       std::uint32_t func_spec,
+                                       std::int32_t align);
+  std::set<Initializer> ParseInitializer();
+
   bool HasNext();
   Token Peek();
   Token PeekPrev();
@@ -29,10 +57,7 @@ class Parser {
   void Expect(Tag tag);
   void MarkLoc(const SourceLocation &loc);
 
-  void ParseStaticAssert();
-
   std::shared_ptr<Expr> ParseCastExpr();
-
   std::shared_ptr<Expr> ParseMultiplicativeExpr();
   std::shared_ptr<Expr> ParseAdditiveExpr();
   std::shared_ptr<Expr> ParseShiftExpr();
@@ -47,6 +72,9 @@ class Parser {
   std::shared_ptr<Expr> ParseAssignExpr();
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
+
+  std::shared_ptr<StringLiteral> ParseStringLiteral();
+  std::string ConcatStr();
 
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};

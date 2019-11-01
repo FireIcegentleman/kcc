@@ -39,6 +39,8 @@ class Scanner {
   Token SkipStringLiteral();
   Token SkipIdentifier();
 
+  std::string ScanStringLiteral();
+
   std::int32_t HandleEscape();
   std::int32_t HandleHexEscape();
   std::int32_t HandleOctEscape(char ch);

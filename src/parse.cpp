@@ -5,26 +5,20 @@
 #include "parse.h"
 
 #include "error.h"
+#include "lex.h"
 
 namespace kcc {
 
 Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {}
 
-std::shared_ptr<TranslationUnit> Parser::Parse() {
-  while (HasNext()) {
-    if (Try(Tag::kStaticAssert)) {
-      ParseStaticAssert();
-      continue;
-    } else if (Try(Tag::kSemicolon)) {
-      Warning(PeekPrev().GetLoc(), "extra ';' outside of a function");
-      continue;
-    }
+std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
+  auto unit{MakeAstNode<TranslationUnit>()};
 
-    // temp
-    ParseExpr();
+  while (HasNext()) {
+    unit->AddStmt(ParseExternalDecl());
   }
 
-  return std::move(unit_);
+  return unit;
 }
 
 bool Parser::HasNext() { return !Peek().TagIs(Tag::kEof); }
@@ -46,7 +40,11 @@ bool Parser::Try(Tag tag) {
   }
 }
 
-void Parser::ParseStaticAssert() { Expect(Tag::kLeftParen); }
+void Parser::ParseStaticAssertDecl() {
+  Expect(Tag::kLeftParen);
+  auto cond{ParseAssignExpr()};
+  Expect(Tag::kComma);
+}
 
 Token Parser::PeekPrev() { return tokens_[index_ - 1]; }
 
@@ -337,11 +335,275 @@ std::shared_ptr<Expr> Parser::ParseMultiplicativeExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseCastExpr() {
-  auto tok{Next()};
-  MarkLoc(tok.GetLoc());
+std::shared_ptr<CompoundStmt> Parser::ParseDecl() {
+  if (Try(Tag::kStaticAssert)) {
+    ParseStaticAssertDecl();
+  } else {
+    std::uint32_t storage_class_spec{}, func_spec{};
+    std::int32_t align{};
+    auto base_type{ParseDeclSpec(storage_class_spec, func_spec, align)};
 
-  if()
+    if (Try(Tag::kSemicolon)) {
+      Warning(Peek().GetLoc(), "declaration does not declare anything");
+      return nullptr;
+    } else {
+      auto ret{ParseInitDeclaratorList(base_type, storage_class_spec, func_spec,
+                                       align)};
+      Expect(Tag::kSemicolon);
+      return ret;
+    }
+  }
 }
+
+std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
+    std::shared_ptr<Type>& base_type, std::uint32_t storage_class_spec,
+    std::uint32_t func_spec, std::int32_t align) {
+  auto init_decls{std::make_shared<CompoundStmt>()};
+
+  do {
+    init_decls->AddStmt(
+        ParseInitDeclarator(base_type, storage_class_spec, func_spec, align));
+  } while (Try(Tag::kComma));
+
+  return init_decls;
+}
+
+std::shared_ptr<Decl> Parser::ParseInitDeclarator(
+    std::shared_ptr<Type>& base_type, std::uint32_t storage_class_spec,
+    std::uint32_t func_spec, std::int32_t align) {
+  std::string name;
+  ParseDeclarator(name, base_type);
+
+  auto decl{
+      MakeDeclarator(name, base_type, storage_class_spec, func_spec, align)};
+
+  if (Try(Tag::kEqual)) {
+    decl->AddInits(ParseInitializer());
+  }
+
+  return decl;
+}
+
+void Parser::ParseDeclarator(std::string& name,
+                             std::shared_ptr<Type>& base_type) {
+  while (Try(Tag::kStar)) {
+    base_type = base_type->GetPointerTo();
+    // TODO type-qualifier
+  }
+
+  ParseDirectDeclarator(name, base_type);
+}
+
+void Parser::ParseDirectDeclarator(std::string& name,
+                                   std::shared_ptr<Type>& base_type) {
+  if (Test(Tag::kIdentifier)) {
+    name = Next().GetStr();
+    ParseDirectDeclaratorTail(base_type);
+  } else if (Try(Tag::kLeftParen)) {
+    auto begin{index_};
+    auto temp{std::make_shared<Type>()};
+    // 此时的 base_type 不一定是正确的, 先跳过括号中的内容
+    ParseDeclarator(name, temp);
+    Expect(Tag::kRightParen);
+
+    ParseDirectDeclaratorTail(base_type);
+    auto end{index_};
+
+    index_ = begin;
+    ParseDeclarator(name, base_type);
+    Expect(Tag::kRightParen);
+    index_ = end;
+  } else {
+    ParseDirectDeclaratorTail(base_type);
+  }
+}
+
+std::shared_ptr<Type> Parser::ParseDeclSpec(std::uint32_t& storage_class_spec,
+                                            std::uint32_t& func_spec,
+                                            std::int32_t& align) {
+#define ERROR \
+  Error(tok.GetLoc(), "two or more data types in declaration specifiers");
+
+  std::uint32_t type_qualifiers{}, type_spec{};
+
+  Token tok;
+  std::shared_ptr<Type> type;
+  while (true) {
+    tok = Next();
+
+    switch (tok.GetTag()) {
+      // TODO 检查
+      // Storage Class Specifier, 至多有一个
+      case Tag::kTypedef:
+        storage_class_spec |= kTypedef;
+        break;
+      case Tag::kExtern:
+        storage_class_spec |= kExtern;
+        break;
+      case Tag::kStatic:
+        storage_class_spec |= kStatic;
+        break;
+      case Tag::kAuto:
+        storage_class_spec |= kAuto;
+        break;
+      case Tag::kRegister:
+        storage_class_spec |= kRegister;
+        break;
+      case Tag::kThreadLocal:
+        ERROR
+
+        // Type specifier
+      case Tag::kVoid:
+        if (type_spec) {
+          ERROR
+        }
+        type_spec |= kVoid;
+        break;
+      case Tag::kChar:
+        if (type_spec & ~kCompChar) {
+          ERROR
+        }
+        type_spec |= kChar;
+        break;
+      case Tag::kShort:
+        if (type_spec & ~kCompShort) {
+          ERROR
+        }
+        type_spec |= kShort;
+        break;
+      case Tag::kInt:
+        if (type_spec & ~kCompInt) {
+          ERROR
+        }
+        type_spec |= kInt;
+        break;
+      case Tag::kLong:
+        if (type_spec & ~kCompLong) {
+          ERROR
+        }
+        if (type_spec & kLong) {
+          type_spec &= ~kLong;
+          type_spec |= kLongLong;
+        } else {
+          type_spec |= kLong;
+        }
+        break;
+      case Tag::kFloat:
+        if (type_spec) {
+          ERROR
+        }
+        type_spec |= kFloat;
+        break;
+      case Tag::kDouble:
+        if (type_spec & ~kCompDouble) {
+          ERROR
+        }
+        type_spec |= kDouble;
+        break;
+      case Tag::kSigned:
+        if (type_spec & ~kCompSigned) {
+          ERROR
+        }
+        type_spec |= kSigned;
+        break;
+      case Tag::kUnsigned:
+        if (type_spec & ~kCompUnsigned) {
+          ERROR
+        }
+        type_spec |= kUnsigned;
+        break;
+      case Tag::kBool:
+        if (type_spec) {
+          ERROR
+        }
+        type_spec |= kBool;
+        break;
+      case Tag::kStruct:
+      case Tag::kUnion:
+        if (type_spec) {
+          ERROR
+        }
+        type = ParseStructUnionSpec(tok.GetTag() == Tag::kStruct);
+        type_spec |= kStructUnionSpec;
+        break;
+      case Tag::kEnum:
+        if (type_spec) {
+          ERROR
+        }
+        type = ParseEnumSpec();
+        type_spec |= kEnumSpec;
+        break;
+
+      case Tag::kComplex:
+      case Tag::kAtomic:
+        ERROR
+
+        // Type qualifier
+      case Tag::kConst:
+        type_qualifiers |= kConst;
+        break;
+      case Tag::kRestrict:
+        type_qualifiers |= kRestrict;
+        break;
+
+      case Tag::kVolatile:
+        ERROR
+
+        // Function specifier
+      case Tag::kInline:
+        func_spec |= kInline;
+        break;
+      case Tag::kNoreturn:
+        func_spec |= kNoreturn;
+        break;
+
+      case Tag::kAlignas:
+        align = ParseAlignas();
+        break;
+
+      default: {
+        // typedef name
+        goto finish;
+      }
+    }
+  }
+
+finish:
+  PutBack();
+
+  if (!type_spec) {
+    ERROR
+  }
+
+  return type;
+}
+std::shared_ptr<Stmt> Parser::ParseExternalDecl() {
+  return std::shared_ptr<Stmt>();
+}
+std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
+  return std::shared_ptr<Type>();
+}
+std::shared_ptr<Type> Parser::ParseEnumSpec() {
+  return std::shared_ptr<Type>();
+}
+std::int32_t Parser::ParseAlignas() { return 0; }
+void Parser::ParseDirectDeclaratorTail(std::shared_ptr<Type>& base_type) {}
+std::shared_ptr<Decl> Parser::MakeDeclarator(
+    const std::string& name, const std::shared_ptr<Type>& base_type,
+    std::uint32_t storage_class_spec, std::uint32_t func_spec,
+    std::int32_t align) {
+  return std::shared_ptr<Decl>();
+}
+std::set<Initializer> Parser::ParseInitializer() {
+  return std::set<Initializer>();
+}
+void Parser::MarkLoc(const SourceLocation& loc) {}
+std::shared_ptr<Expr> Parser::ParseCastExpr() {
+  return std::shared_ptr<Expr>();
+}
+std::shared_ptr<StringLiteral> Parser::ParseStringLiteral() {
+  return std::shared_ptr<StringLiteral>();
+}
+std::string Parser::ConcatStr() { return std::string(); }
 
 }  // namespace kcc

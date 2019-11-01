@@ -23,7 +23,7 @@ int main() {
                  std::mem_fn(&Token::ToString));
 
   Parser parser{std::move(tokens)};
-  auto unit{parser.Parse()};
+  auto unit{parser.ParseTranslationUnit()};
 
   PrintWarnings();
 }
