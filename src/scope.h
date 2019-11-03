@@ -28,6 +28,7 @@ class Scope {
   auto begin() { return std::begin(normal_); }
   auto end() { return std::end(normal_); }
   std::map<std::string, std::shared_ptr<Identifier>> AllTagInCurrScope() const;
+  std::shared_ptr<Scope> GetParent() { return parent_; }
 
  private:
   std::shared_ptr<Scope> parent_;

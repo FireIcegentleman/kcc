@@ -485,15 +485,20 @@ std::int32_t Scanner::HandleOctEscape(char ch) {
   return value;
 }
 
-std::string Scanner::ScanStringLiteral() {
+std::string Scanner::ScanStringLiteral(bool handle_escape) {
+  std::string s;
   // eat "
-  Next(false);
+  Next();
 
   while (!Test('"')) {
-    Next();
+    auto ch{Next()};
+    if (handle_escape && ch == '\\') {
+      ch = HandleEscape();
+    }
+    s.push_back(ch);
   }
 
-  return buffer_;
+  return s;
 }
 
 }  // namespace kcc

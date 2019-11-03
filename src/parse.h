@@ -26,30 +26,34 @@ class Parser {
   std::shared_ptr<Type> ParseEnumSpec();
   void ParseEnumerator(std::shared_ptr<Type> type);
   std::int32_t ParseAlignas();
-  void ParseStructDeclList(std::shared_ptr<StructType> type);
-  std::shared_ptr<Object> ParseStructDecl();
-  std::shared_ptr<Object> ParseStructDeclList(std::shared_ptr<Type> base_type);
+  std::size_t ParseArrayLength();
+  void EnterProto();
+  void ExitProto();
+  std::pair<std::vector<std::shared_ptr<Object>>, bool> ParseParamList();
+  bool IsTypeName(const Token &token);
+  std::shared_ptr<Type> ParseTypeName();
+  void ParseStructDeclList(std::shared_ptr<StructType> base_type);
   void TrySkipAttributes();
   void TrySkipAsm();
+  std::shared_ptr<Object> ParseParamDecl();
+  void ParseAbstractDeclarator(std::shared_ptr<Type> &type);
 
   std::shared_ptr<CompoundStmt> ParseDecl();
   void ParseStaticAssertDecl();
-  std::shared_ptr<Type> ParseDeclSpec(bool in_struct = false);
+  std::shared_ptr<Type> ParseDeclSpec(bool in_struct_or_func);
   void ParseDeclarator(std::string &name, std::shared_ptr<Type> &base_type);
   void ParseDirectDeclarator(std::string &name,
                              std::shared_ptr<Type> &base_type);
   void ParseDirectDeclaratorTail(std::shared_ptr<Type> &base_type);
   std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(
-      std::shared_ptr<Type> &base_type, std::uint32_t storage_class_spec,
-      std::uint32_t func_spec, std::int32_t align);
+      std::shared_ptr<Type> &base_type);
   std::shared_ptr<Declaration> ParseInitDeclarator(
-      std::shared_ptr<Type> &base_type, std::uint32_t storage_class_spec,
-      std::uint32_t func_spec, std::int32_t align);
+      std::shared_ptr<Type> &base_type);
   std::shared_ptr<Declaration> MakeDeclarator(
-      const std::string &name, const std::shared_ptr<Type> &base_type,
-      std::uint32_t storage_class_spec, std::uint32_t func_spec,
-      std::int32_t align);
+      const std::string &name, const std::shared_ptr<Type> &base_type);
   std::set<Initializer> ParseInitializer();
+  std::shared_ptr<Expr> ParseConstantExpr();
+  std::shared_ptr<Constant> ParseStringLiteral(bool handle_escape);
 
   bool HasNext();
   Token Peek();
@@ -58,7 +62,7 @@ class Parser {
   void PutBack();
   bool Test(Tag tag);
   bool Try(Tag tag);
-  void Expect(Tag tag);
+  Token Expect(Tag tag);
   void MarkLoc(const SourceLocation &loc);
 
   std::shared_ptr<Expr> ParseCastExpr();

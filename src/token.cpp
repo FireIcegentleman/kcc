@@ -31,4 +31,13 @@ std::string Token::ToString() const {
                      loc);
 }
 
+bool Token::IsTypeSpec() const {
+  return tag_ == Tag::kVoid || tag_ == Tag::kChar || tag_ == Tag::kShort ||
+         tag_ == Tag::kInt || tag_ == Tag::kLong || tag_ == Tag::kFloat ||
+         tag_ == Tag::kDouble || tag_ == Tag::kSigned ||
+         tag_ == Tag::kUnsigned || tag_ == Tag::kBool ||
+         tag_ == Tag::kComplex || tag_ == Tag::kAtomic ||
+         tag_ == Tag::kStruct || tag_ == Tag::kUnion || tag_ == Tag::kEnum;
+}
+
 }  // namespace kcc

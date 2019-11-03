@@ -169,6 +169,7 @@ class Token {
   void SetSourceLocation(const SourceLocation &location);
 
   std::string ToString() const;
+  bool IsTypeSpec() const;
 
  private:
   Tag tag_{Tag::kNone};

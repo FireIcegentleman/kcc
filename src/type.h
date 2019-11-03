@@ -131,7 +131,7 @@ class Type : public std::enable_shared_from_this<Type> {
   bool IsStatic() const;
   std::int32_t GetAlign() const;
   bool IsComplete() const { return complete_; }
-  bool SetComplete(bool complete) { complete_ = complete; }
+  void SetComplete(bool complete) { complete_ = complete; }
 
   void SetTypeQualifiers(std::uint32_t type_qualifiers);
   void SetStorageClassSpec(std::uint32_t storage_class_spec);

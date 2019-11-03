@@ -93,6 +93,12 @@ template <typename... Args>
   Error(tok.GetLoc(), format_str, args...);
 }
 
+template <typename... Args>
+[[noreturn]] void Warning(const Token &tok, std::string_view format_str,
+                          const Args &... args) {
+  Warning(tok.GetLoc(), format_str, args...);
+}
+
 }  // namespace kcc
 
 #endif  // KCC_SRC_ERROR_H_
