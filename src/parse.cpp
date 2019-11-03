@@ -368,7 +368,7 @@ std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
   return init_decls;
 }
 
-std::shared_ptr<Decl> Parser::ParseInitDeclarator(
+std::shared_ptr<Declaration> Parser::ParseInitDeclarator(
     std::shared_ptr<Type>& base_type, std::uint32_t storage_class_spec,
     std::uint32_t func_spec, std::int32_t align) {
   std::string name;
@@ -418,16 +418,18 @@ void Parser::ParseDirectDeclarator(std::string& name,
   }
 }
 
-std::shared_ptr<Type> Parser::ParseDeclSpec(std::uint32_t& storage_class_spec,
-                                            std::uint32_t& func_spec,
-                                            std::int32_t& align) {
+std::shared_ptr<Type> Parser::ParseDeclSpec(bool in_struct) {
 #define ERROR \
   Error(tok.GetLoc(), "two or more data types in declaration specifiers");
 
   std::uint32_t type_qualifiers{}, type_spec{};
+  std::uint32_t storage_class_spec{};
+  std::uint32_t func_spec{};
+  std::int32_t align{};
 
   Token tok;
   std::shared_ptr<Type> type;
+
   while (true) {
     tok = Next();
 
@@ -575,35 +577,172 @@ finish:
     ERROR
   }
 
+  type = Type::Get(type_spec);
+  type->SetAlign(align);
+  type->SetTypeQualifiers(type_qualifiers);
+  type->SetFuncSpec(func_spec);
+  type->SetStorageClassSpec(storage_class_spec);
+
   return type;
 }
-std::shared_ptr<Stmt> Parser::ParseExternalDecl() {
-  return std::shared_ptr<Stmt>();
-}
+
 std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
-  return std::shared_ptr<Type>();
+  // TODO type attribute
+  auto tok{Peek()};
+  std::string name;
+
+  if (Try(Tag::kIdentifier)) {
+    name = tok.GetStr();
+    if (Try(Tag::kLeftBrace)) {
+      auto tag{curr_scope_->FindTagInCurrScope(name)};
+      // 无前向声明
+      if (!tag) {
+        auto type{StructType::Get(is_struct, true, curr_scope_)};
+        auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
+        curr_scope_->InsertTag(name, ident);
+        ParseStructDeclList(type);
+        Expect(Tag::kRightBrace);
+        return type;
+      } else {
+        if (tag->GetType()->IsComplete()) {
+          Error(tok, "redefinition:{}", name);
+        } else {
+          ParseStructDeclList(
+              std::dynamic_pointer_cast<StructType>(tag->GetType()));
+          Expect(Tag::kRightBrace);
+          return tag->GetType();
+        }
+      }
+    } else {
+      // 可能是前向声明或普通的声明
+      auto tag{curr_scope_->FindTag(name)};
+
+      if (tag) {
+        return tag->GetType();
+      }
+
+      auto type{StructType::Get(is_struct, true, curr_scope_)};
+      auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
+      curr_scope_->InsertTag(name, ident);
+      return type;
+    }
+  } else {
+    // 无标识符只能是定义
+    Expect(Tag::kLeftBrace);
+
+    auto type{StructType::Get(is_struct, false, curr_scope_)};
+    ParseStructDeclList(type);
+
+    Expect(Tag::kRightBrace);
+    return type;
+  }
 }
+
+void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
+  auto scope_backup{curr_scope_};
+  curr_scope_ = type->GetScope();
+
+  while (!Test(Tag::kRightBrace)) {
+    if (!HasNext()) {
+      Error(PeekPrev(), "premature end of input");
+    }
+
+    if (Try(Tag::kStaticAssert)) {
+      ParseStaticAssertDecl();
+    } else {
+      auto base_type{ParseDeclSpec(true)};
+
+      do {
+        std::string name;
+        ParseDeclarator(name, base_type);
+
+        // TODO 位域
+
+        // 可能是匿名 struct / union
+        if (std::empty(name)) {
+          if (base_type->IsStructTy() && !base_type->HasStructName()) {
+            auto anony{std::make_shared<Object>(Peek(), base_type)};
+            type->MergeAnony(anony);
+            continue;
+          } else {
+            Error(Peek(), "declaration does not declare anything");
+          }
+        } else {
+          if (type->GetMember(name)) {
+            Error(Peek(), "duplicate member:{}", name);
+          } else if (!base_type->IsComplete()) {
+            // 可能是柔性数组
+            if (type->IsStruct() && std::size(type->GetMembers()) > 0 &&
+                base_type->IsArrayTy()) {
+              auto member{std::make_shared<Object>(Peek(), base_type)};
+              type->AddMember(member);
+              // 必须是最后一个成员
+              Expect(Tag::kSemicolon);
+              Expect(Tag::kSemicolon);
+              goto finalize;
+            } else {
+              Error(Peek(), "error");
+            }
+          } else if (base_type->IsFunctionTy()) {
+            Error(Peek(), "error");
+          } else {
+            auto member{std::make_shared<Object>(Peek(), base_type)};
+            type->AddMember(member);
+          }
+        }
+      } while (Try(Tag::kComma));
+      Expect(Tag::kSemicolon);
+    }
+  }
+
+finalize:
+  // TODO type attributes
+
+  type->SetComplete(true);
+
+  // struct / union 中的 tag 的作用域与该 struct / union 所在的作用域相同
+  for (const auto& [name, tag] : curr_scope_->AllTagInCurrScope()) {
+    if (scope_backup->FindTagInCurrScope(name)) {
+      Error(tag->GetToken(), "redefinition of tag {}", tag->GetName());
+    } else {
+      scope_backup->InsertTag(name, tag);
+    }
+  }
+
+  curr_scope_ = scope_backup;
+}
+
 std::shared_ptr<Type> Parser::ParseEnumSpec() {
-  return std::shared_ptr<Type>();
+  // TODO type attributes
+
+  std::string name;
+  auto tok{Peek()};
+
+  if (Try(Tag::kIdentifier)) {
+    name = tok.GetStr();
+
+    // 定义
+    if (Try(Tag::kLeftBrace)) {
+      
+    } else {
+      // 只能是普通声明，不允许前向声明
+    }
+  }
 }
+
 std::int32_t Parser::ParseAlignas() { return 0; }
+
 void Parser::ParseDirectDeclaratorTail(std::shared_ptr<Type>& base_type) {}
-std::shared_ptr<Decl> Parser::MakeDeclarator(
+
+std::shared_ptr<Declaration> Parser::MakeDeclarator(
     const std::string& name, const std::shared_ptr<Type>& base_type,
     std::uint32_t storage_class_spec, std::uint32_t func_spec,
     std::int32_t align) {
-  return std::shared_ptr<Decl>();
+  return std::shared_ptr<Declaration>();
 }
-std::set<Initializer> Parser::ParseInitializer() {
-  return std::set<Initializer>();
-}
-void Parser::MarkLoc(const SourceLocation& loc) {}
+
 std::shared_ptr<Expr> Parser::ParseCastExpr() {
   return std::shared_ptr<Expr>();
 }
-std::shared_ptr<StringLiteral> Parser::ParseStringLiteral() {
-  return std::shared_ptr<StringLiteral>();
-}
-std::string Parser::ConcatStr() { return std::string(); }
 
 }  // namespace kcc

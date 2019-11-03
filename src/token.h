@@ -152,6 +152,12 @@ using Tag = TokenTag::Values;
 
 class Token {
  public:
+  static Token Get(Tag tag) {
+    Token tok;
+    tok.SetTag(tag);
+    return tok;
+  }
+
   bool TagIs(Tag tag) const;
   void SetTag(Tag tag);
   Tag GetTag() const { return tag_; }

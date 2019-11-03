@@ -87,6 +87,12 @@ void Warning(const SourceLocation &location, std::string_view format_str,
 
 [[noreturn]] void Error(Tag tag, const Token &actual);
 
+template <typename... Args>
+[[noreturn]] void Error(const Token &tok, std::string_view format_str,
+                        const Args &... args) {
+  Error(tok.GetLoc(), format_str, args...);
+}
+
 }  // namespace kcc
 
 #endif  // KCC_SRC_ERROR_H_

@@ -5,10 +5,12 @@
 #ifndef KCC_SRC_PARSE_H_
 #define KCC_SRC_PARSE_H_
 
+#include <map>
 #include <memory>
 #include <vector>
 
 #include "ast.h"
+#include "scope.h"
 #include "token.h"
 
 namespace kcc {
@@ -22,13 +24,17 @@ class Parser {
   std::shared_ptr<Stmt> ParseExternalDecl();
   std::shared_ptr<Type> ParseStructUnionSpec(bool is_struct);
   std::shared_ptr<Type> ParseEnumSpec();
+  void ParseEnumerator(std::shared_ptr<Type> type);
   std::int32_t ParseAlignas();
+  void ParseStructDeclList(std::shared_ptr<StructType> type);
+  std::shared_ptr<Object> ParseStructDecl();
+  std::shared_ptr<Object> ParseStructDeclList(std::shared_ptr<Type> base_type);
+  void TrySkipAttributes();
+  void TrySkipAsm();
 
   std::shared_ptr<CompoundStmt> ParseDecl();
   void ParseStaticAssertDecl();
-  std::shared_ptr<Type> ParseDeclSpec(std::uint32_t &storage_class_spec,
-                                      std::uint32_t &func_spec,
-                                      std::int32_t &align);
+  std::shared_ptr<Type> ParseDeclSpec(bool in_struct = false);
   void ParseDeclarator(std::string &name, std::shared_ptr<Type> &base_type);
   void ParseDirectDeclarator(std::string &name,
                              std::shared_ptr<Type> &base_type);
@@ -36,15 +42,13 @@ class Parser {
   std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(
       std::shared_ptr<Type> &base_type, std::uint32_t storage_class_spec,
       std::uint32_t func_spec, std::int32_t align);
-  std::shared_ptr<Decl> ParseInitDeclarator(std::shared_ptr<Type> &base_type,
-                                            std::uint32_t storage_class_spec,
-                                            std::uint32_t func_spec,
-                                            std::int32_t align);
-  std::shared_ptr<Decl> MakeDeclarator(const std::string &name,
-                                       const std::shared_ptr<Type> &base_type,
-                                       std::uint32_t storage_class_spec,
-                                       std::uint32_t func_spec,
-                                       std::int32_t align);
+  std::shared_ptr<Declaration> ParseInitDeclarator(
+      std::shared_ptr<Type> &base_type, std::uint32_t storage_class_spec,
+      std::uint32_t func_spec, std::int32_t align);
+  std::shared_ptr<Declaration> MakeDeclarator(
+      const std::string &name, const std::shared_ptr<Type> &base_type,
+      std::uint32_t storage_class_spec, std::uint32_t func_spec,
+      std::int32_t align);
   std::set<Initializer> ParseInitializer();
 
   bool HasNext();
@@ -73,15 +77,15 @@ class Parser {
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
 
-  std::shared_ptr<StringLiteral> ParseStringLiteral();
-  std::string ConcatStr();
-
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
   std::shared_ptr<TranslationUnit> unit_{std::make_shared<TranslationUnit>()};
 
   SourceLocation loc_;
+
+  std::shared_ptr<Scope> curr_scope_;
+  std::map<std::string, std::shared_ptr<LabelStmt>> curr_labels_;
 
   template <typename T, typename... Args>
   std::shared_ptr<T> MakeAstNode(Args &&... args) {
