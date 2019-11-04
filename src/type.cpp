@@ -23,6 +23,7 @@ std::string Type::ToString() const {
       return "long double";
     default:
       assert(false);
+      return nullptr;
   }
 }
 
@@ -38,6 +39,7 @@ std::int32_t Type::Width() const {
       return 16;
     default:
       assert(false);
+      return 0;
   }
 }
 
@@ -68,8 +70,11 @@ std::shared_ptr<Type> Type::MayCast(std::shared_ptr<Type> type, bool in_proto) {
 }
 
 bool Type::IsComplete() const {
-  assert(IsArrayTy() || IsStructTy());
-  return complete_;
+  if (IsArrayTy() || IsStructTy()) {
+    return complete_;
+  } else {
+    return true;
+  }
 }
 
 void Type::SetComplete(bool complete) const {
@@ -238,6 +243,7 @@ std::shared_ptr<Type> Type::Get(std::uint32_t type_spec) {
     return ret;
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
@@ -342,6 +348,7 @@ std::int32_t Type::Rank() const {
     return 0;
   } else {
     assert(false);
+    return 0;
   }
 }
 

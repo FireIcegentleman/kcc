@@ -170,7 +170,7 @@ void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
 template <typename T>
 void CalcExpr<T>::Visit(const ConditionOpExpr& node) {
   auto cond_type{node.GetType()};
-  bool flag;
+  bool flag{};
 
   if (cond_type->IsIntegerTy()) {
     flag = CalcExpr<std::int32_t>{}.Calc(node.cond_);

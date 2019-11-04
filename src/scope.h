@@ -43,6 +43,11 @@ class Scope {
       std::cout << item.first << ' ';
       std::cout << item.second->GetType()->ToString() << '\n';
     }
+    std::cout << "---\n";
+    for (const auto &item : tags_) {
+      std::cout << item.first << ' ';
+      std::cout << item.second->GetType()->ToString() << '\n';
+    }
   }
 
  private:

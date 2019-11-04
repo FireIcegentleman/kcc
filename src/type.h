@@ -74,6 +74,14 @@ class PointerType;
 
 class Type : public std::enable_shared_from_this<Type> {
  public:
+  struct Spec {
+    std::uint32_t type_spec_{};
+    std::uint32_t type_qualifiers_{};
+    std::uint32_t storage_class_spec_{};
+    std::uint32_t func_spec_{};
+    std::int32_t align_{};
+  };
+
   enum TypeId {
     kVoidTyId,
     kFloatTyId,
@@ -105,6 +113,17 @@ class Type : public std::enable_shared_from_this<Type> {
   bool IsTypedef() const { return storage_class_spec_ & kTypedef; }
   bool IsExtern() const { return storage_class_spec_ & kExtern; }
   void SetUnsigned() { type_spec_ |= kUnsigned; }
+  Spec GetSpec() const {
+    return {type_spec_, type_qualifiers_, storage_class_spec_, func_spec_,
+            align_};
+  }
+  void SetSpec(const Spec& spec) {
+    type_spec_ = spec.type_spec_;
+    type_qualifiers_ = spec.type_spec_;
+    storage_class_spec_ = spec.storage_class_spec_;
+    func_spec_ = spec.func_spec_;
+    align_ = spec.align_;
+  }
 
   bool IsComplete() const;
   void SetComplete(bool complete) const;

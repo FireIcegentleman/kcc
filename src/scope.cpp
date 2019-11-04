@@ -37,7 +37,7 @@ std::shared_ptr<Identifier> Scope::FindNormal(const std::string& name) {
   if (type_ == kFile || parent_ == nullptr) {
     return nullptr;
   }
-  return parent_->FindTag(name);
+  return parent_->FindNormal(name);
 }
 
 std::shared_ptr<Identifier> Scope::FindTagInCurrScope(const std::string& name) {

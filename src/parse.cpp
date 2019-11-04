@@ -20,8 +20,6 @@ std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
     unit->AddStmt(ParseExternalDecl());
   }
 
-  curr_scope_->PrintCurrScope();
-
   return unit;
 }
 
@@ -600,7 +598,7 @@ finish:
   PutBack();
 
   if (!type_spec) {
-    Error(tok, "type specifier missing");
+    Error(tok, "type specifier missing: {}", tok.GetStr());
   }
 
   if (!type) {
@@ -633,9 +631,9 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
       // 无前向声明
       if (!tag) {
         auto type{StructType::Get(is_struct, true, curr_scope_)};
-        auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
-        curr_scope_->InsertTag(tag_name, ident);
+        auto ident{MakeAstNode<Identifier>(tok, type, kNone, true)};
         ParseStructDeclList(type);
+        curr_scope_->InsertTag(tag_name, ident);
         Expect(Tag::kRightBrace);
         return type;
       } else {
@@ -674,8 +672,9 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
 }
 
 void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
-  auto scope_backup{curr_scope_};
-  curr_scope_ = type->GetScope();
+  // TODO 为什么会指向相同的地方
+  auto scope_backup{*curr_scope_};
+  *curr_scope_ = *type->GetScope();
 
   while (!Test(Tag::kRightBrace)) {
     if (!HasNext()) {
@@ -724,7 +723,6 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
           } else if (base_type->IsFunctionTy()) {
             Error(Peek(), "field '{}' declared as a function", name);
           } else {
-            // FIXME
             auto member{std::make_shared<Object>(tok, base_type)};
             type->AddMember(member);
           }
@@ -742,14 +740,15 @@ finalize:
 
   // struct / union 中的 tag 的作用域与该 struct / union 所在的作用域相同
   for (const auto& [name, tag] : curr_scope_->AllTagInCurrScope()) {
-    if (scope_backup->FindTagInCurrScope(name)) {
+    if (scope_backup.FindTagInCurrScope(name)) {
       Error(tag->GetToken(), "redefinition of tag {}", tag->GetName());
     } else {
-      scope_backup->InsertTag(name, tag);
+      scope_backup.InsertTag(name, tag);
     }
   }
 
-  curr_scope_ = scope_backup;
+  *type->GetScope() = *curr_scope_;
+  *curr_scope_ = scope_backup;
 }
 
 std::shared_ptr<Type> Parser::ParseEnumSpec() {
@@ -767,8 +766,8 @@ std::shared_ptr<Type> Parser::ParseEnumSpec() {
       if (!tag) {
         auto type{IntegerType::Get(32)};
         auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
-        curr_scope_->InsertTag(tag_name, ident);
         ParseEnumerator(type);
+        curr_scope_->InsertTag(tag_name, ident);
         Expect(Tag::kRightBrace);
         return type;
       } else {
@@ -863,7 +862,9 @@ void Parser::ParseDirectDeclaratorTail(std::shared_ptr<Type>& base_type) {
       Error(Peek(), "has incomplete element type");
     }
 
-    base_type = ArrayType::Get(base_type, len);
+    auto new_type{ArrayType::Get(base_type, len)};
+    new_type->SetSpec(base_type->GetSpec());
+    base_type = new_type;
   } else if (Try(Tag::kLeftParen)) {
     if (base_type->IsFunctionTy()) {
       Error(Peek(), "the return value of function cannot be function");
@@ -879,7 +880,9 @@ void Parser::ParseDirectDeclaratorTail(std::shared_ptr<Type>& base_type) {
 
     ParseDirectDeclaratorTail(base_type);
 
-    base_type = FunctionType::Get(base_type, params, var_args);
+    auto new_type{FunctionType::Get(base_type, params, var_args)};
+    new_type->SetSpec(base_type->GetSpec());
+    base_type = new_type;
   }
 }
 
@@ -954,7 +957,7 @@ std::shared_ptr<Object> Parser::ParseParamDecl() {
 
   auto ident{MakeDeclarator(tok, base_type)};
 
-  return std::dynamic_pointer_cast<Object>(ident);
+  return std::dynamic_pointer_cast<Object>(ident->GetIdent());
 }
 
 bool Parser::IsTypeName(const Token& tok) {
@@ -993,7 +996,9 @@ void Parser::ParseDirectAbstractDeclarator(std::shared_ptr<Type>& type) {
 
 void Parser::ParsePointer(std::shared_ptr<Type>& type) {
   while (Try(Tag::kStar)) {
-    type = type->GetPointerTo();
+    auto new_type{type->GetPointerTo()};
+    new_type->SetSpec(type->GetSpec());
+    type = new_type;
     ParseTypeQualList(type);
   }
 }
@@ -1049,12 +1054,14 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
     if (ident) {
       // 如果两次定义的类型兼容是可以的
       if (!type->Compatible(ident->GetType())) {
-        Error("typedef redefinition with different types('{}' vs '{}'",
+        Error(tok, "typedef redefinition with different types('{}' vs '{}'",
               type->ToString(), ident->GetType()->ToString());
+      } else {
+        Warning(tok, "Typedef redefinition");
       }
     } else {
       curr_scope_->InsertNormal(
-          tok.GetStr(), std::make_shared<Identifier>(tok, type, kNone, true));
+          tok.GetStr(), MakeAstNode<Identifier>(tok, type, kNone, true));
 
       return nullptr;
     }
@@ -1338,6 +1345,7 @@ std::shared_ptr<Expr> Parser::ParseConstant() {
     return ParseCharacter();
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
