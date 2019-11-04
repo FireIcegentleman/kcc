@@ -354,7 +354,7 @@ std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
     auto base_type{ParseDeclSpec(false)};
 
     if (Try(Tag::kSemicolon)) {
-      Warning(PeekPrev(), "declaration does not declare anything");
+      // Warning(PeekPrev(), "declaration does not declare anything");
       return nullptr;
     } else {
       if (maybe_func_def) {
@@ -609,7 +609,7 @@ finish:
   type->SetFuncSpec(func_spec);
   type->SetStorageClassSpec(storage_class_spec);
 
-  // TODO type attributes
+  TryAttributeSpec();
 
   return type;
 
@@ -619,7 +619,8 @@ finish:
 }
 
 std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
-  // TODO type attribute
+  TryAttributeSpec();
+
   auto tok{Peek()};
   std::string tag_name;
 
@@ -631,6 +632,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
       // 无前向声明
       if (!tag) {
         auto type{StructType::Get(is_struct, true, curr_scope_)};
+        type->SetName(tag_name);
         auto ident{MakeAstNode<Identifier>(tok, type, kNone, true)};
         ParseStructDeclList(type);
         curr_scope_->InsertTag(tag_name, ident);
@@ -655,6 +657,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
       }
 
       auto type{StructType::Get(is_struct, true, curr_scope_)};
+      type->SetName(tag_name);
       auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
       curr_scope_->InsertTag(tag_name, ident);
       return type;
@@ -734,25 +737,25 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
   }
 
 finalize:
-  // TODO type attributes
+  TryAttributeSpec();
 
   type->SetComplete(true);
 
   // struct / union 中的 tag 的作用域与该 struct / union 所在的作用域相同
-  for (const auto& [name, tag] : curr_scope_->AllTagInCurrScope()) {
-    if (scope_backup.FindTagInCurrScope(name)) {
-      Error(tag->GetToken(), "redefinition of tag {}", tag->GetName());
-    } else {
-      scope_backup.InsertTag(name, tag);
-    }
-  }
+  //  for (const auto& [name, tag] : curr_scope_->AllTagInCurrScope()) {
+  //    if (scope_backup.FindTagInCurrScope(name)) {
+  //      Error(tag->GetToken(), "redefinition of tag {}", tag->GetName());
+  //    } else {
+  //      scope_backup.InsertTag(name, tag);
+  //    }
+  //  }
 
   *type->GetScope() = *curr_scope_;
   *curr_scope_ = scope_backup;
 }
 
 std::shared_ptr<Type> Parser::ParseEnumSpec() {
-  // TODO type attributes
+  TryAttributeSpec();
 
   std::string tag_name;
   auto tok{Peek()};
@@ -797,7 +800,7 @@ void Parser::ParseEnumerator(std::shared_ptr<Type> type) {
 
   do {
     auto tok{Expect(Tag::kIdentifier)};
-    // TODO type attributes
+    TryAttributeSpec();
     auto name{tok.GetStr()};
     auto ident{curr_scope_->FindNormalInCurrScope(name)};
 
@@ -1137,6 +1140,9 @@ std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
     ext_decl = ParseDecl(true);
   } while (ext_decl == nullptr);
 
+  TryAsm();
+  TryAttributeSpec();
+
   if (Try(Tag::kLeftBrace)) {
     // TODO func def
   } else {
@@ -1246,8 +1252,7 @@ std::shared_ptr<Expr> Parser::ParseSizeof() {
     Error(tok, "sizeof(incomplete type)");
   }
 
-  type->SetUnsigned();
-  return MakeAstNode<Constant>(tok, type,
+  return MakeAstNode<Constant>(tok, Type::Get(kLong | kUnsigned),
                                static_cast<std::uint64_t>(type->Width()));
 }
 
@@ -1488,6 +1493,89 @@ std::shared_ptr<Expr> Parser::ParseCharacter() {
   auto tok{Next()};
   auto val{Scanner{tok.GetStr()}.ScanCharacter()};
   return MakeAstNode<Constant>(tok, val);
+}
+
+// attribute-specifier:
+//  __ATTRIBUTE__ '(' '(' attribute-list-opt ')' ')'
+//
+// attribute-list:
+//  attribute-opt
+//  attribute-list ',' attribute-opt
+//
+// attribute:
+//  attribute-name
+//  attribute-name '(' ')'
+//  attribute-name '(' parameter-list ')'
+//
+// attribute-name:
+//  identifier
+//
+// parameter-list:
+//  identifier
+//  identifier ',' expression-list
+//  expression-list-opt
+//
+// expression-list:
+//  expression
+//  expression-list ',' expression
+// 可以有多个
+void Parser::TryAttributeSpec() {
+  while (Try(Tag::kAttribute)) {
+    Expect(Tag::kLeftParen);
+    Expect(Tag::kLeftParen);
+
+    ParseAttributeList();
+
+    Expect(Tag::kRightParen);
+    Expect(Tag::kRightParen);
+  }
+}
+
+void Parser::ParseAttributeList() {
+  while (!Test(Tag::kRightParen)) {
+    ParseAttribute();
+
+    if (!Test(Tag::kRightParen)) {
+      Expect(Tag::kComma);
+    }
+  }
+}
+
+void Parser::ParseAttribute() {
+  Expect(Tag::kIdentifier);
+
+  if (Try(Tag::kLeftParen)) {
+    ParseAttributeParamList();
+    Expect(Tag::kRightParen);
+  }
+}
+
+void Parser::ParseAttributeParamList() {
+  if (Try(Tag::kIdentifier)) {
+    if (Try(Tag::kComma)) {
+      ParseAttributeExprList();
+    }
+  } else {
+    ParseAttributeExprList();
+  }
+}
+
+void Parser::ParseAttributeExprList() {
+  while (!Test(Tag::kRightParen)) {
+    ParseExpr();
+
+    if (!Test(Tag::kRightParen)) {
+      Expect(Tag::kComma);
+    }
+  }
+}
+
+void Parser::TryAsm() {
+  if (Try(Tag::kAsm)) {
+    Expect(Tag::kLeftParen);
+    ParseStringLiteral(false);
+    Expect(Tag::kRightParen);
+  }
 }
 
 // TODO init

@@ -440,24 +440,26 @@ void JsonGen::Visit(const TranslationUnit& node) {
 
 void JsonGen::Visit(const JumpStmt&) {}
 
-void JsonGen::Visit(const Declaration& node) {
-  QJsonObject root;
-  root["name"] = AstNodeTypes::ToString(node.Kind());
-
-  QJsonArray children;
-
-  QJsonObject type;
-  type["name"] =
-      QString::fromStdString("type: " + node.GetIdent()->GetType()->ToString());
-  children.append(type);
-
-  QJsonObject name;
-  name["name"] = "name: " + QString::fromStdString(node.GetIdent()->GetName());
-  children.append(name);
-
-  root["children"] = children;
-
-  result_ = root;
+// FIXME
+void JsonGen::Visit(const Declaration&) {
+  //  QJsonObject root;
+  //  root["name"] = AstNodeTypes::ToString(node.Kind());
+  //
+  //  QJsonArray children;
+  //
+  //  QJsonObject type;
+  //  type["name"] =
+  //      QString::fromStdString("type: " +
+  //      node.GetIdent()->GetType()->ToString());
+  //  children.append(type);
+  //
+  //  QJsonObject name;
+  //  name["name"] = "name: " +
+  //  QString::fromStdString(node.GetIdent()->GetName()); children.append(name);
+  //
+  //  root["children"] = children;
+  //
+  //  result_ = root;
 }
 
 void JsonGen::Visit(const FuncDef&) {}

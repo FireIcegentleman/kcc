@@ -15,15 +15,15 @@
 namespace kcc {
 
 enum TypeSpec {
-  kVoid = 0x1,
-  kChar = 0x2,
-  kShort = 0x4,
-  kInt = 0x8,
-  kLong = 0x10,
-  kFloat = 0x20,
-  kDouble = 0x40,
-  kSigned = 0x80,
-  kUnsigned = 0x100,
+  kSigned = 0x1,
+  kUnsigned = 0x2,
+  kVoid = 0x4,
+  kChar = 0x8,
+  kShort = 0x10,
+  kInt = 0x20,
+  kLong = 0x40,
+  kFloat = 0x80,
+  kDouble = 0x100,
   kBool = 0x200,
   // 不支持
   kComplex = 0x400,
@@ -221,7 +221,7 @@ class IntegerType : public Type {
   static std::shared_ptr<IntegerType> Get(std::int32_t num_bit);
 
   virtual std::string ToString() const override;
-  virtual std::int32_t Width() const override { return num_bit_; }
+  virtual std::int32_t Width() const override { return num_bit_ / 8; }
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& type) const override;
 
@@ -314,12 +314,12 @@ class StructType : public Type {
 
   std::vector<std::shared_ptr<Object>> members_;
 
-  bool is_struct_;
-  bool has_name_;
+  bool is_struct_{};
+  bool has_name_{};
   std::shared_ptr<Scope> scope_;
-  std::int32_t offset_;
-  std::int32_t width_;
-  std::int32_t align_;
+  std::int32_t offset_{};
+  std::int32_t width_{};
+  std::int32_t align_{};
 };
 
 class ArrayType : public Type {

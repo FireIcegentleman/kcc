@@ -16,7 +16,7 @@ if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES
 endif()
 
 set(sanitizer
-    "Undefined"
+    "None"
     CACHE
       STRING
       "Compile with a sanitizer. Options are: Address, Thread, Undefined, None")

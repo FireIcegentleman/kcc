@@ -178,12 +178,14 @@ void BinaryOpExpr::MultiOpTypeCheck() {
   auto rhs_type{rhs_->GetType()};
 
   if (op_ == Tag::kPercent) {
-    if (!lhs_type->IsIntegerTy() || rhs_type->IsIntegerTy()) {
-      Error(tok_.GetLoc(), "the operand should be integer type");
+    if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
+      Error(tok_.GetLoc(), "the operand should be integer type '{}' '{}'",
+            lhs_type->ToString(), rhs_type->ToString());
     }
   } else {
-    if (!lhs_type->IsArithmeticTy() || rhs_type->IsArithmeticTy()) {
-      Error(tok_.GetLoc(), "the operand should be integer type");
+    if (!lhs_type->IsArithmeticTy() || !rhs_type->IsArithmeticTy()) {
+      Error(tok_.GetLoc(), "the operand should be integer type '{}' '{}'",
+            lhs_type->ToString(), rhs_type->ToString());
     }
   }
 
@@ -203,7 +205,8 @@ void BinaryOpExpr::AddOpTypeCheck() {
   } else if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
     type_ = lhs_type;
   } else {
-    Error(tok_.GetLoc(), "the operand should be integer type");
+    Error(tok_.GetLoc(), "the operand should be integer type '{}' '{}'",
+          lhs_type->ToString(), rhs_type->ToString());
   }
 }
 

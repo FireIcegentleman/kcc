@@ -94,6 +94,13 @@ class Parser {
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
 
+  void TryAttributeSpec();
+  void ParseAttributeList();
+  void ParseAttribute();
+  void ParseAttributeParamList();
+  void ParseAttributeExprList();
+  void TryAsm();
+
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
@@ -104,7 +111,7 @@ class Parser {
   std::shared_ptr<T> MakeAstNode(Args &&... args) {
     auto t{std::make_shared<T>(std::forward<Args>(args)...)};
     if (auto p{std::dynamic_pointer_cast<Expr>(t)}; p) {
-      // p->TypeCheck();
+      p->TypeCheck();
     }
     return t;
   }

@@ -57,7 +57,7 @@ std::string Preprocessor::Run(const std::string &input_file) {
 
 std::string Preprocessor::Cpp(const std::string &input_file) {
   if (std::empty(builtin_)) {
-    // builtin_ = Run("include/builtin.h");
+    builtin_ = Run("include/builtin.h");
   }
 
   return builtin_ + Run(input_file);

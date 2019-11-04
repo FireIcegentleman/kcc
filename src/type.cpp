@@ -205,16 +205,8 @@ std::shared_ptr<Type> Type::Get(std::uint32_t type_spec) {
     auto ret{Type::GetVoidTy()};
     ret->type_spec_ = type_spec;
     return ret;
-  } else if (type_spec & kFloat) {
-    auto ret{Type::GetFloatTy()};
-    ret->type_spec_ = type_spec;
-    return ret;
-  } else if (type_spec & kDouble) {
-    auto ret{Type::GetDoubleTy()};
-    ret->type_spec_ = type_spec;
-    return ret;
-  } else if (type_spec & (kLong | kDouble)) {
-    auto ret{Type::GetX86Fp80Ty()};
+  } else if (type_spec & kBool) {
+    auto ret{IntegerType::Get(1)};
     ret->type_spec_ = type_spec;
     return ret;
   } else if (type_spec & kChar) {
@@ -225,20 +217,28 @@ std::shared_ptr<Type> Type::Get(std::uint32_t type_spec) {
     auto ret{IntegerType::Get(16)};
     ret->type_spec_ = type_spec;
     return ret;
-  } else if (type_spec & kInt) {
-    auto ret{IntegerType::Get(32)};
+  } else if (type_spec & kLongLong) {
+    auto ret{IntegerType::Get(64)};
     ret->type_spec_ = type_spec;
     return ret;
   } else if (type_spec & kLong) {
     auto ret{IntegerType::Get(64)};
     ret->type_spec_ = type_spec;
     return ret;
-  } else if (type_spec & kLongLong) {
-    auto ret{IntegerType::Get(64)};
+  } else if (type_spec & kInt) {
+    auto ret{IntegerType::Get(32)};
     ret->type_spec_ = type_spec;
     return ret;
-  } else if (type_spec & kBool) {
-    auto ret{IntegerType::Get(1)};
+  } else if (type_spec & kFloat) {
+    auto ret{Type::GetFloatTy()};
+    ret->type_spec_ = type_spec;
+    return ret;
+  } else if (type_spec & kDouble) {
+    auto ret{Type::GetDoubleTy()};
+    ret->type_spec_ = type_spec;
+    return ret;
+  } else if (type_spec & (kLong | kDouble)) {
+    auto ret{Type::GetX86Fp80Ty()};
     ret->type_spec_ = type_spec;
     return ret;
   } else {
@@ -265,7 +265,7 @@ bool IntegerType::Equal(const std::shared_ptr<Type>& type) const {
 std::shared_ptr<Type> Type::IntegerPromote(std::shared_ptr<Type> type) {
   assert(type->IsIntegerTy());
 
-  if (type->Rank() < IntegerType::Get(32)->Rank()) {
+  if (type->Rank() < 3) {
     type->num_bit_ = 32;
     type->type_spec_ = kInt;
   }
@@ -286,7 +286,9 @@ std::shared_ptr<Type> Type::MaxType(std::shared_ptr<Type>& lhs,
 
   if (lhs->Width() == rhs->Width() &&
       (lhs->IsUnsigned() || rhs->IsUnsigned())) {
-    return IntegerType::Get(ret->num_bit_);
+    auto new_type{IntegerType::Get(ret->num_bit_)};
+    new_type->SetSpec(ret->GetSpec());
+    return new_type;
   } else {
     return ret;
   }
@@ -368,7 +370,7 @@ std::shared_ptr<Object> Type::GetStructMember(const std::string& name) const {
 
 std::string IntegerType::ToString() const {
   return (IsUnsigned() ? "u" : "") + std::string("int") +
-         std::to_string(Width());
+         std::to_string(num_bit_);
 }
 
 std::shared_ptr<Type> FunctionType::GetParamType(std::int32_t i) const {
