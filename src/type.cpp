@@ -360,7 +360,8 @@ std::shared_ptr<Object> Type::GetStructMember(const std::string& name) const {
 }
 
 std::string IntegerType::ToString() const {
-  return "int" + std::to_string(Width());
+  return (IsUnsigned() ? "u" : "") + std::string("int") +
+         std::to_string(Width());
 }
 
 std::shared_ptr<Type> FunctionType::GetParamType(std::int32_t i) const {

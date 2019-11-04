@@ -14,10 +14,13 @@ class Preprocessor {
  public:
   void SetIncludePaths(const std::vector<std::string> &include_paths);
   void SetMacroDefinitions(const std::vector<std::string> &macro_definitions);
-  std::string Run(const std::string &input_file);
+  std::string Cpp(const std::string &input_file);
 
  private:
+  std::string Run(const std::string &input_file);
+
   std::string cmd_{"gcc -E -std=c17 "};
+  std::string builtin_;
 };
 
 }  // namespace kcc

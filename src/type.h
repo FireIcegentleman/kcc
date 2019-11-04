@@ -92,6 +92,7 @@ class Type : public std::enable_shared_from_this<Type> {
   virtual std::int32_t Width() const;
   void SetAlign(std::int32_t align);
   std::int32_t Align() const;
+  bool HasAlign() const { return align_ != 0; }
   static std::shared_ptr<Type> MayCast(std::shared_ptr<Type> type,
                                        bool in_proto = false);
 

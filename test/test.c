@@ -1,1 +1,5 @@
-(unsigned)~a + 1
+//#include <stdio.h>
+typedef struct {
+  int a;
+} a;
+a b;

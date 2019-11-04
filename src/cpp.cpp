@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 
 #include "error.h"
 
@@ -42,7 +43,7 @@ std::string Preprocessor::Run(const std::string &input_file) {
   char buff[kSize];
 
   if ((fp = popen((cmd_ + input_file).c_str(), "r")) == nullptr) {
-    // error
+    Error("Unable to create pipeline");
   }
 
   while (std::fgets(buff, sizeof(buff), fp)) {
@@ -52,6 +53,14 @@ std::string Preprocessor::Run(const std::string &input_file) {
   pclose(fp);
 
   return preprocessed_code;
+}
+
+std::string Preprocessor::Cpp(const std::string &input_file) {
+  if (std::empty(builtin_)) {
+    // builtin_ = Run("include/builtin.h");
+  }
+
+  return builtin_ + Run(input_file);
 }
 
 }  // namespace kcc

@@ -17,9 +17,10 @@ std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
   curr_scope_ = std::make_shared<Scope>(nullptr, kFile);
 
   while (HasNext()) {
-    unit->AddStmt(ParseExpr());
-    // unit->AddStmt(ParseExternalDecl());
+    unit->AddStmt(ParseExternalDecl());
   }
+
+  curr_scope_->PrintCurrScope();
 
   return unit;
 }
@@ -602,7 +603,9 @@ finish:
     Error(tok, "type specifier missing");
   }
 
-  type = Type::Get(type_spec);
+  if (!type) {
+    type = Type::Get(type_spec);
+  }
   type->SetAlign(align);
   type->SetTypeQualifiers(type_qualifiers);
   type->SetFuncSpec(func_spec);
@@ -705,10 +708,9 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
 
           if (type->GetMember(name)) {
             Error(Peek(), "duplicate member:{}", name);
-          } else if (!base_type->IsComplete()) {
+          } else if (base_type->IsArrayTy() && !base_type->IsComplete()) {
             // 可能是柔性数组
-            if (type->IsStruct() && std::size(type->GetMembers()) > 0 &&
-                base_type->IsArrayTy()) {
+            if (type->IsStruct() && std::size(type->GetMembers()) > 0) {
               auto member{std::make_shared<Object>(Peek(), base_type)};
               type->AddMember(member);
               // 必须是最后一个成员
@@ -722,7 +724,8 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
           } else if (base_type->IsFunctionTy()) {
             Error(Peek(), "field '{}' declared as a function", name);
           } else {
-            auto member{std::make_shared<Object>(Peek(), base_type)};
+            // FIXME
+            auto member{std::make_shared<Object>(tok, base_type)};
             type->AddMember(member);
           }
         }
@@ -1038,7 +1041,7 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
   auto name{tok.GetStr()};
 
   if (type->IsTypedef()) {
-    if (type->GetAlign() != 0) {
+    if (type->HasAlign() != 0) {
       Error(tok, "'_Alignas' attribute only applies to variables and fields");
     }
 
@@ -1052,6 +1055,7 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
     } else {
       curr_scope_->InsertNormal(
           tok.GetStr(), std::make_shared<Identifier>(tok, type, kNone, true));
+
       return nullptr;
     }
   } else if (type->IsVoidTy()) {
@@ -1071,24 +1075,24 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
     linkage = kNone;
   }
 
-  auto ident{curr_scope_->FindNormalInCurrScope(tok)};
-  // 可能是前向声明
-  // 有链接对象（外部或内部）的声明可以重复
-  if (ident) {
-    if (linkage == kNone) {
-      Error(tok, "redefinition of '{}'", name);
-    } else if (linkage != ident->GetLinkage()) {
-      Error(tok, "conflicting linkage '{}'", name);
-    }
-
-    if (!ident->GetType()->IsComplete()) {
-      ident->GetType()->SetComplete(type->IsComplete());
-    }
-  }
+  //  auto ident{curr_scope_->FindNormalInCurrScope(tok)};
+  //  // 可能是前向声明
+  //  // 有链接对象（外部或内部）的声明可以重复
+  //  if (ident) {
+  //    if (linkage == kNone) {
+  //      Error(tok, "redefinition of '{}'", name);
+  //    } else if (linkage != ident->GetLinkage()) {
+  //      Error(tok, "conflicting linkage '{}'", name);
+  //    }
+  //
+  //    if (!ident->GetType()->IsComplete()) {
+  //      ident->GetType()->SetComplete(type->IsComplete());
+  //    }
+  //  }
 
   std::shared_ptr<Identifier> ret;
   if (type->IsFunctionTy()) {
-    if (type->GetAlign() != 0) {
+    if (type->HasAlign() != 0) {
       Error(tok, "'_Alignas' attribute only applies to variables and fields");
     }
     ret = std::make_shared<Identifier>(tok, type, linkage, false);
@@ -1124,10 +1128,12 @@ std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
 
   do {
     ext_decl = ParseDecl(true);
-  } while (ext_decl != nullptr);
+  } while (ext_decl == nullptr);
 
   if (Try(Tag::kLeftBrace)) {
     // TODO func def
+  } else {
+    Expect(Tag::kSemicolon);
   }
 
   return ext_decl;
@@ -1276,8 +1282,25 @@ std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
         }
         return MakeAstNode<FuncCallExpr>(expr, args);
       }
-      case Tag::kArrow:
+      case Tag::kArrow: {
         expr = MakeAstNode<UnaryOpExpr>(tok, Tag::kStar, expr);
+
+        auto member{Expect(Tag::kIdentifier)};
+        auto member_name{member.GetStr()};
+
+        auto type{expr->GetType()};
+        if (!type->IsStructTy()) {
+          Error(tok, "an struct/union expected");
+        }
+
+        auto rhs{type->GetStructMember(member_name)};
+        if (!rhs) {
+          Error(tok, "'{}' is not a member of '{}'", member_name,
+                type->GetStructName());
+        }
+
+        return MakeAstNode<BinaryOpExpr>(tok, Tag::kPeriod, expr, rhs);
+      }
       case Tag::kPeriod: {
         auto member{Expect(Tag::kIdentifier)};
         auto member_name{member.GetStr()};
@@ -1390,7 +1413,8 @@ std::shared_ptr<Expr> Parser::ParseInteger() {
   if (decimal) {
     switch (type_spec) {
       case 0:
-        if ((val > std::numeric_limits<std::int32_t>::max())) {
+        if ((val > static_cast<std::uint32_t>(
+                       std::numeric_limits<std::int32_t>::max()))) {
           type_spec |= kLong;
         } else {
           type_spec |= kInt;
@@ -1409,11 +1433,13 @@ std::shared_ptr<Expr> Parser::ParseInteger() {
   } else {
     switch (type_spec) {
       case 0:
-        if (val > std::numeric_limits<std::int64_t>::max()) {
+        if (val > static_cast<std::uint64_t>(
+                      std::numeric_limits<std::int64_t>::max())) {
           type_spec |= (kLong | kUnsigned);
         } else if (val > std::numeric_limits<std::uint32_t>::max()) {
           type_spec |= kLong;
-        } else if (val > std::numeric_limits<std::int32_t>::max()) {
+        } else if (val > static_cast<std::uint32_t>(
+                             std::numeric_limits<std::int32_t>::max())) {
           type_spec |= (kInt | kUnsigned);
         } else {
           type_spec |= kInt;
@@ -1427,14 +1453,16 @@ std::shared_ptr<Expr> Parser::ParseInteger() {
         }
         break;
       case kLong:
-        if (val > std::numeric_limits<std::int64_t>::max()) {
+        if (val > static_cast<std::uint64_t>(
+                      std::numeric_limits<std::int64_t>::max())) {
           type_spec |= (kLong | kUnsigned);
         } else {
           type_spec |= kLong;
         }
         break;
       case kLongLong:
-        if (val > std::numeric_limits<std::int64_t>::max()) {
+        if (val > static_cast<std::uint64_t>(
+                      std::numeric_limits<std::int64_t>::max())) {
           type_spec |= (kLongLong | kUnsigned);
         } else {
           type_spec |= kLongLong;

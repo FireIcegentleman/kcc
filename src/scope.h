@@ -5,6 +5,7 @@
 #ifndef KCC_SRC_SCOPE_H_
 #define KCC_SRC_SCOPE_H_
 
+#include <iostream>
 #include <map>
 #include <memory>
 
@@ -37,6 +38,12 @@ class Scope {
   bool IsBlockScope() const { return type_ == kBlock; }
   bool IsFuncScope() const { return type_ == kFunc; }
   bool IsFuncProtoScope() const { return type_ == kFuncProto; }
+  void PrintCurrScope() const {
+    for (const auto &item : normal_) {
+      std::cout << item.first << ' ';
+      std::cout << item.second->GetType()->ToString() << '\n';
+    }
+  }
 
  private:
   std::shared_ptr<Scope> parent_;
