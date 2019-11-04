@@ -501,4 +501,27 @@ std::string Scanner::ScanStringLiteral(bool handle_escape) {
   return s;
 }
 
+std::int32_t Scanner::ScanCharacter() {
+  std::int32_t val{};
+  std::int32_t count{};
+  // eat '
+  Next();
+
+  while (!Test('\'')) {
+    auto ch{Next()};
+    if (ch == '\\') {
+      ch = HandleEscape();
+    }
+
+    val = (val << 8) + ch;
+    ++count;
+  }
+
+  if (count > 1) {
+    Warning(location_, "multi-character character constant");
+  }
+
+  return val;
+}
+
 }  // namespace kcc

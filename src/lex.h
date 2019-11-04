@@ -19,6 +19,7 @@ class Scanner {
   explicit Scanner(const std::string &preprocessed_code);
   std::vector<Token> Tokenize();
   std::string ScanStringLiteral(bool handle_escape);
+  std::int32_t ScanCharacter();
 
  private:
   Token Scan();

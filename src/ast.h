@@ -111,6 +111,10 @@ class Expr : public AstNode {
  * ,
  */
 class BinaryOpExpr : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+
  public:
   BinaryOpExpr(const Token& tok, std::shared_ptr<Expr> lhs,
                std::shared_ptr<Expr> rhs);
@@ -150,6 +154,10 @@ class BinaryOpExpr : public Expr {
  * * &
  */
 class UnaryOpExpr : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+
  public:
   UnaryOpExpr(const Token& tok, std::shared_ptr<Expr> expr);
   UnaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> expr);
@@ -172,6 +180,10 @@ class UnaryOpExpr : public Expr {
 };
 
 class TypeCastExpr : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+
  public:
   TypeCastExpr(std::shared_ptr<Expr> expr, std::shared_ptr<Type> to)
       : Expr(expr->GetToken()), expr_{expr}, to_{to} {}
@@ -187,6 +199,10 @@ class TypeCastExpr : public Expr {
 };
 
 class ConditionOpExpr : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+
  public:
   ConditionOpExpr(const Token& tok, std::shared_ptr<Expr> cond,
                   std::shared_ptr<Expr> lhs, std::shared_ptr<Expr> rhs)
@@ -210,6 +226,8 @@ class ConditionOpExpr : public Expr {
 };
 
 class FuncCallExpr : public Expr {
+  friend class JsonGen;
+
  public:
   explicit FuncCallExpr(std::shared_ptr<Expr> callee,
                         std::vector<std::shared_ptr<Expr>> args = {})
@@ -228,6 +246,10 @@ class FuncCallExpr : public Expr {
 };
 
 class Constant : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+
  public:
   Constant(const Token& tok, std::int32_t val)
       : Expr(tok, IntegerType::Get(32)), int_val_(val) {}
@@ -267,6 +289,8 @@ enum Linkage { kNone, kInternal, kExternal };
 // 宏形参名
 // 宏名或宏形参名以外的每个标识符都拥有作用域，并且可以拥有链接
 class Identifier : public Expr {
+  friend class JsonGen;
+
  public:
   Identifier(const Token& tok, std::shared_ptr<Type> type, enum Linkage linkage,
              bool is_type_name)
@@ -290,6 +314,10 @@ class Identifier : public Expr {
 };
 
 class Enumerator : public Identifier {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+
  public:
   Enumerator(const Token& tok, std::int32_t val);
 
@@ -313,6 +341,8 @@ class Enumerator : public Identifier {
 // 值（可以是不确定的）
 // 可选项，表示该对象的标识符
 class Object : public Identifier {
+  friend class JsonGen;
+
  public:
   Object(const Token& tok, std::shared_ptr<Type> type,
          enum Linkage linkage = kNone, bool anonymous = false)
@@ -341,6 +371,8 @@ class Object : public Identifier {
 class Stmt : public AstNode {};
 
 class LabelStmt : public Stmt {
+  friend class JsonGen;
+
  public:
   explicit LabelStmt(const std::string& label);
 
@@ -352,6 +384,8 @@ class LabelStmt : public Stmt {
 };
 
 class IfStmt : public Stmt {
+  friend class JsonGen;
+
  public:
   IfStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> then_block,
          std::shared_ptr<Stmt> else_block = nullptr);
@@ -367,6 +401,8 @@ class IfStmt : public Stmt {
 
 // break / continue / goto
 class JumpStmt : public Stmt {
+  friend class JsonGen;
+
  public:
   explicit JumpStmt(std::shared_ptr<LabelStmt> label);
 
@@ -378,6 +414,8 @@ class JumpStmt : public Stmt {
 };
 
 class ReturnStmt : public Stmt {
+  friend class JsonGen;
+
  public:
   explicit ReturnStmt(std::shared_ptr<Expr> expr);
 
@@ -389,6 +427,8 @@ class ReturnStmt : public Stmt {
 };
 
 class CompoundStmt : public Stmt {
+  friend class JsonGen;
+
  public:
   CompoundStmt() = default;
   explicit CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts);
@@ -405,6 +445,7 @@ class CompoundStmt : public Stmt {
 };
 
 class Initializer {
+  friend class JsonGen;
   friend bool operator<(const Initializer& lhs, const Initializer& rhs);
 
  public:
@@ -421,6 +462,8 @@ class Initializer {
 bool operator<(const Initializer& lhs, const Initializer& rhs);
 
 class Declaration : public Stmt {
+  friend class JsonGen;
+
  public:
   explicit Declaration(std::shared_ptr<Identifier> ident) : ident_{ident} {}
 
@@ -428,8 +471,8 @@ class Declaration : public Stmt {
   virtual void Accept(Visitor& visitor) const override;
 
   void AddInit(const Initializer& init);
-  void AddInits(const std::set<Initializer>& inits);
-  std::shared_ptr<Identifier> GetIdent() const;
+  void AddInits(const std::set<Initializer>& inits) { inits_ = inits; }
+  std::shared_ptr<Identifier> GetIdent() const { return ident_; }
   bool HasInit() const;
   bool IsObj() const { return ident_->IsObject(); }
 
@@ -439,6 +482,8 @@ class Declaration : public Stmt {
 };
 
 class TranslationUnit : public AstNode {
+  friend class JsonGen;
+
  public:
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -452,6 +497,8 @@ class TranslationUnit : public AstNode {
 };
 
 class FuncDef : public ExtDecl {
+  friend class JsonGen;
+
  public:
   explicit FuncDef(std::shared_ptr<Identifier> ident) : ident_(ident) {}
 

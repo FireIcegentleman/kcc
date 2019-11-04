@@ -4,6 +4,7 @@
 
 #include "cpp.h"
 #include "error.h"
+#include "json_gen.h"
 #include "lex.h"
 #include "parse.h"
 
@@ -24,6 +25,9 @@ int main() {
 
   Parser parser{std::move(tokens)};
   auto unit{parser.ParseTranslationUnit()};
+
+  JsonGen json_gen;
+  json_gen.GenJson(unit, "test.html");
 
   PrintWarnings();
 }

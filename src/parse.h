@@ -21,7 +21,7 @@ class Parser {
   std::shared_ptr<TranslationUnit> ParseTranslationUnit();
 
  private:
-  std::shared_ptr<Stmt> ParseExternalDecl();
+  std::shared_ptr<ExtDecl> ParseExternalDecl();
   std::shared_ptr<Type> ParseStructUnionSpec(bool is_struct);
   std::shared_ptr<Type> ParseEnumSpec();
   void ParseEnumerator(std::shared_ptr<Type> type);
@@ -39,7 +39,7 @@ class Parser {
   void ParseTypeQualList(std::shared_ptr<Type> &type);
   void ParseDirectAbstractDeclarator(std::shared_ptr<Type> &type);
 
-  std::shared_ptr<CompoundStmt> ParseDecl();
+  std::shared_ptr<CompoundStmt> ParseDecl(bool maybe_func_def = false);
   void ParseStaticAssertDecl();
   std::shared_ptr<Type> ParseDeclSpec(bool only_spec_and_qual);
   void ParseDeclarator(Token &tok, std::shared_ptr<Type> &base_type);
@@ -97,16 +97,15 @@ class Parser {
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
-  std::shared_ptr<TranslationUnit> unit_{std::make_shared<TranslationUnit>()};
-
-  SourceLocation loc_;
-
   std::shared_ptr<Scope> curr_scope_;
   std::map<std::string, std::shared_ptr<LabelStmt>> curr_labels_;
 
   template <typename T, typename... Args>
   std::shared_ptr<T> MakeAstNode(Args &&... args) {
     auto t{std::make_shared<T>(std::forward<Args>(args)...)};
+    if (auto p{std::dynamic_pointer_cast<Expr>(t)}; p) {
+      // p->TypeCheck();
+    }
     return t;
   }
 };

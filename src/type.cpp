@@ -241,7 +241,7 @@ std::shared_ptr<Type> Type::Get(std::uint32_t type_spec) {
   }
 }
 
-bool Type::Compatible(const std::shared_ptr<Type>&) const { return false; }
+bool Type::Compatible(const std::shared_ptr<Type>&) const { return true; }
 
 bool Type::Equal(const std::shared_ptr<Type>& type) const {
   return type_spec_ == type->type_spec_ &&

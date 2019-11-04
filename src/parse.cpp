@@ -14,9 +14,11 @@ Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {}
 
 std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
   auto unit{MakeAstNode<TranslationUnit>()};
+  curr_scope_ = std::make_shared<Scope>(nullptr, kFile);
 
   while (HasNext()) {
-    unit->AddStmt(ParseExternalDecl());
+    unit->AddStmt(ParseExpr());
+    // unit->AddStmt(ParseExternalDecl());
   }
 
   return unit;
@@ -50,7 +52,7 @@ void Parser::ParseStaticAssertDecl() {
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
-  if (!Calculation<std::int32_t>{}.Calc(expr)) {
+  if (!CalcExpr<std::int32_t>{}.Calc(expr)) {
     Error(expr->GetToken(), "static_assert failed \"{}\"", msg);
   }
 }
@@ -345,7 +347,7 @@ std::shared_ptr<Expr> Parser::ParseMultiplicativeExpr() {
   return lhs;
 }
 
-std::shared_ptr<CompoundStmt> Parser::ParseDecl() {
+std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
   if (Try(Tag::kStaticAssert)) {
     ParseStaticAssertDecl();
     return nullptr;
@@ -356,9 +358,13 @@ std::shared_ptr<CompoundStmt> Parser::ParseDecl() {
       Warning(PeekPrev(), "declaration does not declare anything");
       return nullptr;
     } else {
-      auto ret{ParseInitDeclaratorList(base_type)};
-      Expect(Tag::kSemicolon);
-      return ret;
+      if (maybe_func_def) {
+        return ParseInitDeclaratorList(base_type);
+      } else {
+        auto ret{ParseInitDeclaratorList(base_type)};
+        Expect(Tag::kSemicolon);
+        return ret;
+      }
     }
   }
 }
@@ -799,7 +805,7 @@ void Parser::ParseEnumerator(std::shared_ptr<Type> type) {
 
     if (Try(Tag::kEqual)) {
       auto expr{ParseConstantExpr()};
-      val = Calculation<std::int32_t>{}.Calc(expr);
+      val = CalcExpr<std::int32_t>{}.Calc(expr);
     }
 
     auto enumer{std::make_shared<Enumerator>(tok, val)};
@@ -823,7 +829,7 @@ std::int32_t Parser::ParseAlignas() {
     align = type->Align();
   } else {
     auto expr{ParseConstantExpr()};
-    align = Calculation<std::int32_t>{}.Calc(expr);
+    align = CalcExpr<std::int32_t>{}.Calc(expr);
   }
 
   Expect(Tag::kRightParen);
@@ -882,7 +888,7 @@ std::size_t Parser::ParseArrayLength() {
   }
 
   // 不支持变长数组
-  auto len{Calculation<std::int32_t>{}.Calc(expr)};
+  auto len{CalcExpr<std::int32_t>{}.Calc(expr)};
 
   if (len <= 0) {
     Error(expr->GetToken(), "Array size must be greater than 0");
@@ -1109,12 +1115,22 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(
   }
 
   std::set<Initializer> inits;
-  ParseInitializer(inits, ident->GetType(), 0, false, true);
+  // ParseInitializer(inits, ident->GetType(), 0, false, true);
   return inits;
 }
 
-std::shared_ptr<Stmt> Parser::ParseExternalDecl() {
-  return std::shared_ptr<Stmt>();
+std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
+  std::shared_ptr<ExtDecl> ext_decl;
+
+  do {
+    ext_decl = ParseDecl(true);
+  } while (ext_decl != nullptr);
+
+  if (Try(Tag::kLeftBrace)) {
+    // TODO func def
+  }
+
+  return ext_decl;
 }
 
 std::shared_ptr<Expr> Parser::ParseCastExpr() {
@@ -1218,7 +1234,8 @@ std::shared_ptr<Expr> Parser::ParseSizeof() {
   }
 
   type->SetUnsigned();
-  return MakeAstNode<Constant>(tok, type, type->Width());
+  return MakeAstNode<Constant>(tok, type,
+                               static_cast<std::uint64_t>(type->Width()));
 }
 
 std::shared_ptr<Expr> Parser::ParseAlignof() {
@@ -1302,15 +1319,139 @@ std::shared_ptr<Expr> Parser::ParseConstant() {
 }
 
 std::shared_ptr<Expr> Parser::ParseFloat() {
+  auto tok{Next()};
+  auto str{tok.GetStr()};
+  double val;
+  std::size_t end;
 
+  try {
+    val = std::stod(str, &end);
+  } catch (const std::out_of_range& err) {
+    Error(tok, "float out of range");
+  }
+
+  auto backup{end};
+  std::uint32_t type_spec{kDouble};
+  if (str[end] == 'f' || str[end] == 'F') {
+    type_spec = kFloat;
+    ++end;
+  } else if (str[end] == 'l' || str[end] == 'L') {
+    type_spec = kLong | kDouble;
+    ++end;
+  }
+
+  if (str[end] != '\0') {
+    Error(tok, "invalid suffix:{}", str.substr(backup));
+  }
+
+  return MakeAstNode<Constant>(tok, Type::Get(type_spec), val);
 }
 
 std::shared_ptr<Expr> Parser::ParseInteger() {
+  auto tok{Next()};
+  auto str{tok.GetStr()};
+  std::uint64_t val;
+  std::size_t end;
 
+  try {
+    // 当 base 为 0 时，自动检测进制
+    val = std::stoull(str, &end, 0);
+  } catch (const std::out_of_range& error) {
+    Error(tok, "integer out of range");
+  }
+
+  auto backup{end};
+  std::uint32_t type_spec{};
+  for (auto ch{str[end]}; ch != '\0'; ch = str[++end]) {
+    if (ch == 'u' || ch == 'U') {
+      if (type_spec & kUnsigned) {
+        Error(tok, "invalid suffix: {}", str.substr(backup));
+      }
+      type_spec |= kUnsigned;
+    } else if (ch == 'l' || ch == 'L') {
+      if ((type_spec & kLong) || (type_spec & kLongLong)) {
+        Error(tok, "invalid suffix: {}", str.substr(backup));
+      }
+
+      if (str[end + 1] == 'l' || str[end + 1] == 'L') {
+        type_spec |= kLongLong;
+        ++end;
+      } else {
+        type_spec |= kLong;
+      }
+    } else {
+      Error(tok, "invalid suffix: {}", str.substr(backup));
+    }
+  }
+
+  // 十进制
+  bool decimal{'1' <= str.front() && str.front() <= '9'};
+
+  if (decimal) {
+    switch (type_spec) {
+      case 0:
+        if ((val > std::numeric_limits<std::int32_t>::max())) {
+          type_spec |= kLong;
+        } else {
+          type_spec |= kInt;
+        }
+        break;
+      case kUnsigned:
+        if (val > std::numeric_limits<std::uint32_t>::max()) {
+          type_spec |= (kLong | kUnsigned);
+        } else {
+          type_spec |= (kInt | kUnsigned);
+        }
+        break;
+      default:
+        break;
+    }
+  } else {
+    switch (type_spec) {
+      case 0:
+        if (val > std::numeric_limits<std::int64_t>::max()) {
+          type_spec |= (kLong | kUnsigned);
+        } else if (val > std::numeric_limits<std::uint32_t>::max()) {
+          type_spec |= kLong;
+        } else if (val > std::numeric_limits<std::int32_t>::max()) {
+          type_spec |= (kInt | kUnsigned);
+        } else {
+          type_spec |= kInt;
+        }
+        break;
+      case kUnsigned:
+        if (val > std::numeric_limits<std::uint32_t>::max()) {
+          type_spec |= (kLong | kUnsigned);
+        } else {
+          type_spec |= (kInt | kUnsigned);
+        }
+        break;
+      case kLong:
+        if (val > std::numeric_limits<std::int64_t>::max()) {
+          type_spec |= (kLong | kUnsigned);
+        } else {
+          type_spec |= kLong;
+        }
+        break;
+      case kLongLong:
+        if (val > std::numeric_limits<std::int64_t>::max()) {
+          type_spec |= (kLongLong | kUnsigned);
+        } else {
+          type_spec |= kLongLong;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return MakeAstNode<Constant>(tok, Type::Get(type_spec), val);
 }
 
 std::shared_ptr<Expr> Parser::ParseCharacter() {
-
+  auto tok{Next()};
+  auto val{Scanner{tok.GetStr()}.ScanCharacter()};
+  return MakeAstNode<Constant>(tok, val);
 }
 
 // TODO init
