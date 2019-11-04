@@ -82,7 +82,7 @@ void Expr::EnsureCompatibleOrVoidPtr(const std::shared_ptr<Type>& lhs,
 
 BinaryOpExpr::BinaryOpExpr(const Token& tok, std::shared_ptr<Expr> lhs,
                            std::shared_ptr<Expr> rhs)
-    : Expr(tok), op_(tok.GetTag()), lhs_(MayCast(lhs)), rhs_(MayCast(rhs)) {}
+    : BinaryOpExpr{tok, tok.GetTag(), lhs, rhs} {}
 
 AstNodeType BinaryOpExpr::Kind() const { return AstNodeType::kBinaryOpExpr; }
 
@@ -323,14 +323,12 @@ std::shared_ptr<Type> BinaryOpExpr::Convert() {
   return type;
 }
 
+BinaryOpExpr::BinaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> lhs,
+                           std::shared_ptr<Expr> rhs)
+    : Expr(tok), op_(tag), lhs_(MayCast(lhs)), rhs_(MayCast(rhs)) {}
+
 UnaryOpExpr::UnaryOpExpr(const Token& tok, std::shared_ptr<Expr> expr)
-    : Expr(tok), op_(tok.GetTag()) {
-  if (op_ == Tag::kAmp) {
-    expr_ = expr;
-  } else {
-    expr_ = MayCast(expr);
-  }
-}
+    : UnaryOpExpr{tok, tok.GetTag(), expr} {}
 
 AstNodeType UnaryOpExpr::Kind() const { return AstNodeType::kUnaryOpExpr; }
 
@@ -424,6 +422,15 @@ void UnaryOpExpr::AddrOpTypeCheck() {
   }
 
   type_ = PointerType::Get(expr_->GetType());
+}
+
+UnaryOpExpr::UnaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> expr)
+    : Expr(tok), op_(tag) {
+  if (op_ == Tag::kAmp) {
+    expr_ = expr;
+  } else {
+    expr_ = MayCast(expr);
+  }
 }
 
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }

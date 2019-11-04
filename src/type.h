@@ -92,7 +92,8 @@ class Type : public std::enable_shared_from_this<Type> {
   virtual std::int32_t Width() const;
   void SetAlign(std::int32_t align);
   std::int32_t Align() const;
-  static std::shared_ptr<Type> MayCast(std::shared_ptr<Type> type);
+  static std::shared_ptr<Type> MayCast(std::shared_ptr<Type> type,
+                                       bool in_proto = false);
 
   virtual bool Compatible(const std::shared_ptr<Type>& other) const;
   virtual bool Equal(const std::shared_ptr<Type>& type) const;
@@ -100,8 +101,11 @@ class Type : public std::enable_shared_from_this<Type> {
   static std::shared_ptr<Type> MaxType(std::shared_ptr<Type>& lhs,
                                        std::shared_ptr<Type>& rhs);
   std::int32_t Rank() const;
+  bool IsTypedef() const { return storage_class_spec_ & kTypedef; }
+  bool IsExtern() const { return storage_class_spec_ & kExtern; }
+  void SetUnsigned() { type_spec_ |= kUnsigned; }
 
-  bool Complete() const;
+  bool IsComplete() const;
   void SetComplete(bool complete) const;
   bool IsVoidTy() const;
   bool IsBoolTy() const;
@@ -127,10 +131,12 @@ class Type : public std::enable_shared_from_this<Type> {
   bool IsConstQualified() const;
   bool IsRestrictQualified() const;
   bool IsVolatileQualified() const;
+  void SetConstQualified();
+  void SetRestrictQualified();
+  void SetVolatileQualified();
   bool IsUnsigned() const;
   bool IsStatic() const;
   std::int32_t GetAlign() const;
-  bool IsComplete() const { return complete_; }
   void SetComplete(bool complete) { complete_ = complete; }
 
   void SetTypeQualifiers(std::uint32_t type_qualifiers);
@@ -146,6 +152,7 @@ class Type : public std::enable_shared_from_this<Type> {
   std::string GetStructName() const;
   std::int32_t GetStructNumElements() const;
   std::shared_ptr<Type> GetStructElementType(std::int32_t i) const;
+  std::shared_ptr<Object> GetStructMember(const std::string& name) const;
 
   std::size_t GetArrayNumElements() const;
   std::shared_ptr<Type> GetArrayElementType() const;
@@ -257,7 +264,6 @@ class StructType : public Type {
   void AddMember(std::shared_ptr<Object> member);
   void MergeAnony(std::shared_ptr<Object> anony);
 
-  std::int32_t GetAlign() const { return align_; }
   bool IsStruct() const { return is_struct_; }
   std::vector<std::shared_ptr<Object>> GetMembers() { return members_; }
   std::int32_t GetOffset() const { return offset_; }
@@ -314,7 +320,9 @@ class ArrayType : public Type {
   ArrayType(std::shared_ptr<Type> contained_type, std::size_t num_elements)
       : Type{kArrayTyId},
         contained_type_{contained_type},
-        num_elements_{num_elements} {}
+        num_elements_{num_elements} {
+    SetComplete(num_elements_ > 0);
+  }
 
   std::shared_ptr<Type> contained_type_;
   std::size_t num_elements_;

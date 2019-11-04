@@ -94,8 +94,8 @@ template <typename... Args>
 }
 
 template <typename... Args>
-[[noreturn]] void Warning(const Token &tok, std::string_view format_str,
-                          const Args &... args) {
+void Warning(const Token &tok, std::string_view format_str,
+             const Args &... args) {
   Warning(tok.GetLoc(), format_str, args...);
 }
 

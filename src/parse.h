@@ -29,31 +29,35 @@ class Parser {
   std::size_t ParseArrayLength();
   void EnterProto();
   void ExitProto();
-  std::pair<std::vector<std::shared_ptr<Object>>, bool> ParseParamList();
-  bool IsTypeName(const Token &token);
+  std::pair<std::vector<std::shared_ptr<Object>>, bool> ParseParamTypeList();
+  bool IsTypeName(const Token &tok);
   std::shared_ptr<Type> ParseTypeName();
   void ParseStructDeclList(std::shared_ptr<StructType> base_type);
-  void TrySkipAttributes();
-  void TrySkipAsm();
   std::shared_ptr<Object> ParseParamDecl();
   void ParseAbstractDeclarator(std::shared_ptr<Type> &type);
+  void ParsePointer(std::shared_ptr<Type> &type);
+  void ParseTypeQualList(std::shared_ptr<Type> &type);
+  void ParseDirectAbstractDeclarator(std::shared_ptr<Type> &type);
 
   std::shared_ptr<CompoundStmt> ParseDecl();
   void ParseStaticAssertDecl();
-  std::shared_ptr<Type> ParseDeclSpec(bool in_struct_or_func);
-  void ParseDeclarator(std::string &name, std::shared_ptr<Type> &base_type);
-  void ParseDirectDeclarator(std::string &name,
-                             std::shared_ptr<Type> &base_type);
+  std::shared_ptr<Type> ParseDeclSpec(bool only_spec_and_qual);
+  void ParseDeclarator(Token &tok, std::shared_ptr<Type> &base_type);
+  void ParseDirectDeclarator(Token &tok, std::shared_ptr<Type> &base_type);
   void ParseDirectDeclaratorTail(std::shared_ptr<Type> &base_type);
   std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(
       std::shared_ptr<Type> &base_type);
   std::shared_ptr<Declaration> ParseInitDeclarator(
       std::shared_ptr<Type> &base_type);
   std::shared_ptr<Declaration> MakeDeclarator(
-      const std::string &name, const std::shared_ptr<Type> &base_type);
-  std::set<Initializer> ParseInitializer();
+      const Token &tok, const std::shared_ptr<Type> &type);
   std::shared_ptr<Expr> ParseConstantExpr();
   std::shared_ptr<Constant> ParseStringLiteral(bool handle_escape);
+  std::set<Initializer> ParseInitDeclaratorSub(
+      std::shared_ptr<Identifier> ident);
+  void ParseInitializer(std::set<Initializer> &inits,
+                        std::shared_ptr<Type> type, std::int32_t offset,
+                        bool designated, bool force_brace);
 
   bool HasNext();
   Token Peek();
@@ -63,8 +67,17 @@ class Parser {
   bool Test(Tag tag);
   bool Try(Tag tag);
   Token Expect(Tag tag);
-  void MarkLoc(const SourceLocation &loc);
 
+  std::shared_ptr<Expr> ParseConstant();
+  std::shared_ptr<Expr> ParseFloat();
+  std::shared_ptr<Expr> ParseInteger();
+  std::shared_ptr<Expr> ParseCharacter();
+  std::shared_ptr<Expr> ParseSizeof();
+  std::shared_ptr<Expr> ParseAlignof();
+  std::shared_ptr<Expr> ParsePrimaryExpr();
+  std::shared_ptr<Expr> ParsePostfixExprTail(std::shared_ptr<Expr> expr);
+  std::shared_ptr<Expr> ParsePostfixExpr();
+  std::shared_ptr<Expr> ParseUnaryExpr();
   std::shared_ptr<Expr> ParseCastExpr();
   std::shared_ptr<Expr> ParseMultiplicativeExpr();
   std::shared_ptr<Expr> ParseAdditiveExpr();
@@ -94,7 +107,6 @@ class Parser {
   template <typename T, typename... Args>
   std::shared_ptr<T> MakeAstNode(Args &&... args) {
     auto t{std::make_shared<T>(std::forward<Args>(args)...)};
-    t->SetLoc(loc_);
     return t;
   }
 };

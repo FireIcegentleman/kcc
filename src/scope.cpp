@@ -56,4 +56,20 @@ std::map<std::string, std::shared_ptr<Identifier>> Scope::AllTagInCurrScope()
   return tags_;
 }
 
+std::shared_ptr<Identifier> Scope::FindTag(const Token& tok) {
+  return FindTag(tok.GetStr());
+}
+
+std::shared_ptr<Identifier> Scope::FindNormal(const Token& tok) {
+  return FindNormal(tok.GetStr());
+}
+
+std::shared_ptr<Identifier> Scope::FindTagInCurrScope(const Token& tok) {
+  return FindTagInCurrScope(tok.GetStr());
+}
+
+std::shared_ptr<Identifier> Scope::FindNormalInCurrScope(const Token& tok) {
+  return FindNormalInCurrScope(tok.GetStr());
+}
+
 }  // namespace kcc

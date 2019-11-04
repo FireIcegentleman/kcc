@@ -46,7 +46,7 @@ void Parser::ParseStaticAssertDecl() {
   auto expr{ParseConstantExpr()};
   Expect(Tag::kComma);
 
-  auto msg{ParseStringLiteral(false)};
+  auto msg{ParseStringLiteral(false)->GetStrVal()};
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
@@ -70,12 +70,12 @@ std::shared_ptr<Expr> Parser::ParseExpr() { return ParseCommaExpr(); }
 std::shared_ptr<Expr> Parser::ParseCommaExpr() {
   auto lhs{ParseAssignExpr()};
 
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
   while (Try(Tag::kComma)) {
     auto rhs{ParseAssignExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kComma, std::move(lhs), rhs);
+    lhs = MakeAstNode<BinaryOpExpr>(tok, lhs, rhs);
 
-    MarkLoc(Peek().GetLoc());
+    tok = Peek();
   }
 
   return lhs;
@@ -86,7 +86,6 @@ std::shared_ptr<Expr> Parser::ParseAssignExpr() {
   std::shared_ptr<Expr> rhs;
 
   auto tok{Next()};
-  MarkLoc(tok.GetLoc());
 
   switch (tok.GetTag()) {
     case Tag::kEqual:
@@ -94,43 +93,43 @@ std::shared_ptr<Expr> Parser::ParseAssignExpr() {
       break;
     case Tag::kStarEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kStar, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kStar, lhs, rhs);
       break;
     case Tag::kSlashEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kSlash, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kSlash, lhs, rhs);
       break;
     case Tag::kPercentEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kPercent, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kPercent, lhs, rhs);
       break;
     case Tag::kPlusEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kPlus, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kPlus, lhs, rhs);
       break;
     case Tag::kMinusEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kMinus, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kMinus, lhs, rhs);
       break;
     case Tag::kLessLessEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kLessLess, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kLessLess, lhs, rhs);
       break;
     case Tag::kGreaterGreaterEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kGreaterGreater, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kGreaterGreater, lhs, rhs);
       break;
     case Tag::kAmpEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kAmp, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kAmp, lhs, rhs);
       break;
     case Tag::kCaretEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kCaret, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kCaret, lhs, rhs);
       break;
     case Tag::kPipeEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kPipe, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kPipe, lhs, rhs);
       break;
     default: {
       PutBack();
@@ -138,12 +137,12 @@ std::shared_ptr<Expr> Parser::ParseAssignExpr() {
     }
   }
 
-  return MakeAstNode<BinaryOpExpr>(Tag::kEqual, lhs, rhs);
+  return MakeAstNode<BinaryOpExpr>(tok, Tag::kEqual, lhs, rhs);
 }
 
 std::shared_ptr<Expr> Parser::ParseConditionExpr() {
   auto cond{ParseLogicalOrExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   // 条件运算符 ? 与 : 之间的表达式分析为如同加括号，忽略其相对于 ?: 的优先级
   if (Try(Tag::kQuestion)) {
@@ -153,7 +152,7 @@ std::shared_ptr<Expr> Parser::ParseConditionExpr() {
     Expect(Tag::kColon);
     auto false_expr{ParseExpr()};
 
-    return MakeAstNode<ConditionOpExpr>(cond, true_expr, false_expr);
+    return MakeAstNode<ConditionOpExpr>(tok, cond, true_expr, false_expr);
   }
 
   return cond;
@@ -161,13 +160,13 @@ std::shared_ptr<Expr> Parser::ParseConditionExpr() {
 
 std::shared_ptr<Expr> Parser::ParseLogicalOrExpr() {
   auto lhs{ParseLogicalAndExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (Try(Tag::kPipePipe)) {
     auto rhs{ParseLogicalAndExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kPipePipe, lhs, rhs);
+    lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kPipePipe, lhs, rhs);
 
-    MarkLoc(Peek().GetLoc());
+    tok = Peek();
   }
 
   return lhs;
@@ -175,13 +174,13 @@ std::shared_ptr<Expr> Parser::ParseLogicalOrExpr() {
 
 std::shared_ptr<Expr> Parser::ParseLogicalAndExpr() {
   auto lhs{ParseBitwiseOrExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (Try(Tag::kAmpAmp)) {
     auto rhs{ParseBitwiseOrExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kAmpAmp, lhs, rhs);
+    lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kAmpAmp, lhs, rhs);
 
-    MarkLoc(Peek().GetLoc());
+    tok = Peek();
   }
 
   return lhs;
@@ -189,13 +188,13 @@ std::shared_ptr<Expr> Parser::ParseLogicalAndExpr() {
 
 std::shared_ptr<Expr> Parser::ParseBitwiseOrExpr() {
   auto lhs{ParseBitwiseXorExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (Try(Tag::kPipe)) {
     auto rhs{ParseBitwiseXorExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kPipe, lhs, rhs);
+    lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kPipe, lhs, rhs);
 
-    MarkLoc(Peek().GetLoc());
+    tok = Peek();
   }
 
   return lhs;
@@ -203,13 +202,13 @@ std::shared_ptr<Expr> Parser::ParseBitwiseOrExpr() {
 
 std::shared_ptr<Expr> Parser::ParseBitwiseXorExpr() {
   auto lhs{ParseBitwiseAndExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (Try(Tag::kCaret)) {
     auto rhs{ParseBitwiseAndExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kCaret, lhs, rhs);
+    lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kCaret, lhs, rhs);
 
-    MarkLoc(Peek().GetLoc());
+    tok = Peek();
   }
 
   return lhs;
@@ -217,13 +216,13 @@ std::shared_ptr<Expr> Parser::ParseBitwiseXorExpr() {
 
 std::shared_ptr<Expr> Parser::ParseBitwiseAndExpr() {
   auto lhs{ParseEqualityExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (Try(Tag::kAmp)) {
     auto rhs{ParseEqualityExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kAmp, lhs, rhs);
+    lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kAmp, lhs, rhs);
 
-    MarkLoc(Peek().GetLoc());
+    tok = Peek();
   }
 
   return lhs;
@@ -231,17 +230,17 @@ std::shared_ptr<Expr> Parser::ParseBitwiseAndExpr() {
 
 std::shared_ptr<Expr> Parser::ParseEqualityExpr() {
   auto lhs{ParseRelationExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (true) {
     if (Try(Tag::kEqual)) {
       auto rhs{ParseRelationExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kEqual, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kEqual, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kExclaimEqual)) {
       auto rhs{ParseRelationExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kExclaimEqual, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kExclaimEqual, lhs, rhs);
+      tok = Peek();
     } else {
       break;
     }
@@ -252,25 +251,25 @@ std::shared_ptr<Expr> Parser::ParseEqualityExpr() {
 
 std::shared_ptr<Expr> Parser::ParseRelationExpr() {
   auto lhs{ParseShiftExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (true) {
     if (Try(Tag::kLess)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kLess, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kLess, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kLessEqual)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kLessEqual, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kLessEqual, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kGreater)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kGreater, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kGreater, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kGreaterEqual)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kGreaterEqual, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kGreaterEqual, lhs, rhs);
+      tok = Peek();
     } else {
       break;
     }
@@ -281,17 +280,17 @@ std::shared_ptr<Expr> Parser::ParseRelationExpr() {
 
 std::shared_ptr<Expr> Parser::ParseShiftExpr() {
   auto lhs{ParseAdditiveExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (true) {
     if (Try(Tag::kLessLess)) {
       auto rhs{ParseAdditiveExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kLessLess, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kLessLess, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kGreaterGreater)) {
       auto rhs{ParseAdditiveExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kGreaterGreater, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kGreaterGreater, lhs, rhs);
+      tok = Peek();
     } else {
       break;
     }
@@ -302,17 +301,17 @@ std::shared_ptr<Expr> Parser::ParseShiftExpr() {
 
 std::shared_ptr<Expr> Parser::ParseAdditiveExpr() {
   auto lhs{ParseMultiplicativeExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (true) {
     if (Try(Tag::kPlus)) {
       auto rhs{ParseMultiplicativeExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kPlus, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kPlus, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kMinus)) {
       auto rhs{ParseMultiplicativeExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kMinus, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kMinus, lhs, rhs);
+      tok = Peek();
     } else {
       break;
     }
@@ -323,21 +322,21 @@ std::shared_ptr<Expr> Parser::ParseAdditiveExpr() {
 
 std::shared_ptr<Expr> Parser::ParseMultiplicativeExpr() {
   auto lhs{ParseCastExpr()};
-  MarkLoc(Peek().GetLoc());
+  auto tok{Peek()};
 
   while (true) {
     if (Try(Tag::kStar)) {
       auto rhs{ParseCastExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kStar, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kStar, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kSlash)) {
       auto rhs{ParseCastExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kSlash, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kSlash, lhs, rhs);
+      tok = Peek();
     } else if (Try(Tag::kPercent)) {
       auto rhs{ParseCastExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kPercent, lhs, rhs);
-      MarkLoc(Peek().GetLoc());
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kPercent, lhs, rhs);
+      tok = Peek();
     } else {
       break;
     }
@@ -351,10 +350,10 @@ std::shared_ptr<CompoundStmt> Parser::ParseDecl() {
     ParseStaticAssertDecl();
     return nullptr;
   } else {
-    auto base_type{ParseDeclSpec()};
+    auto base_type{ParseDeclSpec(false)};
 
-    if (Test(Tag::kSemicolon)) {
-      Warning(Next(), "declaration does not declare anything");
+    if (Try(Tag::kSemicolon)) {
+      Warning(PeekPrev(), "declaration does not declare anything");
       return nullptr;
     } else {
       auto ret{ParseInitDeclaratorList(base_type)};
@@ -369,8 +368,9 @@ std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
   auto init_decls{std::make_shared<CompoundStmt>()};
 
   do {
-    init_decls->AddStmt(
-        ParseInitDeclarator(base_type, storage_class_spec, func_spec, align));
+    if (auto decl{ParseInitDeclarator(base_type)}; decl) {
+      init_decls->AddStmt(decl);
+    }
   } while (Try(Tag::kComma));
 
   return init_decls;
@@ -378,46 +378,40 @@ std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
 
 std::shared_ptr<Declaration> Parser::ParseInitDeclarator(
     std::shared_ptr<Type>& base_type) {
-  std::string name;
-  ParseDeclarator(name, base_type);
+  Token tok;
+  ParseDeclarator(tok, base_type);
 
-  auto decl{
-      MakeDeclarator(name, base_type, storage_class_spec, func_spec, align)};
+  auto decl{MakeDeclarator(tok, base_type)};
 
-  if (Try(Tag::kEqual)) {
-    decl->AddInits(ParseInitializer());
+  if (decl && Try(Tag::kEqual) && decl->IsObj()) {
+    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
   }
 
   return decl;
 }
 
-void Parser::ParseDeclarator(std::string& name,
-                             std::shared_ptr<Type>& base_type) {
-  while (Try(Tag::kStar)) {
-    base_type = base_type->GetPointerTo();
-    // TODO type-qualifier
-  }
-
-  ParseDirectDeclarator(name, base_type);
+void Parser::ParseDeclarator(Token& tok, std::shared_ptr<Type>& base_type) {
+  ParsePointer(base_type);
+  ParseDirectDeclarator(tok, base_type);
 }
 
-void Parser::ParseDirectDeclarator(std::string& name,
+void Parser::ParseDirectDeclarator(Token& tok,
                                    std::shared_ptr<Type>& base_type) {
   if (Test(Tag::kIdentifier)) {
-    name = Next().GetStr();
+    tok = Next();
     ParseDirectDeclaratorTail(base_type);
   } else if (Try(Tag::kLeftParen)) {
     auto begin{index_};
-    auto temp{std::make_shared<Type>()};
+    auto temp{Type::GetVoidTy()};
     // 此时的 base_type 不一定是正确的, 先跳过括号中的内容
-    ParseDeclarator(name, temp);
+    ParseDeclarator(tok, temp);
     Expect(Tag::kRightParen);
 
     ParseDirectDeclaratorTail(base_type);
     auto end{index_};
 
     index_ = begin;
-    ParseDeclarator(name, base_type);
+    ParseDeclarator(tok, base_type);
     Expect(Tag::kRightParen);
     index_ = end;
   } else {
@@ -426,12 +420,13 @@ void Parser::ParseDirectDeclarator(std::string& name,
 }
 
 // 不支持在 struct / union 中使用 _Alignas
+// 不支持在函数参数列表中使用 storage class specifier
 // 在 struct / union 中和函数参数声明中只能使用 type specifier 和 type qualifier
-std::shared_ptr<Type> Parser::ParseDeclSpec(bool in_struct_or_func) {
+std::shared_ptr<Type> Parser::ParseDeclSpec(bool only_spec_and_qual) {
 #define CheckAndSetStorageClassSpec(spec)                       \
   if (storage_class_spec != 0) {                                \
     Error(tok, "duplicated storage class specifier");           \
-  } else if (in_struct_or_func) {                               \
+  } else if (only_spec_and_qual) {                              \
     Error(tok, "storage class specifier are not allowed here"); \
   }                                                             \
   storage_class_spec |= spec;
@@ -439,7 +434,7 @@ std::shared_ptr<Type> Parser::ParseDeclSpec(bool in_struct_or_func) {
 #define CheckAndSetFuncSpec(spec)                                       \
   if (func_spec & spec) {                                               \
     Warning(tok, "duplicate function specifier declaration specifier"); \
-  } else if (in_struct_or_func) {                                       \
+  } else if (only_spec_and_qual) {                                      \
     Error(tok, "function specifiers are not allowed here");             \
   }                                                                     \
   func_spec |= spec;
@@ -575,7 +570,7 @@ std::shared_ptr<Type> Parser::ParseDeclSpec(bool in_struct_or_func) {
         CheckAndSetFuncSpec(kNoreturn) break;
 
       case Tag::kAlignas:
-        if (in_struct_or_func) {
+        if (only_spec_and_qual) {
           Error(tok, "_Alignas are not allowed here");
         }
         align = std::max(ParseAlignas(), align);
@@ -619,23 +614,24 @@ finish:
 std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
   // TODO type attribute
   auto tok{Peek()};
-  std::string name;
+  std::string tag_name;
 
   if (Try(Tag::kIdentifier)) {
-    name = tok.GetStr();
+    tag_name = tok.GetStr();
+    // 定义
     if (Try(Tag::kLeftBrace)) {
-      auto tag{curr_scope_->FindTagInCurrScope(name)};
+      auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
       // 无前向声明
       if (!tag) {
         auto type{StructType::Get(is_struct, true, curr_scope_)};
         auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
-        curr_scope_->InsertTag(name, ident);
+        curr_scope_->InsertTag(tag_name, ident);
         ParseStructDeclList(type);
         Expect(Tag::kRightBrace);
         return type;
       } else {
         if (tag->GetType()->IsComplete()) {
-          Error(tok, "redefinition:{}", name);
+          Error(tok, "redefinition:{}", tag_name);
         } else {
           ParseStructDeclList(
               std::dynamic_pointer_cast<StructType>(tag->GetType()));
@@ -645,7 +641,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
       }
     } else {
       // 可能是前向声明或普通的声明
-      auto tag{curr_scope_->FindTag(name)};
+      auto tag{curr_scope_->FindTag(tag_name)};
 
       if (tag) {
         return tag->GetType();
@@ -653,7 +649,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
 
       auto type{StructType::Get(is_struct, true, curr_scope_)};
       auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
-      curr_scope_->InsertTag(name, ident);
+      curr_scope_->InsertTag(tag_name, ident);
       return type;
     }
   } else {
@@ -683,21 +679,24 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
       auto base_type{ParseDeclSpec(true)};
 
       do {
-        std::string name;
-        ParseDeclarator(name, base_type);
+        Token tok;
+        ParseDeclarator(tok, base_type);
 
         // TODO 位域
 
         // 可能是匿名 struct / union
-        if (std::empty(name)) {
+        if (std::empty(tok.GetStr())) {
           if (base_type->IsStructTy() && !base_type->HasStructName()) {
-            auto anony{std::make_shared<Object>(Peek(), base_type)};
+            auto anony{
+                std::make_shared<Object>(Peek(), base_type, kNone, true)};
             type->MergeAnony(anony);
             continue;
           } else {
             Error(Peek(), "declaration does not declare anything");
           }
         } else {
+          std::string name{tok.GetStr()};
+
           if (type->GetMember(name)) {
             Error(Peek(), "duplicate member:{}", name);
           } else if (!base_type->IsComplete()) {
@@ -708,19 +707,21 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
               type->AddMember(member);
               // 必须是最后一个成员
               Expect(Tag::kSemicolon);
-              Expect(Tag::kSemicolon);
+              Expect(Tag::kRightBrace);
+
               goto finalize;
             } else {
-              Error(Peek(), "error");
+              Error(Peek(), "field '{}' has incomplete type", name);
             }
           } else if (base_type->IsFunctionTy()) {
-            Error(Peek(), "error");
+            Error(Peek(), "field '{}' declared as a function", name);
           } else {
             auto member{std::make_shared<Object>(Peek(), base_type)};
             type->AddMember(member);
           }
         }
       } while (Try(Tag::kComma));
+
       Expect(Tag::kSemicolon);
     }
   }
@@ -745,33 +746,33 @@ finalize:
 std::shared_ptr<Type> Parser::ParseEnumSpec() {
   // TODO type attributes
 
-  std::string name;
+  std::string tag_name;
   auto tok{Peek()};
 
   if (Try(Tag::kIdentifier)) {
-    name = tok.GetStr();
-
+    tag_name = tok.GetStr();
     // 定义
     if (Try(Tag::kLeftBrace)) {
-      auto tag{curr_scope_->FindTagInCurrScope(name)};
+      auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
 
       if (!tag) {
         auto type{IntegerType::Get(32)};
         auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
-        curr_scope_->InsertTag(name, ident);
+        curr_scope_->InsertTag(tag_name, ident);
         ParseEnumerator(type);
         Expect(Tag::kRightBrace);
         return type;
       } else {
-        Error(tok, "error");
+        // 不允许前向声明，如果当前作用域中有 tag 则就是重定义
+        Error(tok, "redefinition of enumeration tag: {}", tag_name);
       }
     } else {
-      // 只能是普通声明，不允许前向声明
-      auto tag{curr_scope_->FindTag(name)};
+      // 只能是普通声明
+      auto tag{curr_scope_->FindTag(tag_name)};
       if (tag) {
         return tag->GetType();
       } else {
-        Error(tok, "error");
+        Error(tok, "unknown enumeration: {}", tag_name);
       }
     }
   } else {
@@ -787,17 +788,17 @@ void Parser::ParseEnumerator(std::shared_ptr<Type> type) {
   std::int32_t val{};
 
   do {
-    // TODO type attributes
     auto tok{Expect(Tag::kIdentifier)};
+    // TODO type attributes
     auto name{tok.GetStr()};
     auto ident{curr_scope_->FindNormalInCurrScope(name)};
 
     if (ident) {
-      Error(tok, "error");
+      Error(tok, "redefinition of enumerator '{}'", name);
     }
 
     if (Try(Tag::kEqual)) {
-      auto expr{ParseConditionExpr()};
+      auto expr{ParseConstantExpr()};
       val = Calculation<std::int32_t>{}.Calc(expr);
     }
 
@@ -806,7 +807,7 @@ void Parser::ParseEnumerator(std::shared_ptr<Type> type) {
     curr_scope_->InsertNormal(name, enumer);
 
     Try(Tag::kComma);
-  } while (Test(Tag::kRightBrace));
+  } while (!Test(Tag::kRightBrace));
 
   type->SetComplete(true);
 }
@@ -821,63 +822,70 @@ std::int32_t Parser::ParseAlignas() {
     auto type{ParseTypeName()};
     align = type->Align();
   } else {
-    auto expr{ParseConditionExpr()};
+    auto expr{ParseConstantExpr()};
     align = Calculation<std::int32_t>{}.Calc(expr);
   }
 
   Expect(Tag::kRightParen);
 
+  // TODO 获取完整声明后检查 align 是否小于类型的 width
   if (align < 0 || ((align - 1) & align)) {
-    Error(tok, "error");
+    Error(tok, "requested alignment is not a power of 2");
   }
 
   return align;
 }
 
+// 只支持
+// direct-declarator[assignment-expression-opt]
+// direct-declarator[parameter-type-list]
 void Parser::ParseDirectDeclaratorTail(std::shared_ptr<Type>& base_type) {
   if (Try(Tag::kLeftSquare)) {
     if (base_type->IsFunctionTy()) {
-      Error("error");
+      Error(Peek(), "the element of array cannot be a function");
     }
 
     auto len{ParseArrayLength()};
     Expect(Tag::kRightSquare);
 
+    ParseDirectDeclaratorTail(base_type);
+
+    if (!base_type->IsComplete()) {
+      Error(Peek(), "has incomplete element type");
+    }
+
     base_type = ArrayType::Get(base_type, len);
   } else if (Try(Tag::kLeftParen)) {
     if (base_type->IsFunctionTy()) {
-      Error("error");
+      Error(Peek(), "the return value of function cannot be function");
     } else if (base_type->IsArrayTy()) {
-      Error("error");
+      Error(Peek(), "the return value of function cannot be array");
     }
 
     EnterProto();
-    auto [params, var]{ParseParamList()};
+    auto [params, var_args]{ParseParamTypeList()};
     ExitProto();
+
     Expect(Tag::kRightParen);
 
-    base_type = FunctionType::Get(base_type, params, var);
-  }
-}
+    ParseDirectDeclaratorTail(base_type);
 
-std::shared_ptr<Declaration> Parser::MakeDeclarator(
-    const std::string& name, const std::shared_ptr<Type>& base_type) {
-  return std::shared_ptr<Declaration>();
+    base_type = FunctionType::Get(base_type, params, var_args);
+  }
 }
 
 std::size_t Parser::ParseArrayLength() {
-  // 不支持 type qualifier
-
-  auto expr{ParseConditionExpr()};
+  auto expr{ParseAssignExpr()};
 
   if (!expr->GetType()->IsIntegerTy()) {
-    Error("error");
+    Error(expr->GetToken(), "The array size must be an integer");
   }
 
+  // 不支持变长数组
   auto len{Calculation<std::int32_t>{}.Calc(expr)};
 
   if (len <= 0) {
-    Error("error");
+    Error(expr->GetToken(), "Array size must be greater than 0");
   }
 
   return len;
@@ -889,8 +897,12 @@ void Parser::EnterProto() {
 
 void Parser::ExitProto() { curr_scope_ = curr_scope_->GetParent(); }
 
-std::pair<std::vector<std::shared_ptr<Object>>, bool> Parser::ParseParamList() {
+std::pair<std::vector<std::shared_ptr<Object>>, bool>
+Parser::ParseParamTypeList() {
   if (Test(Tag::kRightParen)) {
+    Warning(
+        Next(),
+        "The parameter list is not allowed to be empty, you should use void");
     return {{}, false};
   }
 
@@ -917,15 +929,30 @@ std::pair<std::vector<std::shared_ptr<Object>>, bool> Parser::ParseParamList() {
   return {params, false};
 }
 
-std::shared_ptr<Object> Parser::ParseParamDecl() {}
+// declaration-specifiers declarator
+// declaration-specifiers abstract-declarator（此时不能是函数定义）
+std::shared_ptr<Object> Parser::ParseParamDecl() {
+  // 不支持 storage class specifier
+  auto base_type{ParseDeclSpec(true)};
 
-bool Parser::IsTypeName(const Token& token) {
-  if (token.IsTypeSpec()) {
-    return true;
+  Token tok;
+  ParseDeclarator(tok, base_type);
+  base_type = Type::MayCast(base_type, true);
+
+  if (std::empty(tok.GetStr())) {
+    return std::make_shared<Object>(Peek(), base_type, kNone, true);
   }
 
-  if (token.TagIs(Tag::kIdentifier)) {
-    auto ident{curr_scope_->FindNormal(token.GetStr())};
+  auto ident{MakeDeclarator(tok, base_type)};
+
+  return std::dynamic_pointer_cast<Object>(ident);
+}
+
+bool Parser::IsTypeName(const Token& tok) {
+  if (tok.IsTypeSpecQual()) {
+    return true;
+  } else if (tok.IsIdentifier()) {
+    auto ident{curr_scope_->FindNormal(tok)};
     if (ident && ident->IsTypeName()) {
       return true;
     }
@@ -935,7 +962,49 @@ bool Parser::IsTypeName(const Token& token) {
 }
 
 std::shared_ptr<Type> Parser::ParseTypeName() {
-  auto type{ParseDeclSpec(true)};
+  auto base_type{ParseDeclSpec(true)};
+  ParseAbstractDeclarator(base_type);
+  return base_type;
+}
+
+void Parser::ParseAbstractDeclarator(std::shared_ptr<Type>& type) {
+  ParsePointer(type);
+  ParseDirectAbstractDeclarator(type);
+}
+
+void Parser::ParseDirectAbstractDeclarator(std::shared_ptr<Type>& type) {
+  Token tok;
+  ParseDirectDeclarator(tok, type);
+  auto name{tok.GetStr()};
+
+  if (!std::empty(name)) {
+    Error(tok, "unexpected identifier '{}'", name);
+  }
+}
+
+void Parser::ParsePointer(std::shared_ptr<Type>& type) {
+  while (Try(Tag::kStar)) {
+    type = type->GetPointerTo();
+    ParseTypeQualList(type);
+  }
+}
+
+void Parser::ParseTypeQualList(std::shared_ptr<Type>& type) {
+  auto tok{Peek()};
+
+  while (true) {
+    if (Try(Tag::kConst)) {
+      type->SetConstQualified();
+    } else if (Try(Tag::kRestrict)) {
+      type->SetRestrictQualified();
+    } else if (Try(Tag::kVolatile)) {
+      Error(tok, "Does not support volatile");
+    } else if (Try(Tag::kAtomic)) {
+      Error(tok, "Does not support _Atomic");
+    } else {
+      break;
+    }
+  }
 }
 
 std::shared_ptr<Expr> Parser::ParseConstantExpr() {
@@ -956,5 +1025,305 @@ std::shared_ptr<Constant> Parser::ParseStringLiteral(bool handle_escape) {
   return std::make_shared<Constant>(
       tok, ArrayType::Get(IntegerType::Get(8), std::size(str)), str);
 }
+
+// TODO check
+std::shared_ptr<Declaration> Parser::MakeDeclarator(
+    const Token& tok, const std::shared_ptr<Type>& type) {
+  auto name{tok.GetStr()};
+
+  if (type->IsTypedef()) {
+    if (type->GetAlign() != 0) {
+      Error(tok, "'_Alignas' attribute only applies to variables and fields");
+    }
+
+    auto ident{curr_scope_->FindNormalInCurrScope(name)};
+    if (ident) {
+      // 如果两次定义的类型兼容是可以的
+      if (!type->Compatible(ident->GetType())) {
+        Error("typedef redefinition with different types('{}' vs '{}'",
+              type->ToString(), ident->GetType()->ToString());
+      }
+    } else {
+      curr_scope_->InsertNormal(
+          tok.GetStr(), std::make_shared<Identifier>(tok, type, kNone, true));
+      return nullptr;
+    }
+  } else if (type->IsVoidTy()) {
+    Error(tok, "variable or field {} declared void", name);
+  } else if (type->IsFunctionTy() && !curr_scope_->IsFileScope()) {
+    Error(tok, "function definition is not allowed here");
+  }
+
+  Linkage linkage;
+  if (curr_scope_->IsFileScope()) {
+    if (type->IsStatic()) {
+      linkage = kInternal;
+    } else {
+      linkage = kExternal;
+    }
+  } else {
+    linkage = kNone;
+  }
+
+  auto ident{curr_scope_->FindNormalInCurrScope(tok)};
+  // 可能是前向声明
+  // 有链接对象（外部或内部）的声明可以重复
+  if (ident) {
+    if (linkage == kNone) {
+      Error(tok, "redefinition of '{}'", name);
+    } else if (linkage != ident->GetLinkage()) {
+      Error(tok, "conflicting linkage '{}'", name);
+    }
+
+    if (!ident->GetType()->IsComplete()) {
+      ident->GetType()->SetComplete(type->IsComplete());
+    }
+  }
+
+  std::shared_ptr<Identifier> ret;
+  if (type->IsFunctionTy()) {
+    if (type->GetAlign() != 0) {
+      Error(tok, "'_Alignas' attribute only applies to variables and fields");
+    }
+    ret = std::make_shared<Identifier>(tok, type, linkage, false);
+  } else {
+    ret = std::make_shared<Object>(tok, type, linkage, false);
+  }
+
+  curr_scope_->InsertNormal(name, ret);
+
+  return std::make_shared<Declaration>(ret);
+}
+
+std::set<Initializer> Parser::ParseInitDeclaratorSub(
+    std::shared_ptr<Identifier> ident) {
+  if (!curr_scope_->IsFileScope() && ident->GetLinkage() == kExternal) {
+    Error(ident->GetToken(), "{} has both 'extern' and initializer",
+          ident->GetName());
+  }
+
+  if (!ident->GetType()->IsComplete() && !ident->GetType()->IsArrayTy()) {
+    Error(ident->GetToken(),
+          "variable '{}' has initializer but incomplete type",
+          ident->GetName());
+  }
+
+  std::set<Initializer> inits;
+  ParseInitializer(inits, ident->GetType(), 0, false, true);
+  return inits;
+}
+
+std::shared_ptr<Stmt> Parser::ParseExternalDecl() {
+  return std::shared_ptr<Stmt>();
+}
+
+std::shared_ptr<Expr> Parser::ParseCastExpr() {
+  auto tok{Peek()};
+
+  if (Try(Tag::kLeftParen)) {
+    if (!IsTypeName(Peek())) {
+      Error(tok, "expect type name");
+    }
+
+    auto type{ParseTypeName()};
+    Expect(Tag::kRightBrace);
+
+    // TODO 复合字面量 ???
+
+    return MakeAstNode<TypeCastExpr>(ParseCastExpr(), type);
+  } else {
+    return ParseUnaryExpr();
+  }
+}
+
+std::shared_ptr<Expr> Parser::ParsePrimaryExpr() {
+  auto tok{Peek()};
+
+  if (Try(Tag::kLeftParen)) {
+    auto expr{ParseExpr()};
+    Expect(Tag::kRightParen);
+    return expr;
+  } else if (Peek().IsStringLiteral()) {
+    return ParseStringLiteral(true);
+  } else if (Peek().IsIdentifier()) {
+    auto ident{curr_scope_->FindNormal(tok)};
+    if (ident) {
+      return ident;
+    } else {
+      Error(tok, "undefined symbol: {}", tok.GetStr());
+    }
+  } else if (Peek().IsConstant()) {
+    return ParseConstant();
+  } else if (Try(Tag::kGeneric)) {
+    // TODO
+    return nullptr;
+  } else {
+    Error(tok, "{} unexpected", tok.GetStr());
+  }
+}
+
+std::shared_ptr<Expr> Parser::ParsePostfixExpr() {
+  // TODO 复合字面量
+  return ParsePostfixExprTail(ParsePrimaryExpr());
+}
+
+/*
+ * ++ --
+ * + - ~
+ * !
+ * * &
+ */
+std::shared_ptr<Expr> Parser::ParseUnaryExpr() {
+  auto tok{Next()};
+
+  switch (tok.GetTag()) {
+    // 默认为前缀
+    case Tag::kPlusPlus:
+    case Tag::kMinusMinus:
+    case Tag::kPlus:
+    case Tag::kMinus:
+    case Tag::kTilde:
+    case Tag::kExclaim:
+    case Tag::kStar:
+    case Tag::kAmp:
+      return MakeAstNode<UnaryOpExpr>(tok, ParseUnaryExpr());
+    case Tag::kSizeof:
+      return ParseSizeof();
+    case Tag::kAlignof:
+      return ParseAlignof();
+    default:
+      PutBack();
+      return ParsePostfixExpr();
+  }
+}
+
+std::shared_ptr<Expr> Parser::ParseSizeof() {
+  std::shared_ptr<Type> type;
+  auto tok{Peek()};
+
+  if (Try(Tag::kLeftParen)) {
+    if (!IsTypeName(Peek())) {
+      Error(Peek(), "expect type name");
+    }
+
+    type = ParseTypeName();
+    Expect(Tag::kRightParen);
+  } else {
+    auto expr{ParseUnaryExpr()};
+    type = expr->GetType();
+  }
+
+  if (!type->IsComplete()) {
+    Error(tok, "sizeof(incomplete type)");
+  }
+
+  type->SetUnsigned();
+  return MakeAstNode<Constant>(tok, type, type->Width());
+}
+
+std::shared_ptr<Expr> Parser::ParseAlignof() {
+  std::shared_ptr<Type> type;
+  auto tok{Peek()};
+
+  Expect(Tag::kLeftParen);
+
+  if (!IsTypeName(Peek())) {
+    Error(Peek(), "expect type name");
+  }
+
+  type = ParseTypeName();
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<Constant>(tok, type->Align());
+}
+
+std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
+  while (true) {
+    auto tok{Next()};
+
+    switch (tok.GetTag()) {
+      case Tag::kLeftSquare: {
+        auto rhs{ParseExpr()};
+        Expect(Tag::kLeftSquare);
+        return MakeAstNode<UnaryOpExpr>(
+            tok, Tag::kStar,
+            MakeAstNode<BinaryOpExpr>(tok, Tag::kPlus, expr, rhs));
+      }
+      case Tag::kLeftParen: {
+        std::vector<std::shared_ptr<Expr>> args;
+        while (!Try(Tag::kRightParen)) {
+          args.push_back(Expr::MayCast(ParseAssignExpr()));
+          if (!Test(Tag::kRightParen)) {
+            Expect(Tag::kComma);
+          }
+        }
+        return MakeAstNode<FuncCallExpr>(expr, args);
+      }
+      case Tag::kArrow:
+        expr = MakeAstNode<UnaryOpExpr>(tok, Tag::kStar, expr);
+      case Tag::kPeriod: {
+        auto member{Expect(Tag::kIdentifier)};
+        auto member_name{member.GetStr()};
+
+        auto type{expr->GetType()};
+        if (!type->IsStructTy()) {
+          Error(tok, "an struct/union expected");
+        }
+
+        auto rhs{type->GetStructMember(member_name)};
+        if (!rhs) {
+          Error(tok, "'{}' is not a member of '{}'", member_name,
+                type->GetStructName());
+        }
+
+        return MakeAstNode<BinaryOpExpr>(tok, Tag::kPeriod, expr, rhs);
+      }
+      case Tag::kPlusPlus:
+        return MakeAstNode<UnaryOpExpr>(tok, Tag::kPostfixPlusPlus, expr);
+      case Tag::kMinusMinus:
+        return MakeAstNode<UnaryOpExpr>(tok, Tag::kPostfixMinusMinus, expr);
+      default:
+        PutBack();
+        return expr;
+    }
+  }
+}
+
+std::shared_ptr<Expr> Parser::ParseConstant() {
+  if (Peek().IsIntegerConstant()) {
+    return ParseInteger();
+  } else if (Peek().IsFloatConstant()) {
+    return ParseFloat();
+  } else if (Peek().IsCharacterConstant()) {
+    return ParseCharacter();
+  } else {
+    assert(false);
+  }
+}
+
+std::shared_ptr<Expr> Parser::ParseFloat() {
+
+}
+
+std::shared_ptr<Expr> Parser::ParseInteger() {
+
+}
+
+std::shared_ptr<Expr> Parser::ParseCharacter() {
+
+}
+
+// TODO init
+// void Parser::ParseInitializer(std::set<Initializer>& inits,
+//                              std::shared_ptr<Type> type, std::int32_t offset,
+//                              bool designated, bool force_brace) {
+//  if (designated && !Test(Tag::kPeriod) && !Test(Tag::kLeftSquare)) {
+//    Expect(Tag::kEqual);
+//  }
+//
+//  if (type->IsArrayTy()) {
+//  } else if (type->IsStructTy()) {
+//  }
+//}
 
 }  // namespace kcc

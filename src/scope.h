@@ -25,10 +25,18 @@ class Scope {
   std::shared_ptr<Identifier> FindNormal(const std::string &name);
   std::shared_ptr<Identifier> FindTagInCurrScope(const std::string &name);
   std::shared_ptr<Identifier> FindNormalInCurrScope(const std::string &name);
+  std::shared_ptr<Identifier> FindTag(const Token &tok);
+  std::shared_ptr<Identifier> FindNormal(const Token &tok);
+  std::shared_ptr<Identifier> FindTagInCurrScope(const Token &tok);
+  std::shared_ptr<Identifier> FindNormalInCurrScope(const Token &tok);
   auto begin() { return std::begin(normal_); }
   auto end() { return std::end(normal_); }
   std::map<std::string, std::shared_ptr<Identifier>> AllTagInCurrScope() const;
   std::shared_ptr<Scope> GetParent() { return parent_; }
+  bool IsFileScope() const { return type_ == kFile; }
+  bool IsBlockScope() const { return type_ == kBlock; }
+  bool IsFuncScope() const { return type_ == kFunc; }
+  bool IsFuncProtoScope() const { return type_ == kFuncProto; }
 
  private:
   std::shared_ptr<Scope> parent_;

@@ -31,13 +31,31 @@ std::string Token::ToString() const {
                      loc);
 }
 
-bool Token::IsTypeSpec() const {
+bool Token::IsTypeSpecQual() const {
   return tag_ == Tag::kVoid || tag_ == Tag::kChar || tag_ == Tag::kShort ||
          tag_ == Tag::kInt || tag_ == Tag::kLong || tag_ == Tag::kFloat ||
          tag_ == Tag::kDouble || tag_ == Tag::kSigned ||
          tag_ == Tag::kUnsigned || tag_ == Tag::kBool ||
          tag_ == Tag::kComplex || tag_ == Tag::kAtomic ||
-         tag_ == Tag::kStruct || tag_ == Tag::kUnion || tag_ == Tag::kEnum;
+         tag_ == Tag::kStruct || tag_ == Tag::kUnion || tag_ == Tag::kEnum ||
+         tag_ == Tag::kConst || tag_ == Tag::kRestrict ||
+         tag_ == Tag::kVolatile || tag_ == Tag::kAtomic;
+}
+
+bool Token::IsIdentifier() const { return tag_ == Tag::kIdentifier; }
+
+bool Token::IsStringLiteral() const { return tag_ == Tag::kStringLiteral; }
+
+bool Token::IsConstant() const {
+  return IsIntegerConstant() || IsFloatConstant() || IsCharacterConstant();
+}
+
+bool Token::IsIntegerConstant() const { return tag_ == Tag::kIntegerConstant; }
+
+bool Token::IsFloatConstant() const { return tag_ == Tag::kFloatingConstant; }
+
+bool Token::IsCharacterConstant() const {
+  return tag_ == Tag::kCharacterConstant;
 }
 
 }  // namespace kcc

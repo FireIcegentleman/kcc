@@ -51,16 +51,24 @@ std::int32_t Type::Align() const {
   }
 }
 
-std::shared_ptr<Type> Type::MayCast(std::shared_ptr<Type> type) {
-  if (type->type_id_ == kFunctionTyId || type->type_id_ == kArrayTyId) {
+std::shared_ptr<Type> Type::MayCast(std::shared_ptr<Type> type, bool in_proto) {
+  if (type->IsFunctionTy()) {
     return type->GetPointerTo();
+  } else if (type->IsArrayTy()) {
+    type = type->GetPointerTo();
+
+    if (!in_proto) {
+      type->SetConstQualified();
+    }
+
+    return type;
   } else {
     return type;
   }
 }
 
-bool Type::Complete() const {
-  assert(type_id_ == kArrayTyId || type_id_ == kStructTyId);
+bool Type::IsComplete() const {
+  assert(IsArrayTy() || IsStructTy());
   return complete_;
 }
 
@@ -339,6 +347,16 @@ std::int32_t Type::Rank() const {
 
 bool Type::HasStructName() const {
   return dynamic_cast<const StructType*>(this)->HasName();
+}
+
+void Type::SetConstQualified() { type_qualifiers_ |= kConst; }
+
+void Type::SetRestrictQualified() { type_qualifiers_ |= kRestrict; }
+
+void Type::SetVolatileQualified() { type_qualifiers_ |= kVolatile; }
+
+std::shared_ptr<Object> Type::GetStructMember(const std::string& name) const {
+  return dynamic_cast<const StructType*>(this)->GetMember(name);
 }
 
 std::string IntegerType::ToString() const {

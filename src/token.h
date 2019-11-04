@@ -99,12 +99,16 @@ class TokenTag : public QObject {
 
     kPlusPlus,    // ++
     kMinusMinus,  // --
-    kAmp,         // &
-    kStar,        // *
-    kPlus,        // +
-    kMinus,       // -
-    kTilde,       // ~
-    kExclaim,     // !
+
+    kPostfixPlusPlus,    // ++
+    kPostfixMinusMinus,  // --
+
+    kAmp,      // &
+    kStar,     // *
+    kPlus,     // +
+    kMinus,    // -
+    kTilde,    // ~
+    kExclaim,  // !
 
     kSlash,           // /
     kPercent,         // %
@@ -169,7 +173,13 @@ class Token {
   void SetSourceLocation(const SourceLocation &location);
 
   std::string ToString() const;
-  bool IsTypeSpec() const;
+  bool IsTypeSpecQual() const;
+  bool IsIdentifier() const;
+  bool IsStringLiteral() const;
+  bool IsConstant() const;
+  bool IsIntegerConstant() const;
+  bool IsFloatConstant() const;
+  bool IsCharacterConstant() const;
 
  private:
   Tag tag_{Tag::kNone};

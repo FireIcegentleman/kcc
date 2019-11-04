@@ -114,6 +114,8 @@ class BinaryOpExpr : public Expr {
  public:
   BinaryOpExpr(const Token& tok, std::shared_ptr<Expr> lhs,
                std::shared_ptr<Expr> rhs);
+  BinaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> lhs,
+               std::shared_ptr<Expr> rhs);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -150,6 +152,7 @@ class BinaryOpExpr : public Expr {
 class UnaryOpExpr : public Expr {
  public:
   UnaryOpExpr(const Token& tok, std::shared_ptr<Expr> expr);
+  UnaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> expr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -210,7 +213,7 @@ class FuncCallExpr : public Expr {
  public:
   explicit FuncCallExpr(std::shared_ptr<Expr> callee,
                         std::vector<std::shared_ptr<Expr>> args = {})
-      : Expr{callee->GetToken()}, callee_{callee}, args_{args} {}
+      : Expr{callee->GetToken()}, callee_{callee}, args_{std::move(args)} {}
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -419,16 +422,19 @@ bool operator<(const Initializer& lhs, const Initializer& rhs);
 
 class Declaration : public Stmt {
  public:
-  explicit Declaration(std::shared_ptr<Object> object) : object_{object} {}
+  explicit Declaration(std::shared_ptr<Identifier> ident) : ident_{ident} {}
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
   void AddInit(const Initializer& init);
+  void AddInits(const std::set<Initializer>& inits);
+  std::shared_ptr<Identifier> GetIdent() const;
   bool HasInit() const;
+  bool IsObj() const { return ident_->IsObject(); }
 
  private:
-  std::shared_ptr<Object> object_;
+  std::shared_ptr<Identifier> ident_;
   std::set<Initializer> inits_;
 };
 
