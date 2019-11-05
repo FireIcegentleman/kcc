@@ -18,7 +18,7 @@ std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
 
   while (HasNext()) {
     if (auto decl{ParseExternalDecl()}; decl) {
-      unit->AddStmt(decl);
+      unit->AddExtDecl(decl);
     }
   }
 
@@ -408,7 +408,7 @@ void Parser::ParseDirectDeclarator(Token& tok,
     ParseDirectDeclaratorTail(base_type);
   } else if (Try(Tag::kLeftParen)) {
     auto begin{index_};
-    auto temp{Type::GetVoidTy()};
+    auto temp{ArithmeticType::Get(kInt)};
     // 此时的 base_type 不一定是正确的, 先跳过括号中的内容
     ParseDeclarator(tok, temp);
     Expect(Tag::kRightParen);
@@ -705,7 +705,7 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
         if (std::empty(tok.GetStr())) {
           if (base_type->IsStructTy() && !base_type->HasStructName()) {
             auto anony{MakeAstNode<Object>(Peek(), base_type, kNone, true)};
-            type->MergeAnony(anony);
+            type->MergeAnonymous(anony);
             continue;
           } else {
             Error(Peek(), "declaration does not declare anything");
@@ -772,7 +772,7 @@ std::shared_ptr<Type> Parser::ParseEnumSpec() {
       auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
 
       if (!tag) {
-        auto type{IntegerType::Get(32)};
+        auto type{ArithmeticType::Get(32)};
         auto ident{MakeAstNode<Identifier>(tok, type, kNone, true)};
         ParseEnumerator(type);
         curr_scope_->InsertTag(tag_name, ident);
@@ -793,7 +793,7 @@ std::shared_ptr<Type> Parser::ParseEnumSpec() {
     }
   } else {
     Expect(Tag::kLeftBrace);
-    auto type{IntegerType::Get(32)};
+    auto type{ArithmeticType::Get(32)};
     ParseEnumerator(type);
     Expect(Tag::kRightBrace);
     return type;
@@ -1045,7 +1045,7 @@ std::shared_ptr<Constant> Parser::ParseStringLiteral(bool handle_escape) {
   str += '\0';
 
   return MakeAstNode<Constant>(
-      tok, ArrayType::Get(IntegerType::Get(8), std::size(str)), str);
+      tok, ArrayType::Get(ArithmeticType::Get(8), std::size(str)), str);
 }
 
 // TODO check
@@ -1289,7 +1289,7 @@ std::shared_ptr<Expr> Parser::ParseSizeof() {
   }
 
   return MakeAstNode<Constant>(tok, Type::Get(kLong | kUnsigned),
-                               static_cast<std::uint64_t>(type->Width()));
+                               static_cast<std::uint64_t>(type->GetWidth()));
 }
 
 std::shared_ptr<Expr> Parser::ParseAlignof() {
@@ -1775,8 +1775,8 @@ std::shared_ptr<ReturnStmt> Parser::ParseReturnStmt() {
     auto expr{ParseExpr()};
     Expect(Tag::kSemicolon);
 
-    expr = Expr::CastTo(expr,
-                        curr_func_def_->GetFuncType()->GetFunctionReturnType());
+    expr = Expr::MayCastTo(
+        expr, curr_func_def_->GetFuncType()->GetFunctionReturnType());
     return MakeAstNode<ReturnStmt>(expr);
   }
 }

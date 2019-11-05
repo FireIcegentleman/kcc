@@ -8,9 +8,17 @@
 
 namespace kcc {
 
+Token Token::Get(Tag tag) {
+  Token tok;
+  tok.SetTag(tag);
+  return tok;
+}
+
 bool Token::TagIs(Tag tag) const { return tag_ == tag; }
 
 void Token::SetTag(Tag tag) { tag_ = tag; }
+
+Tag Token::GetTag() const { return tag_; }
 
 std::string Token::GetStr() const { return str_; }
 

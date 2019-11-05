@@ -139,21 +139,21 @@ class TokenTag : public QObject {
   };
 
   Q_ENUM(Values)
+
+  static std::string ToString(TokenTag::Values value) {
+    return QMetaEnum::fromType<TokenTag::Values>().valueToKey(value) + 1;
+  }
 };
 
 using Tag = TokenTag::Values;
 
 class Token {
  public:
-  static Token Get(Tag tag) {
-    Token tok;
-    tok.SetTag(tag);
-    return tok;
-  }
+  static Token Get(Tag tag);
 
   bool TagIs(Tag tag) const;
   void SetTag(Tag tag);
-  Tag GetTag() const { return tag_; }
+  Tag GetTag() const;
 
   std::string GetStr() const;
   void SetStr(const std::string &str);
@@ -176,10 +176,6 @@ class Token {
   std::string str_;
   SourceLocation location_;
 };
-
-inline std::string ToString(Tag value) {
-  return QMetaEnum::fromType<Tag>().valueToKey(value) + 1;
-}
 
 }  // namespace kcc
 

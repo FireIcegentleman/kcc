@@ -26,5 +26,5 @@
 ////#include <wctype.h> // 表达式类型错误
 // html文件过大 可能有bug
 
-#include <stdio.h>
+int printf(const char *s, ...);
 int main(void) { printf("Hello World!"); }

@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
 
 #include "error.h"
 

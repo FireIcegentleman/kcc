@@ -6,6 +6,19 @@
 
 namespace kcc {
 
+void Scope::PrintCurrScope() const {
+  for (const auto& item : normal_) {
+    std::cout << "func / object / typedef / enumerator :\n";
+    std::cout << item.first << ' ';
+    std::cout << item.second->GetType()->ToString() << '\n';
+  }
+  std::cout << "struct / union / enum :\n";
+  for (const auto& item : tags_) {
+    std::cout << item.first << ' ';
+    std::cout << item.second->GetType()->ToString() << '\n';
+  }
+}
+
 void Scope::InsertTag(const std::string& name,
                       std::shared_ptr<Identifier> ident) {
   tags_[name] = ident;
@@ -51,11 +64,6 @@ std::shared_ptr<Identifier> Scope::FindNormalInCurrScope(
   return iter == std::end(normal_) ? nullptr : iter->second;
 }
 
-std::map<std::string, std::shared_ptr<Identifier>> Scope::AllTagInCurrScope()
-    const {
-  return tags_;
-}
-
 std::shared_ptr<Identifier> Scope::FindTag(const Token& tok) {
   return FindTag(tok.GetStr());
 }
@@ -71,5 +79,14 @@ std::shared_ptr<Identifier> Scope::FindTagInCurrScope(const Token& tok) {
 std::shared_ptr<Identifier> Scope::FindNormalInCurrScope(const Token& tok) {
   return FindNormalInCurrScope(tok.GetStr());
 }
+
+std::map<std::string, std::shared_ptr<Identifier>> Scope::AllTagInCurrScope()
+    const {
+  return tags_;
+}
+
+std::shared_ptr<Scope> Scope::GetParent() { return parent_; }
+
+bool Scope::IsFileScope() const { return type_ == kFile; }
 
 }  // namespace kcc

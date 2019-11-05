@@ -324,9 +324,9 @@ void JsonGen::Visit(const TypeCastExpr& node) {
 void JsonGen::Visit(const Constant& node) {
   auto str{AstNodeTypes::ToString(node.Kind()).append(' ')};
   if (node.GetType()->IsIntegerTy()) {
-    str.append(QString::fromStdString(std::to_string(node.int_val_)));
+    str.append(QString::fromStdString(std::to_string(node.integer_val_)));
   } else if (node.GetType()->IsFloatPointTy()) {
-    str.append(QString::fromStdString(std::to_string(node.float_val_)));
+    str.append(QString::fromStdString(std::to_string(node.float_point_val_)));
   } else {
     str.append(QString::fromStdString(node.str_val_));
   }
@@ -342,7 +342,7 @@ void JsonGen::Visit(const Enumerator& node) {
   root["name"] =
       AstNodeTypes::ToString(node.Kind())
           .append(' ')
-          .append(QString::fromStdString(std::to_string(node.val_->int_val_)));
+          .append(QString::fromStdString(std::to_string(node.val_->integer_val_)));
 
   result_ = root;
 }
@@ -507,25 +507,24 @@ void JsonGen::Visit(const GotoStmt& node) {
 }
 
 // FIXME
-void JsonGen::Visit(const Declaration&) {
-  //  QJsonObject root;
-  //  root["name"] = AstNodeTypes::ToString(node.Kind());
-  //
-  //  QJsonArray children;
-  //
-  //  QJsonObject type;
-  //  type["name"] =
-  //      QString::fromStdString("type: " +
-  //      node.GetIdent()->GetType()->ToString());
-  //  children.append(type);
-  //
-  //  QJsonObject name;
-  //  name["name"] = "name: " +
-  //  QString::fromStdString(node.GetIdent()->GetName()); children.append(name);
-  //
-  //  root["children"] = children;
-  //
-  //  result_ = root;
+void JsonGen::Visit(const Declaration& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+
+  QJsonArray children;
+
+  QJsonObject type;
+  type["name"] =
+      QString::fromStdString("type: " + node.GetIdent()->GetType()->ToString());
+  children.append(type);
+
+  QJsonObject name;
+  name["name"] = "name: " + QString::fromStdString(node.GetIdent()->GetName());
+  children.append(name);
+
+  root["children"] = children;
+
+  result_ = root;
 }
 
 void JsonGen::Visit(const FuncDef& node) {

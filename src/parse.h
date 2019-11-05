@@ -37,28 +37,25 @@ class Parser {
   std::shared_ptr<Object> ParseParamDecl();
   void ParseAbstractDeclarator(std::shared_ptr<Type> &type);
   void ParsePointer(std::shared_ptr<Type> &type);
-  void ParseTypeQualList(std::shared_ptr<Type> &type);
-  void ParseDirectAbstractDeclarator(std::shared_ptr<Type> &type);
+  void ParseTypeQualList(QualType &type);
+  void ParseDirectAbstractDeclarator(QualType &type);
 
   std::shared_ptr<CompoundStmt> ParseDecl(bool maybe_func_def = false);
   void ParseStaticAssertDecl();
-  std::shared_ptr<Type> ParseDeclSpec(bool only_spec_and_qual);
-  void ParseDeclarator(Token &tok, std::shared_ptr<Type> &base_type);
-  void ParseDirectDeclarator(Token &tok, std::shared_ptr<Type> &base_type);
-  void ParseDirectDeclaratorTail(std::shared_ptr<Type> &base_type);
-  std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(
-      std::shared_ptr<Type> &base_type);
-  std::shared_ptr<Declaration> ParseInitDeclarator(
-      std::shared_ptr<Type> &base_type);
-  std::shared_ptr<Declaration> MakeDeclarator(
-      const Token &tok, const std::shared_ptr<Type> &type);
+  QualType ParseDeclSpec(bool only_spec_and_qual);
+  void ParseDeclarator(Token &tok, QualType &base_type);
+  void ParseDirectDeclarator(Token &tok, QualType &base_type);
+  void ParseDirectDeclaratorTail(QualType &base_type);
+  std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(QualType &base_type);
+  std::shared_ptr<Declaration> ParseInitDeclarator(QualType &base_type);
+  std::shared_ptr<Declaration> MakeDeclarator(const Token &tok,
+                                              const QualType &type);
   std::shared_ptr<Expr> ParseConstantExpr();
   std::shared_ptr<Constant> ParseStringLiteral(bool handle_escape);
   std::set<Initializer> ParseInitDeclaratorSub(
       std::shared_ptr<Identifier> ident);
-  void ParseInitializer(std::set<Initializer> &inits,
-                        std::shared_ptr<Type> type, std::int32_t offset,
-                        bool designated, bool force_brace);
+  void ParseInitializer(std::set<Initializer> &inits, QualType type,
+                        std::int32_t offset, bool designated, bool force_brace);
 
   bool HasNext();
   Token Peek();
@@ -95,7 +92,7 @@ class Parser {
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
 
-  void EnterBlock(std::shared_ptr<Type> func_type = nullptr);
+  void EnterBlock(QualType func_type = {});
   void ExitBlock();
   void EnterFunc(std::shared_ptr<Identifier> ident);
   void ExitFunc();
@@ -103,8 +100,7 @@ class Parser {
   std::shared_ptr<LabelStmt> ParseLabelStmt();
   std::shared_ptr<CaseStmt> ParseCaseStmt();
   std::shared_ptr<DefaultStmt> ParseDefaultStmt();
-  std::shared_ptr<CompoundStmt> ParseCompoundStmt(
-      std::shared_ptr<Type> func_type = nullptr);
+  std::shared_ptr<CompoundStmt> ParseCompoundStmt(QualType func_type = {});
   std::shared_ptr<ExprStmt> ParseExprStmt();
   std::shared_ptr<IfStmt> ParseIfStmt();
   std::shared_ptr<SwitchStmt> ParseSwitchStmt();

@@ -67,309 +67,269 @@ enum TypeSpecCompatibility {
   kCompDouble = kLong
 };
 
+class Type;
+class PointerType;
 class Object;
 class Scope;
-class IntegerType;
-class PointerType;
+
+class QualType {
+  friend bool operator==(QualType lhs, QualType rhs);
+  friend bool operator!=(QualType lhs, QualType rhs);
+
+ public:
+  QualType() = default;
+  QualType(std::shared_ptr<Type> type, std::uint32_t type_qual = 0)
+      : type_{type}, type_qual_{type_qual} {}
+
+  Type& operator*();
+  const Type& operator*() const;
+  std::shared_ptr<Type> operator->();
+  const std::shared_ptr<Type> operator->() const;
+
+  std::shared_ptr<Type> GetType();
+  const std::shared_ptr<Type> GetType() const;
+  std::uint32_t GetTypeQual() const;
+
+  bool IsConst() const;
+  bool IsRestrict() const;
+
+ private:
+  std::shared_ptr<Type> type_;
+  std::uint32_t type_qual_;
+};
+
+bool operator==(QualType lhs, QualType rhs);
+bool operator!=(QualType lhs, QualType rhs);
 
 class Type : public std::enable_shared_from_this<Type> {
  public:
-  struct Spec {
-    std::uint32_t type_spec_{};
-    std::uint32_t type_qualifiers_{};
-    std::uint32_t storage_class_spec_{};
-    std::uint32_t func_spec_{};
-    std::int32_t align_{};
-  };
-
-  enum TypeId {
-    kVoidTyId,
-    kFloatTyId,
-    kDoubleTyId,
-    kX86Fp80TyId,
-    kIntegerTyId,
-    kFunctionTyId,
-    kStructTyId,
-    kArrayTyId,
-    kPointerTyId,
-  };
+  // 数组函数隐式转换为指针
+  // TODO 是否应该创建一个 ast 节点？
+  static QualType MayCast(QualType type, bool in_proto = false);
 
   virtual ~Type() = default;
 
-  virtual std::string ToString() const;
-  virtual std::int32_t Width() const;
-  void SetAlign(std::int32_t align);
-  std::int32_t Align() const;
-  bool HasAlign() const { return align_ != 0; }
-  static std::shared_ptr<Type> MayCast(std::shared_ptr<Type> type,
-                                       bool in_proto = false);
-
-  virtual bool Compatible(const std::shared_ptr<Type>& other) const;
-  virtual bool Equal(const std::shared_ptr<Type>& type) const;
-  static std::shared_ptr<Type> IntegerPromote(std::shared_ptr<Type> type);
-  static std::shared_ptr<Type> MaxType(std::shared_ptr<Type>& lhs,
-                                       std::shared_ptr<Type>& rhs);
-  std::int32_t Rank() const;
-  bool IsTypedef() const { return storage_class_spec_ & kTypedef; }
-  bool IsExtern() const { return storage_class_spec_ & kExtern; }
-  void SetUnsigned() { type_spec_ |= kUnsigned; }
-  Spec GetSpec() const {
-    return {type_spec_, type_qualifiers_, storage_class_spec_, func_spec_,
-            align_};
-  }
-  void SetSpec(const Spec& spec) {
-    type_spec_ = spec.type_spec_;
-    type_qualifiers_ = spec.type_spec_;
-    storage_class_spec_ = spec.storage_class_spec_;
-    func_spec_ = spec.func_spec_;
-    align_ = spec.align_;
-  }
+  // 位数而不是字节数
+  virtual std::int32_t GetWidth() const = 0;
+  virtual std::int32_t GetAlign() const = 0;
+  virtual std::string ToString() const = 0;
+  // 这里忽略了 cvr
+  virtual bool Compatible(const std::shared_ptr<Type>& other) const = 0;
+  virtual bool Equal(const std::shared_ptr<Type>& other) const = 0;
 
   bool IsComplete() const;
   void SetComplete(bool complete) const;
+
+  bool IsUnsigned() const;
   bool IsVoidTy() const;
   bool IsBoolTy() const;
+  bool IsShortTy() const;
+  bool IsIntTy() const;
+  bool IsLongTy() const;
+  bool IsLongLongTy() const;
   bool IsFloatTy() const;
   bool IsDoubleTy() const;
-  bool IsX86Fp80Ty() const;
-  bool IsIntegerTy() const;
-  bool IsIntegerTy(std::int32_t bit_width) const;
-  bool IsFunctionTy() const;
-  bool IsStructTy() const;
-  bool IsArrayTy() const;
+  bool IsLongDoubleTy() const;
+  bool IsComplexTy() const;
+  bool IsTypeName() const;
+
   bool IsPointerTy() const;
+  bool IsArrayTy() const;
+  bool IsStructTy() const;
+  bool IsUnionTy() const;
+  bool IsFunctionTy() const;
+
   bool IsObjectTy() const;
+  bool IsCharacterTy() const;
+  bool IsIntegerTy() const;
+  bool IsRealTy() const;
   bool IsArithmeticTy() const;
   bool IsScalarTy() const;
-  bool IsRealTy() const;
-  bool IsRealFloatPointTy() const;
-  bool IsFloatPointTy() const;
   bool IsAggregateTy() const;
   bool IsDerivedTy() const;
 
-  bool HasStructName() const;
-  bool IsConstQualified() const;
-  bool IsRestrictQualified() const;
-  bool IsVolatileQualified() const;
-  void SetConstQualified();
-  void SetRestrictQualified();
-  void SetVolatileQualified();
-  bool IsUnsigned() const;
-  bool IsStatic() const;
-  std::int32_t GetAlign() const;
-  void SetComplete(bool complete) { complete_ = complete; }
-
-  void SetTypeQualifiers(std::uint32_t type_qualifiers);
-  void SetStorageClassSpec(std::uint32_t storage_class_spec);
-
-  std::shared_ptr<Type> GetFunctionParamType(std::int32_t i) const;
-  std::int32_t GetFunctionNumParams() const;
-  bool IsFunctionVarArg() const;
-  std::vector<std::shared_ptr<Object>> GetFunctionParams() const;
-  bool IsFunctionVarArgs() const;
-  std::shared_ptr<Type> GetFunctionReturnType() const;
-
-  std::string GetStructName() const;
-  std::int32_t GetStructNumElements() const;
-  std::shared_ptr<Type> GetStructElementType(std::int32_t i) const;
-  std::shared_ptr<Object> GetStructMember(const std::string& name) const;
-
-  std::size_t GetArrayNumElements() const;
-  std::shared_ptr<Type> GetArrayElementType() const;
-
-  std::shared_ptr<Type> GetPointerElementType() const;
-
-  static std::shared_ptr<Type> GetVoidTy();
-  static std::shared_ptr<Type> GetFloatTy();
-  static std::shared_ptr<Type> GetDoubleTy();
-  static std::shared_ptr<Type> GetX86Fp80Ty();
-
-  static std::shared_ptr<Type> Get(std::uint32_t type_spec);
+  bool IsRealFloatPointTy() const;
+  bool IsFloatPointTy() const;
 
   std::shared_ptr<PointerType> GetPointerTo();
-  static std::shared_ptr<PointerType> GetVoidPtrTy();
 
-  void SetFuncSpec(std::uint32_t func_spec);
-  bool IsInline() const;
-  bool IsNoreturn() const;
+  std::int32_t ArithmeticRank() const;
+  std::uint64_t ArithmeticMaxIntegerValue() const;
+  void ArithmeticSetUnsigned();
+
+  QualType PointerGetElementType() const;
+
+  void ArraySetNumElements(std::size_t num_elements);
+  std::size_t ArrayGetNumElements() const;
+  QualType ArrayGetElementType() const;
+
+  bool StructHasName() const;
+  void StructSetName(const std::string& name);
+  std::string StructGetName() const;
+  std::int32_t StructGetNumMembers() const;
+  std::vector<std::shared_ptr<Object>> StructGetMembers();
+  std::shared_ptr<Object> StructGetMember(const std::string& name) const;
+  QualType StructGetMemberType(std::int32_t i) const;
+  std::shared_ptr<Scope> StructGetScope();
+  void StructAddMember(std::shared_ptr<Object> member);
+  void StructMergeAnonymous(std::shared_ptr<Object> anonymous);
+  std::int32_t StructGetOffset() const;
+
+  bool FuncIsVarArgs() const;
+  QualType FuncGetReturnType() const;
+  std::int32_t FuncGetNumParams() const;
+  QualType FuncGetParamType(std::int32_t i) const;
+  std::vector<std::shared_ptr<Object>> FuncGetParams() const;
+  void FuncSetFuncSpec(std::uint32_t func_spec);
+  bool FuncIsInline() const;
+  bool FuncIsNoreturn() const;
 
  protected:
-  explicit Type(TypeId type_id) : type_id_{type_id} {}
-  std::int32_t num_bit_;
+  explicit Type(bool complete);
 
  private:
-  TypeId type_id_;
-
-  // 不完整类型是缺乏足以确定其对象大小的信息对象类型。不完整类型可以在翻译单元的某些点完整。
-  // 下列类型不完整：
-  // 类型 void 。此类型不能完整。
-  // 大小未知的数组。之后指定大小的声明能使之完整。
-  // 内容未知的结构体或联合体类型。
   mutable bool complete_{false};
-
-  std::uint32_t type_spec_{};
-  std::uint32_t type_qualifiers_{};
-  std::uint32_t storage_class_spec_{};
-  std::uint32_t func_spec_{};
-  std::int32_t align_{};
 };
 
-class IntegerType : public Type {
+class ArithmeticType : public Type {
   friend class Type;
 
  public:
-  static std::shared_ptr<IntegerType> Get(std::int32_t num_bit);
+  static std::shared_ptr<ArithmeticType> Get(std::uint32_t type_spec);
 
+  static std::shared_ptr<Type> IntegerPromote(std::shared_ptr<Type> type);
+  static std::shared_ptr<Type> MaxType(std::shared_ptr<Type> lhs,
+                                       std::shared_ptr<Type> rhs);
+
+  virtual std::int32_t GetWidth() const override;
+  virtual std::int32_t GetAlign() const override;
   virtual std::string ToString() const override;
-  virtual std::int32_t Width() const override { return num_bit_ / 8; }
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
-  virtual bool Equal(const std::shared_ptr<Type>& type) const override;
+  virtual bool Equal(const std::shared_ptr<Type>& other) const override;
 
- protected:
-  explicit IntegerType(std::int32_t num_bit) : Type{kIntegerTyId} {
-    num_bit_ = num_bit;
-    SetComplete(true);
-  }
+  std::int32_t Rank() const;
+  std::uint64_t MaxIntegerValue() const;
+  void SetUnsigned();
 
  private:
+  explicit ArithmeticType(std::uint32_t type_spec);
+
+  std::uint32_t type_spec_{};
 };
 
-class FunctionType : public Type {
+class PointerType : public Type {
  public:
-  FunctionType(const FunctionType&) = delete;
-  FunctionType& operator=(const FunctionType&) = delete;
+  static std::shared_ptr<PointerType> Get(QualType element_type);
 
-  static std::shared_ptr<FunctionType> Get(
-      std::shared_ptr<Type> return_type,
-      std::vector<std::shared_ptr<Object>> params, bool is_var_args = false) {
-    return std::shared_ptr<FunctionType>(
-        new FunctionType{return_type, params, is_var_args});
-  }
-
-  std::shared_ptr<Type> GetParamType(std::int32_t i) const;
-  std::int32_t GetNumParams() const { return std::size(params_); }
-  bool IsVarArgs() const { return is_var_args_; }
+  virtual std::int32_t GetWidth() const override;
+  virtual std::int32_t GetAlign() const override;
   virtual std::string ToString() const override;
-  std::shared_ptr<Type> GetReturnType() const;
-  std::vector<std::shared_ptr<Object>> GetParams() const;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& type) const override;
 
- private:
-  FunctionType(std::shared_ptr<Type> return_type,
-               std::vector<std::shared_ptr<Object>> param, bool is_var_args)
-      : Type{kFunctionTyId},
-        return_type_{return_type},
-        params_{param},
-        is_var_args_{is_var_args} {}
+  QualType GetElementType() const;
 
-  std::shared_ptr<Type> return_type_;
-  std::vector<std::shared_ptr<Object>> params_;
-  bool is_var_args_;
+ private:
+  explicit PointerType(QualType element_type);
+
+  QualType element_type_;
+};
+
+class ArrayType : public Type {
+ public:
+  static std::shared_ptr<ArrayType> Get(QualType contained_type,
+                                        std::size_t num_elements = 0);
+
+  virtual std::int32_t GetWidth() const override;
+  virtual std::int32_t GetAlign() const override;
+  virtual std::string ToString() const override;
+  virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
+  virtual bool Equal(const std::shared_ptr<Type>& other) const override;
+
+  void SetNumElements(std::size_t num_elements);
+  std::size_t GetNumElements() const;
+  QualType GetElementType() const;
+
+ private:
+  ArrayType(QualType contained_type, std::size_t num_elements);
+
+  QualType contained_type_;
+  std::size_t num_elements_;
 };
 
 class StructType : public Type {
  public:
   static std::shared_ptr<StructType> Get(bool is_struct, bool has_name,
-                                         std::shared_ptr<Scope> parent) {
-    return std::shared_ptr<StructType>(
-        new StructType{is_struct, has_name, parent});
-  }
+                                         std::shared_ptr<Scope> parent);
 
-  virtual std::int32_t Width() const override { return width_; }
-  void SetName(const std::string& name) { name_ = name; }
-  std::string GetName() const;
-  std::int32_t GetNumElements() const;
-  std::shared_ptr<Type> GetElementType(std::int32_t i) const;
-
-  void AddMember(std::shared_ptr<Object> member);
-  void MergeAnony(std::shared_ptr<Object> anony);
-
-  bool IsStruct() const { return is_struct_; }
-  std::vector<std::shared_ptr<Object>> GetMembers() { return members_; }
-  std::int32_t GetOffset() const { return offset_; }
-  bool HasName() const { return has_name_; }
-  std::shared_ptr<Scope> GetScope() { return scope_; }
+  virtual std::int32_t GetWidth() const override;
+  virtual std::int32_t GetAlign() const override;
   virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
-  virtual bool Equal(const std::shared_ptr<Type>& type) const override;
-  std::shared_ptr<Object> GetMember(const std::string& name) const;
+  virtual bool Equal(const std::shared_ptr<Type>& other) const override;
 
-  // 计算新成员的开始位置
-  static int MakeAlign(int offset, int align) {
-    if (offset % align == 0) {
-      return offset;
-    } else {
-      return offset + align - offset % align;
-    }
-  }
+  bool IsStruct() const;
+  bool HasName() const;
+  void SetName(const std::string& name);
+  std::string GetName() const;
+
+  std::int32_t GetNumMembers() const;
+  std::vector<std::shared_ptr<Object>> GetMembers();
+  std::shared_ptr<Object> GetMember(const std::string& name) const;
+  QualType GetMemberType(std::int32_t i) const;
+  std::shared_ptr<Scope> GetScope();
+  std::int32_t GetOffset() const;
+
+  void AddMember(std::shared_ptr<Object> member);
+  void MergeAnonymous(std::shared_ptr<Object> anonymous);
 
  private:
-  StructType(bool is_struct, bool has_name, std::shared_ptr<Scope> parent)
-      : Type{kStructTyId},
-        is_struct_{is_struct},
-        has_name_{has_name},
-        scope_{parent} {}
+  StructType(bool is_struct, bool has_name, std::shared_ptr<Scope> parent);
 
-  std::string name_;
-
-  std::vector<std::shared_ptr<Object>> members_;
+  // 计算新成员的开始位置
+  static std::int32_t MakeAlign(std::int32_t offset, std::int32_t align);
 
   bool is_struct_{};
   bool has_name_{};
+
+  std::string name_;
+  std::vector<std::shared_ptr<Object>> members_;
   std::shared_ptr<Scope> scope_;
+
   std::int32_t offset_{};
   std::int32_t width_{};
   std::int32_t align_{};
 };
 
-class ArrayType : public Type {
+class FunctionType : public Type {
  public:
-  std::size_t GetNumElements() const { return num_elements_; }
-  std::shared_ptr<Type> GetElementType() const { return contained_type_; }
+  static std::shared_ptr<FunctionType> Get(
+      QualType return_type, std::vector<std::shared_ptr<Object>> params,
+      bool is_var_args = false);
 
-  static std::shared_ptr<ArrayType> Get(std::shared_ptr<Type> contained_type,
-                                        std::size_t num_elements);
+  virtual std::int32_t GetWidth() const override;
+  virtual std::int32_t GetAlign() const override;
   virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
-  virtual bool Equal(const std::shared_ptr<Type>& type) const override;
-  virtual std::int32_t Width() const override {
-    return contained_type_->Width() * num_elements_;
-  }
+  virtual bool Equal(const std::shared_ptr<Type>& other) const override;
+
+  bool IsVarArgs() const;
+  QualType GetReturnType() const;
+  std::int32_t GetNumParams() const;
+  QualType GetParamType(std::int32_t i) const;
+  std::vector<std::shared_ptr<Object>> GetParams() const;
+  void SetFuncSpec(std::uint32_t func_spec);
+  bool IsInline() const;
+  bool IsNoreturn() const;
 
  private:
-  ArrayType(std::shared_ptr<Type> contained_type, std::size_t num_elements)
-      : Type{kArrayTyId},
-        contained_type_{contained_type},
-        num_elements_{num_elements} {
-    SetComplete(num_elements_ > 0);
-  }
+  FunctionType(QualType return_type, std::vector<std::shared_ptr<Object>> param,
+               bool is_var_args);
 
-  std::shared_ptr<Type> contained_type_;
-  std::size_t num_elements_;
-};
-
-class PointerType : public Type {
- public:
-  PointerType(const PointerType&) = delete;
-  PointerType& operator=(const PointerType&) = delete;
-
-  static std::shared_ptr<PointerType> Get(std::shared_ptr<Type> element_type) {
-    return std::shared_ptr<PointerType>(new PointerType{element_type});
-  }
-  virtual std::string ToString() const override;
-  std::shared_ptr<Type> GetElementType() const;
-  virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
-  virtual bool Equal(const std::shared_ptr<Type>& type) const override;
-  virtual std::int32_t Width() const override { return 8; }
-
- private:
-  explicit PointerType(std::shared_ptr<Type> element_type)
-      : Type{kPointerTyId}, element_type_{element_type} {
-    SetComplete(true);
-  }
-
-  std::shared_ptr<Type> element_type_;
+  bool is_var_args_;
+  std::uint32_t func_spec_{};
+  QualType return_type_;
+  std::vector<std::shared_ptr<Object>> params_;
 };
 
 }  // namespace kcc
