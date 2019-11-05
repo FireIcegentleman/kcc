@@ -94,18 +94,21 @@ class Parser {
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
 
-  std::unique_ptr<CompoundStmt> ParseCompoundStmt();
-  std::unique_ptr<Stmt> ParseStmt();
-  std::unique_ptr<IfStmt> ParseIfStmt();
-  std::unique_ptr<WhileStmt> ParseWhileStmt();
-  std::unique_ptr<DoWhileStmt> ParseDoWhileStmt();
-  std::unique_ptr<ForStmt> ParseForStmt();
-  std::unique_ptr<ReturnStmt> ParseReturnStmt();
-  std::unique_ptr<Stmt> ParseExpressionStmt();
-  std::unique_ptr<CaseStmt> ParseCaseStmt();
-  std::unique_ptr<DefaultStmt> ParseDefaultStmt();
-  std::unique_ptr<SwitchStmt> ParseSwitchStmt();
-  std::unique_ptr<Stmt> ParseGotoStmt();
+  std::shared_ptr<Stmt> ParseStmt();
+  std::shared_ptr<LabelStmt> ParseLabelStmt();
+  std::shared_ptr<CaseStmt> ParseCaseStmt();
+  std::shared_ptr<DefaultStmt> ParseDefaultStmt();
+  std::shared_ptr<CompoundStmt> ParseCompoundStmt();
+  std::shared_ptr<ExprStmt> ParseExprStmt();
+  std::shared_ptr<IfStmt> ParseIfStmt();
+  std::shared_ptr<SwitchStmt> ParseSwitchStmt();
+  std::shared_ptr<WhileStmt> ParseWhileStmt();
+  std::shared_ptr<DoWhileStmt> ParseDoWhileStmt();
+  std::shared_ptr<ForStmt> ParseForStmt();
+  std::shared_ptr<GotoStmt> ParseGotoStmt();
+  std::shared_ptr<ContinueStmt> ParseContinueStmt();
+  std::shared_ptr<BreakStmt> ParseBreakStmt();
+  std::shared_ptr<ReturnStmt> ParseReturnStmt();
 
   void TryAttributeSpec();
   void ParseAttributeList();
@@ -119,15 +122,7 @@ class Parser {
 
   std::shared_ptr<Scope> curr_scope_;
   std::map<std::string, std::shared_ptr<LabelStmt>> curr_labels_;
-
-  template <typename T, typename... Args>
-  std::shared_ptr<T> MakeAstNode(Args &&... args) {
-    auto t{std::make_shared<T>(std::forward<Args>(args)...)};
-    if (auto p{std::dynamic_pointer_cast<Expr>(t)}; p) {
-      p->TypeCheck();
-    }
-    return t;
-  }
+  std::shared_ptr<FuncDef> curr_func_;
 };
 
 }  // namespace kcc

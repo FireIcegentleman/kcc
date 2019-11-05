@@ -28,7 +28,6 @@ class Visitor {
   virtual void Visit(const Identifier &node) = 0;
   virtual void Visit(const Object &node) = 0;
   virtual void Visit(const TranslationUnit &node) = 0;
-  virtual void Visit(const JumpStmt &node) = 0;
   virtual void Visit(const Declaration &node) = 0;
   virtual void Visit(const FuncDef &node) = 0;
   virtual void Visit(const ExprStmt &node) = 0;
@@ -38,6 +37,9 @@ class Visitor {
   virtual void Visit(const CaseStmt &node) = 0;
   virtual void Visit(const DefaultStmt &node) = 0;
   virtual void Visit(const SwitchStmt &node) = 0;
+  virtual void Visit(const BreakStmt &node) = 0;
+  virtual void Visit(const ContinueStmt &node) = 0;
+  virtual void Visit(const GotoStmt &node) = 0;
 };
 
 }  // namespace kcc

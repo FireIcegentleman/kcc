@@ -25,7 +25,6 @@ ACCEPT(Identifier)
 ACCEPT(Enumerator)
 ACCEPT(Object)
 ACCEPT(TranslationUnit)
-ACCEPT(JumpStmt)
 ACCEPT(Declaration)
 ACCEPT(FuncDef)
 ACCEPT(ExprStmt)
@@ -35,52 +34,49 @@ ACCEPT(ForStmt)
 ACCEPT(CaseStmt)
 ACCEPT(DefaultStmt)
 ACCEPT(SwitchStmt)
+ACCEPT(GotoStmt)
+ACCEPT(ContinueStmt)
+ACCEPT(BreakStmt)
 
 ExprStmt::ExprStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
 
 AstNodeType ExprStmt::Kind() const { return AstNodeType::kExprStmt; }
 
-WhileStmt::WhileStmt(std::shared_ptr<Expr> cond,
-                     std::shared_ptr<CompoundStmt> block)
+WhileStmt::WhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block)
     : cond_{cond}, block_{block} {}
 
 AstNodeType WhileStmt::Kind() const { return AstNodeType::kWhileStmt; }
 
 DoWhileStmt::DoWhileStmt(std::shared_ptr<Expr> cond,
-                         std::shared_ptr<CompoundStmt> block)
+                         std::shared_ptr<Stmt> block)
     : cond_{cond}, block_{block} {}
 
 AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
 
 ForStmt::ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
-                 std::shared_ptr<Expr> inc, std::shared_ptr<CompoundStmt> block,
+                 std::shared_ptr<Expr> inc, std::shared_ptr<Stmt> block,
                  std::shared_ptr<Declaration> decl)
     : init_{init}, cond_{cond}, inc_{inc}, block_{block}, decl_{decl} {}
 
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
 
-CaseStmt::CaseStmt(std::int32_t case_value) : case_value_{case_value} {}
+CaseStmt::CaseStmt(std::int32_t case_value, std::shared_ptr<Stmt> block)
+    : case_value_{case_value}, block_{block} {}
 
-CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2)
-    : case_value_range_{case_value, case_value2}, has_range_{true} {}
-
-void CaseStmt::AddStmt(std::shared_ptr<Stmt> stmt) { block_->AddStmt(stmt); }
+CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2,
+                   std::shared_ptr<Stmt> block)
+    : case_value_range_{case_value, case_value2},
+      has_range_{true},
+      block_{block} {}
 
 AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
-void DefaultStmt::AddStmt(std::shared_ptr<Stmt> stmt) { block_->AddStmt(stmt); }
-
 AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
 
-SwitchStmt::SwitchStmt(std::shared_ptr<Expr> choose) : choose_{choose} {}
+DefaultStmt::DefaultStmt(std::shared_ptr<Stmt> block) : block_{block} {}
 
-void SwitchStmt::AddCase(std::shared_ptr<CaseStmt> case_stmt) {
-  case_stmts_.push_back(case_stmt);
-}
-
-void SwitchStmt::SetDefault(std::shared_ptr<DefaultStmt> default_stmt) {
-  default_stmt_ = default_stmt;
-}
+SwitchStmt::SwitchStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block)
+    : cond_{cond}, block_{block} {}
 
 AstNodeType SwitchStmt::Kind() const { return AstNodeType::kSwitchStmt; }
 
@@ -681,7 +677,7 @@ AstNodeType TranslationUnit::Kind() const {
   return AstNodeType::kTranslationUnit;
 }
 
-LabelStmt::LabelStmt(const std::string& label) : label_{label} {}
+LabelStmt::LabelStmt(std::shared_ptr<Identifier> ident) : ident_{ident} {}
 
 AstNodeType LabelStmt::Kind() const { return AstNodeType::kLabelStmt; }
 
@@ -690,10 +686,6 @@ IfStmt::IfStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> then_block,
     : cond_{cond}, then_block_{then_block}, else_block_{else_block} {}
 
 AstNodeType IfStmt::Kind() const { return AstNodeType::kIfStmt; }
-
-JumpStmt::JumpStmt(std::shared_ptr<LabelStmt> label) : label_{label} {}
-
-AstNodeType JumpStmt::Kind() const { return AstNodeType::kJumpStmt; }
 
 ReturnStmt::ReturnStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
 
@@ -719,5 +711,11 @@ bool Declaration::HasInit() const { return std::size(inits_); }
 bool operator<(const Initializer& lhs, const Initializer& rhs) {
   return lhs.offset_ < rhs.offset_;
 }
+
+AstNodeType BreakStmt::Kind() const { return AstNodeType::kBreakStmt; }
+
+AstNodeType ContinueStmt::Kind() const { return AstNodeType::kContinueStmt; }
+
+AstNodeType GotoStmt::Kind() const { return AstNodeType::kGotoStmt; }
 
 }  // namespace kcc

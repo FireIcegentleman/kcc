@@ -42,7 +42,6 @@ class CalcExpr : public Visitor {
   virtual void Visit(const Identifier& node) override;
   virtual void Visit(const Object& node) override;
   virtual void Visit(const TranslationUnit& node) override;
-  virtual void Visit(const JumpStmt& node) override;
   virtual void Visit(const Declaration& node) override;
   virtual void Visit(const FuncDef& node) override;
   virtual void Visit(const ExprStmt& node) override;
@@ -52,6 +51,9 @@ class CalcExpr : public Visitor {
   virtual void Visit(const CaseStmt& node) override;
   virtual void Visit(const DefaultStmt& node) override;
   virtual void Visit(const SwitchStmt& node) override;
+  virtual void Visit(const BreakStmt& node) override;
+  virtual void Visit(const ContinueStmt& node) override;
+  virtual void Visit(const GotoStmt& node) override;
 
   T val_;
 };
@@ -263,7 +265,17 @@ void CalcExpr<T>::Visit(const TranslationUnit&) {
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const JumpStmt&) {
+void CalcExpr<T>::Visit(const BreakStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const ContinueStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const GotoStmt&) {
   assert(false);
 }
 

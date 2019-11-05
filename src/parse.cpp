@@ -1578,50 +1578,179 @@ void Parser::TryAsm() {
   }
 }
 
-std::unique_ptr<CompoundStmt> Parser::ParseCompoundStmt() {
-  return std::unique_ptr<CompoundStmt>();
+std::shared_ptr<Stmt> Parser::ParseStmt() {
+  auto tok{Peek()};
+
+  TryAttributeSpec();
+
+  switch (tok.GetTag()) {
+    case Tag::kIdentifier: {
+      Next();
+      if (Peek().TagIs(Tag::kColon)) {
+        PutBack();
+        ParseLabelStmt();
+      } else {
+        PutBack();
+      }
+    }
+    case Tag::kCase:
+      return ParseCaseStmt();
+    case Tag::kDefault:
+      return ParseDefaultStmt();
+    case Tag::kLeftBrace:
+      return ParseCompoundStmt();
+    case Tag::kIf:
+      return ParseIfStmt();
+    case Tag::kSwitch:
+      return ParseSwitchStmt();
+    case Tag::kWhile:
+      return ParseWhileStmt();
+    case Tag::kDo:
+      return ParseDoWhileStmt();
+    case Tag::kFor:
+      return ParseForStmt();
+    case Tag::kGoto:
+      return ParseGotoStmt();
+    case Tag::kContinue:
+      return ParseContinueStmt();
+    case Tag::kBreak:
+      return ParseBreakStmt();
+    case Tag::kReturn:
+      return ParseReturnStmt();
+    default:
+      return ParseExprStmt();
+  }
 }
 
-std::unique_ptr<Stmt> Parser::ParseStmt() { return std::unique_ptr<Stmt>(); }
-
-std::unique_ptr<IfStmt> Parser::ParseIfStmt() {
-  return std::unique_ptr<IfStmt>();
+std::shared_ptr<CompoundStmt> Parser::ParseCompoundStmt() {
+  return std::shared_ptr<CompoundStmt>();
 }
 
-std::unique_ptr<WhileStmt> Parser::ParseWhileStmt() {
-  return std::unique_ptr<WhileStmt>();
+std::shared_ptr<IfStmt> Parser::ParseIfStmt() {
+  Expect(Tag::kIf);
+  Expect(Tag::kLeftParen);
+
+  auto tok{Peek()};
+  auto cond{ParseExpr()};
+  if (!cond->GetType()->IsScalarTy()) {
+    Error(tok, "expect scalar");
+  }
+
+  Expect(Tag::kRightParen);
+
+  auto then_block{ParseStmt()};
+  if (Try(Tag::kElse)) {
+    return MakeAstNode<IfStmt>(cond, then_block, ParseStmt());
+  } else {
+    return MakeAstNode<IfStmt>(cond, then_block);
+  }
 }
 
-std::unique_ptr<DoWhileStmt> Parser::ParseDoWhileStmt() {
-  return std::unique_ptr<DoWhileStmt>();
+std::shared_ptr<WhileStmt> Parser::ParseWhileStmt() {
+  Expect(Tag::kWhile);
+  Expect(Tag::kLeftParen);
+
+  auto tok{Peek()};
+  auto cond{ParseExpr()};
+  if (!cond->GetType()->IsScalarTy()) {
+    Error(tok, "expect scalar");
+  }
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<WhileStmt>(cond, ParseStmt());
 }
 
-std::unique_ptr<ForStmt> Parser::ParseForStmt() {
-  return std::unique_ptr<ForStmt>();
+std::shared_ptr<DoWhileStmt> Parser::ParseDoWhileStmt() {
+  Expect(Tag::kDo);
+
+  auto stmt{ParseStmt()};
+
+  Expect(Tag::kWhile);
+  Expect(Tag::kLeftParen);
+
+  auto tok{Peek()};
+  auto cond{ParseExpr()};
+  if (!cond->GetType()->IsScalarTy()) {
+    Error(tok, "expect scalar");
+  }
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<DoWhileStmt>(cond, stmt);
 }
 
-std::unique_ptr<ReturnStmt> Parser::ParseReturnStmt() {
-  return std::unique_ptr<ReturnStmt>();
+std::shared_ptr<ForStmt> Parser::ParseForStmt() {
+  Expect(Tag::kFor);
+  Expect(Tag::kLeftParen);
+
+  return nullptr;
 }
 
-std::unique_ptr<Stmt> Parser::ParseExpressionStmt() {
-  return std::unique_ptr<Stmt>();
+std::shared_ptr<ReturnStmt> Parser::ParseReturnStmt() {
+  Expect(Tag::kReturn);
+
+  if (Try(Tag::kSemicolon)) {
+    return MakeAstNode<ReturnStmt>();
+  } else {
+    auto expr{ParseExpr()};
+    Expect(Tag::kSemicolon);
+
+    expr =
+        Expr::CastTo(expr, curr_func_->GetFuncType()->GetFunctionReturnType());
+    return MakeAstNode<ReturnStmt>(expr);
+  }
 }
 
-std::unique_ptr<CaseStmt> Parser::ParseCaseStmt() {
-  return std::unique_ptr<CaseStmt>();
+std::shared_ptr<ExprStmt> Parser::ParseExprStmt() {
+  if (Try(Tag::kSemicolon)) {
+    return MakeAstNode<ExprStmt>();
+  } else {
+    return MakeAstNode<ExprStmt>(ParseExpr());
+  }
 }
 
-std::unique_ptr<DefaultStmt> Parser::ParseDefaultStmt() {
-  return std::unique_ptr<DefaultStmt>();
+std::shared_ptr<CaseStmt> Parser::ParseCaseStmt() {
+  return std::shared_ptr<CaseStmt>();
 }
 
-std::unique_ptr<SwitchStmt> Parser::ParseSwitchStmt() {
-  return std::unique_ptr<SwitchStmt>();
+std::shared_ptr<DefaultStmt> Parser::ParseDefaultStmt() {
+  return std::shared_ptr<DefaultStmt>();
 }
 
-std::unique_ptr<Stmt> Parser::ParseGotoStmt() {
-  return std::unique_ptr<Stmt>();
+std::shared_ptr<SwitchStmt> Parser::ParseSwitchStmt() {
+  return std::shared_ptr<SwitchStmt>();
+}
+
+std::shared_ptr<GotoStmt> Parser::ParseGotoStmt() {
+  Expect(Tag::kGoto);
+  auto tok{Expect(Tag::kIdentifier)};
+  Expect(Tag::kSemicolon);
+
+  return MakeAstNode<GotoStmt>(
+      MakeAstNode<Identifier>(tok, Type::GetVoidPtrTy(), kNone, false));
+}
+
+std::shared_ptr<LabelStmt> Parser::ParseLabelStmt() {
+  auto tok{Expect(Tag::kIdentifier)};
+  Expect(Tag::kColon);
+
+  TryAttributeSpec();
+
+  return MakeAstNode<LabelStmt>(
+      MakeAstNode<Identifier>(tok, Type::GetVoidPtrTy(), kNone, false));
+}
+
+std::shared_ptr<ContinueStmt> Parser::ParseContinueStmt() {
+  Expect(Tag::kContinue);
+  Expect(Tag::kSemicolon);
+
+  return MakeAstNode<ContinueStmt>();
+}
+
+std::shared_ptr<BreakStmt> Parser::ParseBreakStmt() {
+  Expect(Tag::kBreak);
+  Expect(Tag::kSemicolon);
+
+  return MakeAstNode<BreakStmt>();
 }
 
 // TODO init

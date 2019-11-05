@@ -35,6 +35,9 @@ class AstNodeTypes : public QObject {
     kWhileStmt,
     kDoWhileStmt,
     kForStmt,
+    kBreakStmt,
+    kContinueStmt,
+    kGotoStmt,
     kReturnStmt,
     kCaseStmt,
     kDefaultStmt,
@@ -51,7 +54,6 @@ class AstNodeTypes : public QObject {
     kEnumerator,
     kObject,
     kTranslationUnit,
-    kJumpStmt,
     kDeclaration,
     kFuncDef,
   };
@@ -384,13 +386,13 @@ class LabelStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit LabelStmt(const std::string& label);
+  explicit LabelStmt(std::shared_ptr<Identifier> label);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
  private:
-  std::string label_;
+  std::shared_ptr<Identifier> ident_;
 };
 
 class IfStmt : public Stmt {
@@ -410,27 +412,12 @@ class IfStmt : public Stmt {
   std::shared_ptr<Stmt> else_block_;
 };
 
-// break / continue / goto
-class JumpStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
- public:
-  explicit JumpStmt(std::shared_ptr<LabelStmt> label);
-
-  virtual AstNodeType Kind() const override;
-  virtual void Accept(Visitor& visitor) const override;
-
- private:
-  std::shared_ptr<LabelStmt> label_;
-};
-
 class ReturnStmt : public Stmt {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  explicit ReturnStmt(std::shared_ptr<Expr> expr);
+  explicit ReturnStmt(std::shared_ptr<Expr> expr = nullptr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -463,7 +450,7 @@ class ExprStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit ExprStmt(std::shared_ptr<Expr> expr);
+  explicit ExprStmt(std::shared_ptr<Expr> expr = nullptr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -477,14 +464,14 @@ class WhileStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  WhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<CompoundStmt> block);
+  WhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
  private:
   std::shared_ptr<Expr> cond_;
-  std::shared_ptr<CompoundStmt> block_;
+  std::shared_ptr<Stmt> block_;
 };
 
 class DoWhileStmt : public Stmt {
@@ -492,14 +479,14 @@ class DoWhileStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  DoWhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<CompoundStmt> block);
+  DoWhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
  private:
   std::shared_ptr<Expr> cond_;
-  std::shared_ptr<CompoundStmt> block_;
+  std::shared_ptr<Stmt> block_;
 };
 
 class ForStmt : public Stmt {
@@ -508,7 +495,7 @@ class ForStmt : public Stmt {
 
  public:
   ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
-          std::shared_ptr<Expr> inc, std::shared_ptr<CompoundStmt> block,
+          std::shared_ptr<Expr> inc, std::shared_ptr<Stmt> block,
           std::shared_ptr<Declaration> decl);
 
   virtual AstNodeType Kind() const override;
@@ -516,7 +503,7 @@ class ForStmt : public Stmt {
 
  private:
   std::shared_ptr<Expr> init_, cond_, inc_;
-  std::shared_ptr<CompoundStmt> block_;
+  std::shared_ptr<Stmt> block_;
   std::shared_ptr<Declaration> decl_;
 };
 
@@ -525,21 +512,19 @@ class CaseStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit CaseStmt(std::int32_t case_value);
-  CaseStmt(std::int32_t case_value, std::int32_t case_value2);
-
-  void AddStmt(std::shared_ptr<Stmt> stmt);
+  explicit CaseStmt(std::int32_t case_value, std::shared_ptr<Stmt> block);
+  CaseStmt(std::int32_t case_value, std::int32_t case_value2,
+           std::shared_ptr<Stmt> block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
  private:
   std::int32_t case_value_{};
-  // GCC 扩展
   std::pair<std::int32_t, std::int32_t> case_value_range_;
   bool has_range_{false};
 
-  std::shared_ptr<CompoundStmt> block_;
+  std::shared_ptr<Stmt> block_;
 };
 
 class DefaultStmt : public Stmt {
@@ -547,15 +532,13 @@ class DefaultStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  DefaultStmt() = default;
-
-  void AddStmt(std::shared_ptr<Stmt> stmt);
+  DefaultStmt(std::shared_ptr<Stmt> block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
  private:
-  std::shared_ptr<CompoundStmt> block_;
+  std::shared_ptr<Stmt> block_;
 };
 
 class SwitchStmt : public Stmt {
@@ -563,18 +546,46 @@ class SwitchStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit SwitchStmt(std::shared_ptr<Expr> choose);
-
-  void AddCase(std::shared_ptr<CaseStmt> case_stmt);
-  void SetDefault(std::shared_ptr<DefaultStmt> default_stmt);
+  explicit SwitchStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
  private:
-  std::shared_ptr<Expr> choose_;
-  std::vector<std::shared_ptr<CaseStmt>> case_stmts_;
-  std::shared_ptr<DefaultStmt> default_stmt_;
+  std::shared_ptr<Expr> cond_;
+  std::shared_ptr<Stmt> block_;
+};
+
+class BreakStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+};
+
+class ContinueStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+};
+
+class GotoStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  explicit GotoStmt(std::shared_ptr<Identifier> ident) : ident_{ident} {}
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::shared_ptr<Identifier> ident_;
 };
 
 class Initializer {
@@ -651,6 +662,15 @@ class FuncDef : public ExtDecl {
   std::shared_ptr<Identifier> ident_;
   std::shared_ptr<CompoundStmt> body_;
 };
+
+template <typename T, typename... Args>
+std::shared_ptr<T> MakeAstNode(Args&&... args) {
+  auto t{std::make_shared<T>(std::forward<Args>(args)...)};
+  if (auto p{std::dynamic_pointer_cast<Expr>(t)}; p) {
+    p->TypeCheck();
+  }
+  return t;
+}
 
 }  // namespace kcc
 
