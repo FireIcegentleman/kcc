@@ -58,4 +58,13 @@ bool Token::IsCharacterConstant() const {
   return tag_ == Tag::kCharacterConstant;
 }
 
+bool Token::IsDecl() const {
+  return IsTypeSpecQual() || tag_ == Tag::kAttribute || tag_ == Tag::kInline ||
+         tag_ == Tag::kNoreturn || tag_ == Tag::kAlignas ||
+         tag_ == Tag::kStaticAssert || tag_ == Tag::kTypedef ||
+         tag_ == Tag::kExtern || tag_ == Tag::kStatic ||
+         tag_ == Tag::kThreadLocal || tag_ == Tag::kAuto ||
+         tag_ == Tag::kRegister;
+}
+
 }  // namespace kcc

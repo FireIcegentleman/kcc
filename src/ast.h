@@ -431,14 +431,14 @@ class CompoundStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  CompoundStmt() = default;
-  explicit CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts);
+  explicit CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts,
+                        std::shared_ptr<Scope> scope);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
 
   std::shared_ptr<Scope> GetScope();
-  void AddStmt(std::shared_ptr<Stmt> stmt);
+  std::vector<std::shared_ptr<Stmt>> GetStmts();
 
  private:
   std::vector<std::shared_ptr<Stmt>> stmts_;
@@ -496,7 +496,7 @@ class ForStmt : public Stmt {
  public:
   ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
           std::shared_ptr<Expr> inc, std::shared_ptr<Stmt> block,
-          std::shared_ptr<Declaration> decl);
+          std::shared_ptr<Stmt> decl);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -504,7 +504,7 @@ class ForStmt : public Stmt {
  private:
   std::shared_ptr<Expr> init_, cond_, inc_;
   std::shared_ptr<Stmt> block_;
-  std::shared_ptr<Declaration> decl_;
+  std::shared_ptr<Stmt> decl_;
 };
 
 class CaseStmt : public Stmt {

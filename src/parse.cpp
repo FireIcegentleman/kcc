@@ -370,15 +370,15 @@ std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
 
 std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
     std::shared_ptr<Type>& base_type) {
-  auto init_decls{std::make_shared<CompoundStmt>()};
+  std::vector<std::shared_ptr<Stmt>> stmts;
 
   do {
     if (auto decl{ParseInitDeclarator(base_type)}; decl) {
-      init_decls->AddStmt(decl);
+      stmts.push_back(decl);
     }
   } while (Try(Tag::kComma));
 
-  return init_decls;
+  return MakeAstNode<CompoundStmt>(stmts, curr_scope_);
 }
 
 std::shared_ptr<Declaration> Parser::ParseInitDeclarator(
@@ -1134,7 +1134,7 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(
 }
 
 std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
-  std::shared_ptr<ExtDecl> ext_decl;
+  std::shared_ptr<CompoundStmt> ext_decl;
 
   do {
     ext_decl = ParseDecl(true);
@@ -1143,13 +1143,38 @@ std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
   TryAsm();
   TryAttributeSpec();
 
-  if (Try(Tag::kLeftBrace)) {
-    // TODO func def
+  if (Test(Tag::kLeftBrace)) {
+    auto stmt{ext_decl->GetStmts()};
+    if (std::size(stmt) != 1) {
+      Error(Peek(), "func def error");
+    }
+
+    auto ident{
+        std::dynamic_pointer_cast<Declaration>(stmt.front())->GetIdent()};
+    EnterFunc(ident);
+
+    if (curr_func_def_->GetFuncType()->IsComplete()) {
+      Error(ident->GetToken(), "redefinition of {}", ident->GetName());
+    }
+
+    ident->GetType()->SetComplete(true);
+    for (const auto& param : ident->GetType()->GetFunctionParams()) {
+      if (param->Anonymous()) {
+        Error(param->GetToken(), "param name omitted");
+      }
+    }
+
+    curr_func_def_->SetBody(ParseCompoundStmt(ident->GetType()));
+
+    auto ret{curr_func_def_};
+
+    ExitFunc();
+
+    return ret;
   } else {
     Expect(Tag::kSemicolon);
+    return ext_decl;
   }
-
-  return ext_decl;
 }
 
 std::shared_ptr<Expr> Parser::ParseCastExpr() {
@@ -1181,6 +1206,7 @@ std::shared_ptr<Expr> Parser::ParsePrimaryExpr() {
   } else if (Peek().IsStringLiteral()) {
     return ParseStringLiteral(true);
   } else if (Peek().IsIdentifier()) {
+    Next();
     auto ident{curr_scope_->FindNormal(tok)};
     if (ident) {
       return ident;
@@ -1287,7 +1313,7 @@ std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
       case Tag::kLeftParen: {
         std::vector<std::shared_ptr<Expr>> args;
         while (!Try(Tag::kRightParen)) {
-          args.push_back(Expr::MayCast(ParseAssignExpr()));
+          args.push_back(ParseAssignExpr());
           if (!Test(Tag::kRightParen)) {
             Expect(Tag::kComma);
           }
@@ -1588,9 +1614,10 @@ std::shared_ptr<Stmt> Parser::ParseStmt() {
       Next();
       if (Peek().TagIs(Tag::kColon)) {
         PutBack();
-        ParseLabelStmt();
+        return ParseLabelStmt();
       } else {
         PutBack();
+        return ParseExprStmt();
       }
     }
     case Tag::kCase:
@@ -1622,8 +1649,26 @@ std::shared_ptr<Stmt> Parser::ParseStmt() {
   }
 }
 
-std::shared_ptr<CompoundStmt> Parser::ParseCompoundStmt() {
-  return std::shared_ptr<CompoundStmt>();
+std::shared_ptr<CompoundStmt> Parser::ParseCompoundStmt(
+    std::shared_ptr<Type> func_type) {
+  Expect(Tag::kLeftBrace);
+
+  EnterBlock(func_type);
+
+  std::vector<std::shared_ptr<Stmt>> stmts;
+  while (!Try(Tag::kRightBrace)) {
+    if (IsDecl(Peek())) {
+      stmts.push_back(ParseDecl());
+    } else {
+      stmts.push_back(ParseStmt());
+    }
+  }
+
+  auto scope{curr_scope_};
+
+  ExitBlock();
+
+  return MakeAstNode<CompoundStmt>(stmts, scope);
 }
 
 std::shared_ptr<IfStmt> Parser::ParseIfStmt() {
@@ -1682,7 +1727,33 @@ std::shared_ptr<ForStmt> Parser::ParseForStmt() {
   Expect(Tag::kFor);
   Expect(Tag::kLeftParen);
 
-  return nullptr;
+  std::shared_ptr<Expr> init, cond, inc;
+  std::shared_ptr<Stmt> block;
+  std::shared_ptr<Stmt> decl;
+
+  EnterBlock();
+  auto tok{Peek()};
+  if (IsDecl(tok)) {
+    decl = ParseDecl(false);
+  } else if (!Try(Tag::kSemicolon)) {
+    init = ParseExpr();
+    Expect(Tag::kSemicolon);
+  }
+
+  if (!Try(Tag::kSemicolon)) {
+    cond = ParseExpr();
+    Expect(Tag::kSemicolon);
+  }
+
+  if (!Try(Tag::kRightParen)) {
+    inc = ParseExpr();
+    Expect(Tag::kRightParen);
+  }
+
+  block = ParseStmt();
+  ExitBlock();
+
+  return MakeAstNode<ForStmt>(init, cond, inc, block, decl);
 }
 
 std::shared_ptr<ReturnStmt> Parser::ParseReturnStmt() {
@@ -1694,8 +1765,8 @@ std::shared_ptr<ReturnStmt> Parser::ParseReturnStmt() {
     auto expr{ParseExpr()};
     Expect(Tag::kSemicolon);
 
-    expr =
-        Expr::CastTo(expr, curr_func_->GetFuncType()->GetFunctionReturnType());
+    expr = Expr::CastTo(expr,
+                        curr_func_def_->GetFuncType()->GetFunctionReturnType());
     return MakeAstNode<ReturnStmt>(expr);
   }
 }
@@ -1704,20 +1775,50 @@ std::shared_ptr<ExprStmt> Parser::ParseExprStmt() {
   if (Try(Tag::kSemicolon)) {
     return MakeAstNode<ExprStmt>();
   } else {
-    return MakeAstNode<ExprStmt>(ParseExpr());
+    auto ret{MakeAstNode<ExprStmt>(ParseExpr())};
+    Expect(Tag::kSemicolon);
+    return ret;
   }
 }
 
 std::shared_ptr<CaseStmt> Parser::ParseCaseStmt() {
-  return std::shared_ptr<CaseStmt>();
+  Expect(Tag::kCase);
+
+  auto expr{ParseExpr()};
+  if (!expr->GetType()->IsIntegerTy()) {
+    Error(expr->GetToken(), "expect integer");
+  }
+  auto val{CalcExpr<std::int32_t>{}.Calc(expr)};
+
+  if (Try(Tag::kEllipsis)) {
+    auto expr2{ParseExpr()};
+    if (!expr2->GetType()->IsIntegerTy()) {
+      Error(expr2->GetToken(), "expect integer");
+    }
+    auto val2{CalcExpr<std::int32_t>{}.Calc(expr)};
+    Expect(Tag::kColon);
+    return MakeAstNode<CaseStmt>(val, val2, ParseStmt());
+  } else {
+    Expect(Tag::kColon);
+    return MakeAstNode<CaseStmt>(val, ParseStmt());
+  }
 }
 
 std::shared_ptr<DefaultStmt> Parser::ParseDefaultStmt() {
-  return std::shared_ptr<DefaultStmt>();
+  Expect(Tag::kDefault);
+  Expect(Tag::kColon);
+
+  return MakeAstNode<DefaultStmt>(ParseStmt());
 }
 
 std::shared_ptr<SwitchStmt> Parser::ParseSwitchStmt() {
-  return std::shared_ptr<SwitchStmt>();
+  Expect(Tag::kSwitch);
+  Expect(Tag::kLeftParen);
+
+  auto cond{ParseExpr()};
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<SwitchStmt>(cond, ParseStmt());
 }
 
 std::shared_ptr<GotoStmt> Parser::ParseGotoStmt() {
@@ -1752,6 +1853,37 @@ std::shared_ptr<BreakStmt> Parser::ParseBreakStmt() {
 
   return MakeAstNode<BreakStmt>();
 }
+
+void Parser::EnterBlock(std::shared_ptr<Type> func_type) {
+  curr_scope_ = std::make_shared<Scope>(curr_scope_, kBlock);
+
+  if (func_type) {
+    for (const auto& param : func_type->GetFunctionParams()) {
+      curr_scope_->InsertNormal(param->GetName(), param);
+    }
+  }
+}
+
+void Parser::ExitBlock() { curr_scope_ = curr_scope_->GetParent(); }
+
+bool Parser::IsDecl(const Token& tok) {
+  if (tok.IsDecl()) {
+    return true;
+  } else if (tok.IsIdentifier()) {
+    auto ident{curr_scope_->FindNormal(tok)};
+    if (ident && ident->IsTypeName()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void Parser::EnterFunc(std::shared_ptr<Identifier> ident) {
+  curr_func_def_ = MakeAstNode<FuncDef>(ident);
+}
+
+void Parser::ExitFunc() { curr_func_def_ = nullptr; }
 
 // TODO init
 // void Parser::ParseInitializer(std::set<Initializer>& inits,

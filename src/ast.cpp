@@ -55,7 +55,7 @@ AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
 
 ForStmt::ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
                  std::shared_ptr<Expr> inc, std::shared_ptr<Stmt> block,
-                 std::shared_ptr<Declaration> decl)
+                 std::shared_ptr<Stmt> decl)
     : init_{init}, cond_{cond}, inc_{inc}, block_{block}, decl_{decl} {}
 
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
@@ -559,6 +559,7 @@ void FuncCallExpr::TypeCheck() {
     callee_ = std::make_shared<UnaryOpExpr>(Token::Get(Tag::kStar), callee_);
   } else if (callee_->GetType()->IsFunctionTy()) {
     auto args_iter{std::begin(args_)};
+
     for (const auto& param : callee_->GetType()->GetFunctionParams()) {
       if (args_iter == std::end(args_)) {
         Error(tok_, "too few arguments for function call");
@@ -691,16 +692,15 @@ ReturnStmt::ReturnStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
 
 AstNodeType ReturnStmt::Kind() const { return AstNodeType::kReturnStmt; }
 
-CompoundStmt::CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts)
-    : stmts_{std::move(stmts)} {}
+CompoundStmt::CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts,
+                           std::shared_ptr<Scope> scope)
+    : stmts_{std::move(stmts)}, scope_{scope} {}
 
 AstNodeType CompoundStmt::Kind() const { return AstNodeType::kCompoundStmt; }
 
 std::shared_ptr<Scope> CompoundStmt::GetScope() { return scope_; }
 
-void CompoundStmt::AddStmt(std::shared_ptr<Stmt> stmt) {
-  stmts_.push_back(stmt);
-}
+std::vector<std::shared_ptr<Stmt>> CompoundStmt::GetStmts() { return stmts_; }
 
 AstNodeType Declaration::Kind() const { return AstNodeType::kDeclaration; }
 

@@ -534,6 +534,9 @@ void JsonGen::Visit(const FuncDef& node) {
 
   QJsonArray children;
 
+  node.ident_->Accept(*this);
+  children.append(result_);
+
   node.body_->Accept(*this);
   children.append(result_);
 

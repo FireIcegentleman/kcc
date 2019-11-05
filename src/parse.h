@@ -31,6 +31,7 @@ class Parser {
   void ExitProto();
   std::pair<std::vector<std::shared_ptr<Object>>, bool> ParseParamTypeList();
   bool IsTypeName(const Token &tok);
+  bool IsDecl(const Token &tok);
   std::shared_ptr<Type> ParseTypeName();
   void ParseStructDeclList(std::shared_ptr<StructType> base_type);
   std::shared_ptr<Object> ParseParamDecl();
@@ -94,11 +95,16 @@ class Parser {
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
 
+  void EnterBlock(std::shared_ptr<Type> func_type = nullptr);
+  void ExitBlock();
+  void EnterFunc(std::shared_ptr<Identifier> ident);
+  void ExitFunc();
   std::shared_ptr<Stmt> ParseStmt();
   std::shared_ptr<LabelStmt> ParseLabelStmt();
   std::shared_ptr<CaseStmt> ParseCaseStmt();
   std::shared_ptr<DefaultStmt> ParseDefaultStmt();
-  std::shared_ptr<CompoundStmt> ParseCompoundStmt();
+  std::shared_ptr<CompoundStmt> ParseCompoundStmt(
+      std::shared_ptr<Type> func_type = nullptr);
   std::shared_ptr<ExprStmt> ParseExprStmt();
   std::shared_ptr<IfStmt> ParseIfStmt();
   std::shared_ptr<SwitchStmt> ParseSwitchStmt();
@@ -122,7 +128,7 @@ class Parser {
 
   std::shared_ptr<Scope> curr_scope_;
   std::map<std::string, std::shared_ptr<LabelStmt>> curr_labels_;
-  std::shared_ptr<FuncDef> curr_func_;
+  std::shared_ptr<FuncDef> curr_func_def_;
 };
 
 }  // namespace kcc

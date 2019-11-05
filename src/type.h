@@ -205,7 +205,7 @@ class Type : public std::enable_shared_from_this<Type> {
   // 类型 void 。此类型不能完整。
   // 大小未知的数组。之后指定大小的声明能使之完整。
   // 内容未知的结构体或联合体类型。
-  mutable bool complete_;
+  mutable bool complete_{false};
 
   std::uint32_t type_spec_{};
   std::uint32_t type_qualifiers_{};
@@ -228,6 +228,7 @@ class IntegerType : public Type {
  protected:
   explicit IntegerType(std::int32_t num_bit) : Type{kIntegerTyId} {
     num_bit_ = num_bit;
+    SetComplete(true);
   }
 
  private:
@@ -364,7 +365,9 @@ class PointerType : public Type {
 
  private:
   explicit PointerType(std::shared_ptr<Type> element_type)
-      : Type{kPointerTyId}, element_type_{element_type} {}
+      : Type{kPointerTyId}, element_type_{element_type} {
+    SetComplete(true);
+  }
 
   std::shared_ptr<Type> element_type_;
 };

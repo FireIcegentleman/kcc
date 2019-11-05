@@ -1,12 +1,24 @@
+#include <llvm/IR/Module.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include <fstream>
 #include <functional>
 #include <iterator>
 
+#include "code_gen.h"
 #include "cpp.h"
 #include "error.h"
 #include "json_gen.h"
 #include "lex.h"
+#include "obj_gen.h"
+#include "opt.h"
 #include "parse.h"
+
+namespace kcc {
+
+extern std::unique_ptr<llvm::Module> Module;
+
+}  // namespace kcc
 
 using namespace kcc;
 
@@ -26,8 +38,20 @@ int main() {
   Parser parser{std::move(tokens)};
   auto unit{parser.ParseTranslationUnit()};
 
-  JsonGen json_gen;
-  json_gen.GenJson(unit, "test/dev/test.html");
+  JsonGen{}.GenJson(unit, "test/dev/test.html");
+
+  CodeGen{}.GenCode(unit);
+  Optimization(OptLevel::kO3);
+
+  std::error_code error_code;
+  llvm::raw_fd_ostream ir_file{"test/dev/test.ll", error_code};
+  ir_file << *Module;
+
+  ObjGen("test/dev/test.o");
+
+  std::system("gcc test/dev/test.o -c test/dev/test");
+
+  std::system("./test/dev/test");
 
   PrintWarnings();
 }

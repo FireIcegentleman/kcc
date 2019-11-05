@@ -167,6 +167,7 @@ class Token {
   bool IsIntegerConstant() const;
   bool IsFloatConstant() const;
   bool IsCharacterConstant() const;
+  bool IsDecl() const;
 
  private:
   Tag tag_{Tag::kNone};

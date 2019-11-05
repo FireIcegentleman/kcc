@@ -69,13 +69,7 @@ std::shared_ptr<Type> Type::MayCast(std::shared_ptr<Type> type, bool in_proto) {
   }
 }
 
-bool Type::IsComplete() const {
-  if (IsArrayTy() || IsStructTy()) {
-    return complete_;
-  } else {
-    return true;
-  }
-}
+bool Type::IsComplete() const { return complete_; }
 
 void Type::SetComplete(bool complete) const {
   assert(type_id_ == kArrayTyId || type_id_ == kStructTyId);
@@ -315,12 +309,15 @@ std::int32_t Type::GetAlign() const {
 }
 
 std::vector<std::shared_ptr<Object>> Type::GetFunctionParams() const {
-  return std::vector<std::shared_ptr<Object>>();
+  return dynamic_cast<const FunctionType*>(this)->GetParams();
 }
 
-bool Type::IsFunctionVarArgs() const { return false; }
+bool Type::IsFunctionVarArgs() const {
+  return dynamic_cast<const FunctionType*>(this)->IsVarArgs();
+}
+
 std::shared_ptr<Type> Type::GetFunctionReturnType() const {
-  return std::shared_ptr<Type>();
+  return dynamic_cast<const FunctionType*>(this)->GetReturnType();
 }
 
 void Type::SetFuncSpec(std::uint32_t func_spec) { func_spec_ = func_spec; }
@@ -388,8 +385,12 @@ std::string FunctionType::ToString() const {
     s += "...)";
     return s;
   } else {
-    s.pop_back();
-    s.pop_back();
+    if (std::size(params_) != 0) {
+      s.pop_back();
+      s.pop_back();
+    } else {
+      s += "void";
+    }
 
     return s + ")";
   }
