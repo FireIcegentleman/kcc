@@ -131,6 +131,8 @@ class TokenTag : public QObject {
 
     kComma,  // ,
 
+    kExtension,  // __extension__
+
     kNone,
     kEof,
     kInvalid,

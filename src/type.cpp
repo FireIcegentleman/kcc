@@ -57,7 +57,7 @@ std::shared_ptr<Type> Type::MayCast(std::shared_ptr<Type> type, bool in_proto) {
   if (type->IsFunctionTy()) {
     return type->GetPointerTo();
   } else if (type->IsArrayTy()) {
-    type = type->GetPointerTo();
+    type = type->GetArrayElementType()->GetPointerTo();
 
     if (!in_proto) {
       type->SetConstQualified();
@@ -290,7 +290,7 @@ std::shared_ptr<Type> Type::MaxType(std::shared_ptr<Type>& lhs,
 
 bool Type::IsBoolTy() const { return IsIntegerTy(1); }
 
-bool Type::IsRealTy() const { return IsIntegerTy() && IsRealFloatPointTy(); }
+bool Type::IsRealTy() const { return IsIntegerTy() || IsRealFloatPointTy(); }
 
 bool Type::IsRealFloatPointTy() const {
   return IsFloatTy() && IsDoubleTy() && IsX86Fp80Ty();

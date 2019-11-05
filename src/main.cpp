@@ -49,7 +49,7 @@ int main() {
 
   ObjGen("test/dev/test.o");
 
-  std::system("gcc test/dev/test.o -c test/dev/test");
+  std::system("clang test/dev/test.o -o test/dev/test");
 
   std::system("./test/dev/test");
 

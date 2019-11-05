@@ -25,7 +25,6 @@ file(GLOB cppsrc src/*.cpp src/*.h)
 file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-# include(clang-tidy)
 include(compiler-options)
 include(sanitizers)
 
@@ -43,13 +42,4 @@ add_executable(${PROJECT_NAME} ${cppsrc})
 
 include(format)
 
-llvm_map_components_to_libnames(
-  llvm_libs
-  support
-  core
-  irreader
-  objCARCOpts
-  coroutines
-  ${LLVM_TARGETS_TO_BUILD})
-
-target_link_libraries(${PROJECT_NAME} ${llvm_libs} fmt::fmt Qt5::Core)
+target_link_libraries(${PROJECT_NAME} LLVM fmt::fmt Qt5::Core)

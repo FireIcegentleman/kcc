@@ -36,3 +36,7 @@
 cmake-build-debug
 cmake-build-release
 compile_commands.json
+test/dev/test.i
+test/dev/test.txt
+test/dev/test.html
+test/dev/test.ll

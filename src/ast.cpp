@@ -107,7 +107,7 @@ std::shared_ptr<Expr> Expr::MayCast(std::shared_ptr<Expr> expr) {
   auto type{Type::MayCast(expr->GetType())};
 
   if (!type->Equal(expr->GetType())) {
-    return std::make_shared<TypeCastExpr>(expr, type);
+    return MakeAstNode<TypeCastExpr>(expr, type);
   } else {
     return expr;
   }
@@ -116,7 +116,7 @@ std::shared_ptr<Expr> Expr::MayCast(std::shared_ptr<Expr> expr) {
 std::shared_ptr<Expr> Expr::CastTo(std::shared_ptr<Expr> expr,
                                    std::shared_ptr<Type> type) {
   expr = MayCast(expr);
-  return std::make_shared<TypeCastExpr>(expr, type);
+  return MakeAstNode<TypeCastExpr>(expr, type);
   // TODO ???
 }
 
@@ -281,8 +281,9 @@ void BinaryOpExpr::ShiftOpTypeCheck() {
   auto lhs_type{lhs_->GetType()};
   auto rhs_type{rhs_->GetType()};
 
-  if (!lhs_type->IsArithmeticTy() || rhs_type->IsArithmeticTy()) {
-    Error(tok_.GetLoc(), "the operand should be integer type");
+  if (!lhs_type->IsArithmeticTy() || !rhs_type->IsArithmeticTy()) {
+    Error(tok_.GetLoc(), "the operand should be integer type '{}' '{}'",
+          lhs_type->ToString(), rhs_type->ToString());
   }
 
   lhs_ = Expr::CastTo(lhs_, Type::IntegerPromote(lhs_type));
@@ -300,7 +301,8 @@ void BinaryOpExpr::RelationalOpTypeCheck() {
   } else if (lhs_type->IsRealTy() && rhs_type->IsRealTy()) {
     Convert();
   } else {
-    Error(tok_.GetLoc(), "the operand should be integer type");
+    Error(tok_.GetLoc(), "the operand should be integer type '{}' '{}'",
+          lhs_type->ToString(), rhs_type->ToString());
   }
 
   type_ = IntegerType::Get(32);
@@ -369,9 +371,9 @@ std::shared_ptr<Type> BinaryOpExpr::Convert() {
   auto type = Type::MaxType(lhs_type, rhs_type);
 
   if (!lhs_type->Equal(type)) {
-    lhs_ = std::make_shared<TypeCastExpr>(lhs_, type);
+    lhs_ = MakeAstNode<TypeCastExpr>(lhs_, type);
   } else if (!rhs_type->Equal(type)) {
-    rhs_ = std::make_shared<TypeCastExpr>(rhs_, type);
+    rhs_ = MakeAstNode<TypeCastExpr>(rhs_, type);
   }
 
   return type;
@@ -439,8 +441,8 @@ void UnaryOpExpr::UnaryAddSubOpTypeCheck() {
     Error(expr_->GetToken(), "expect operand of real type or pointer");
   }
 
-  expr_ = std::make_shared<TypeCastExpr>(
-      expr_, Type::IntegerPromote(expr_->GetType()));
+  expr_ =
+      MakeAstNode<TypeCastExpr>(expr_, Type::IntegerPromote(expr_->GetType()));
   type_ = expr_->GetType();
 }
 
@@ -449,8 +451,8 @@ void UnaryOpExpr::NotOpTypeCheck() {
     Error(expr_->GetToken(), "expect operand of real type or pointer");
   }
 
-  expr_ = std::make_shared<TypeCastExpr>(
-      expr_, Type::IntegerPromote(expr_->GetType()));
+  expr_ =
+      MakeAstNode<TypeCastExpr>(expr_, Type::IntegerPromote(expr_->GetType()));
   type_ = expr_->GetType();
 }
 
@@ -492,9 +494,6 @@ AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
 bool TypeCastExpr::IsLValue() const { return false; }
 
 void TypeCastExpr::TypeCheck() {
-  if (!to_->IsVoidTy() && !expr_->GetType()->IsScalarTy()) {
-    Error(expr_->GetToken(), "expect operand of real type or pointer");
-  }
   // TODO more check
   type_ = to_;
 }
@@ -534,9 +533,9 @@ std::shared_ptr<Type> ConditionOpExpr::Convert() {
   auto type = Type::MaxType(lhs_type, rhs_type);
 
   if (!lhs_type->Equal(type)) {
-    lhs_ = std::make_shared<TypeCastExpr>(lhs_, type);
+    lhs_ = MakeAstNode<TypeCastExpr>(lhs_, type);
   } else if (!rhs_type->Equal(type)) {
-    rhs_ = std::make_shared<TypeCastExpr>(rhs_, type);
+    rhs_ = MakeAstNode<TypeCastExpr>(rhs_, type);
   }
 
   return type;
@@ -556,7 +555,7 @@ void FuncCallExpr::TypeCheck() {
     }
     type_ =
         callee_->GetType()->GetPointerElementType()->GetFunctionReturnType();
-    callee_ = std::make_shared<UnaryOpExpr>(Token::Get(Tag::kStar), callee_);
+    callee_ = MakeAstNode<UnaryOpExpr>(Token::Get(Tag::kStar), callee_);
   } else if (callee_->GetType()->IsFunctionTy()) {
     auto args_iter{std::begin(args_)};
 
@@ -575,10 +574,9 @@ void FuncCallExpr::TypeCheck() {
 
     while (args_iter != std::end(args_)) {
       if ((*args_iter)->GetType()->IsFloatTy()) {
-        *args_iter =
-            std::make_shared<TypeCastExpr>(*args_iter, Type::GetDoubleTy());
+        *args_iter = MakeAstNode<TypeCastExpr>(*args_iter, Type::GetDoubleTy());
       } else if ((*args_iter)->GetType()->IsIntegerTy()) {
-        *args_iter = std::make_shared<TypeCastExpr>(
+        *args_iter = MakeAstNode<TypeCastExpr>(
             *args_iter, Type::IntegerPromote((*args_iter)->GetType()));
       }
       ++args_iter;
@@ -632,7 +630,7 @@ bool Identifier::IsEnumerator() const {
 
 Enumerator::Enumerator(const Token& tok, std::int32_t val)
     : Identifier{tok, IntegerType::Get(32), kNone, false},
-      val_{std::make_shared<Constant>(tok, val)} {}
+      val_{MakeAstNode<Constant>(tok, val)} {}
 
 AstNodeType Enumerator::Kind() const { return AstNodeType::kEnumerator; }
 

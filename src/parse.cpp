@@ -17,7 +17,9 @@ std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
   curr_scope_ = std::make_shared<Scope>(nullptr, kFile);
 
   while (HasNext()) {
-    unit->AddStmt(ParseExternalDecl());
+    if (auto decl{ParseExternalDecl()}; decl) {
+      unit->AddStmt(decl);
+    }
   }
 
   return unit;
@@ -354,7 +356,6 @@ std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
     auto base_type{ParseDeclSpec(false)};
 
     if (Try(Tag::kSemicolon)) {
-      // Warning(PeekPrev(), "declaration does not declare anything");
       return nullptr;
     } else {
       if (maybe_func_def) {
@@ -457,6 +458,9 @@ std::shared_ptr<Type> Parser::ParseDeclSpec(bool only_spec_and_qual) {
     tok = Next();
 
     switch (tok.GetTag()) {
+      case Tag::kExtension:
+        break;
+
       // Storage Class Specifier, 至多有一个
       case Tag::kTypedef:
         CheckAndSetStorageClassSpec(kTypedef) break;
@@ -658,7 +662,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
 
       auto type{StructType::Get(is_struct, true, curr_scope_)};
       type->SetName(tag_name);
-      auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
+      auto ident{MakeAstNode<Identifier>(tok, type, kNone, true)};
       curr_scope_->InsertTag(tag_name, ident);
       return type;
     }
@@ -693,13 +697,14 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
         Token tok;
         ParseDeclarator(tok, base_type);
 
+        TryAttributeSpec();
+
         // TODO 位域
 
         // 可能是匿名 struct / union
         if (std::empty(tok.GetStr())) {
           if (base_type->IsStructTy() && !base_type->HasStructName()) {
-            auto anony{
-                std::make_shared<Object>(Peek(), base_type, kNone, true)};
+            auto anony{MakeAstNode<Object>(Peek(), base_type, kNone, true)};
             type->MergeAnony(anony);
             continue;
           } else {
@@ -713,7 +718,7 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
           } else if (base_type->IsArrayTy() && !base_type->IsComplete()) {
             // 可能是柔性数组
             if (type->IsStruct() && std::size(type->GetMembers()) > 0) {
-              auto member{std::make_shared<Object>(Peek(), base_type)};
+              auto member{MakeAstNode<Object>(Peek(), base_type)};
               type->AddMember(member);
               // 必须是最后一个成员
               Expect(Tag::kSemicolon);
@@ -726,7 +731,7 @@ void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
           } else if (base_type->IsFunctionTy()) {
             Error(Peek(), "field '{}' declared as a function", name);
           } else {
-            auto member{std::make_shared<Object>(tok, base_type)};
+            auto member{MakeAstNode<Object>(tok, base_type)};
             type->AddMember(member);
           }
         }
@@ -768,7 +773,7 @@ std::shared_ptr<Type> Parser::ParseEnumSpec() {
 
       if (!tag) {
         auto type{IntegerType::Get(32)};
-        auto ident{std::make_shared<Identifier>(tok, type, kNone, true)};
+        auto ident{MakeAstNode<Identifier>(tok, type, kNone, true)};
         ParseEnumerator(type);
         curr_scope_->InsertTag(tag_name, ident);
         Expect(Tag::kRightBrace);
@@ -813,7 +818,7 @@ void Parser::ParseEnumerator(std::shared_ptr<Type> type) {
       val = CalcExpr<std::int32_t>{}.Calc(expr);
     }
 
-    auto enumer{std::make_shared<Enumerator>(tok, val)};
+    auto enumer{MakeAstNode<Enumerator>(tok, val)};
     ++val;
     curr_scope_->InsertNormal(name, enumer);
 
@@ -955,7 +960,7 @@ std::shared_ptr<Object> Parser::ParseParamDecl() {
   base_type = Type::MayCast(base_type, true);
 
   if (std::empty(tok.GetStr())) {
-    return std::make_shared<Object>(Peek(), base_type, kNone, true);
+    return MakeAstNode<Object>(Peek(), base_type, kNone, true);
   }
 
   auto ident{MakeDeclarator(tok, base_type)};
@@ -1039,7 +1044,7 @@ std::shared_ptr<Constant> Parser::ParseStringLiteral(bool handle_escape) {
 
   str += '\0';
 
-  return std::make_shared<Constant>(
+  return MakeAstNode<Constant>(
       tok, ArrayType::Get(IntegerType::Get(8), std::size(str)), str);
 }
 
@@ -1105,14 +1110,14 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
     if (type->HasAlign() != 0) {
       Error(tok, "'_Alignas' attribute only applies to variables and fields");
     }
-    ret = std::make_shared<Identifier>(tok, type, linkage, false);
+    ret = MakeAstNode<Identifier>(tok, type, linkage, false);
   } else {
-    ret = std::make_shared<Object>(tok, type, linkage, false);
+    ret = MakeAstNode<Object>(tok, type, linkage, false);
   }
 
   curr_scope_->InsertNormal(name, ret);
 
-  return std::make_shared<Declaration>(ret);
+  return MakeAstNode<Declaration>(ret);
 }
 
 std::set<Initializer> Parser::ParseInitDeclaratorSub(
@@ -1136,9 +1141,11 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(
 std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
   std::shared_ptr<CompoundStmt> ext_decl;
 
-  do {
-    ext_decl = ParseDecl(true);
-  } while (ext_decl == nullptr);
+  ext_decl = ParseDecl(true);
+
+  if (ext_decl == nullptr) {
+    return nullptr;
+  }
 
   TryAsm();
   TryAttributeSpec();
@@ -1182,7 +1189,10 @@ std::shared_ptr<Expr> Parser::ParseCastExpr() {
 
   if (Try(Tag::kLeftParen)) {
     if (!IsTypeName(Peek())) {
-      Error(tok, "expect type name");
+      // TODO right?
+      auto expr{ParseExpr()};
+      Expect(Tag::kRightParen);
+      return expr;
     }
 
     auto type{ParseTypeName()};
