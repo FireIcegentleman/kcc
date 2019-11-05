@@ -28,6 +28,61 @@ ACCEPT(TranslationUnit)
 ACCEPT(JumpStmt)
 ACCEPT(Declaration)
 ACCEPT(FuncDef)
+ACCEPT(ExprStmt)
+ACCEPT(WhileStmt)
+ACCEPT(DoWhileStmt)
+ACCEPT(ForStmt)
+ACCEPT(CaseStmt)
+ACCEPT(DefaultStmt)
+ACCEPT(SwitchStmt)
+
+ExprStmt::ExprStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
+
+AstNodeType ExprStmt::Kind() const { return AstNodeType::kExprStmt; }
+
+WhileStmt::WhileStmt(std::shared_ptr<Expr> cond,
+                     std::shared_ptr<CompoundStmt> block)
+    : cond_{cond}, block_{block} {}
+
+AstNodeType WhileStmt::Kind() const { return AstNodeType::kWhileStmt; }
+
+DoWhileStmt::DoWhileStmt(std::shared_ptr<Expr> cond,
+                         std::shared_ptr<CompoundStmt> block)
+    : cond_{cond}, block_{block} {}
+
+AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
+
+ForStmt::ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
+                 std::shared_ptr<Expr> inc, std::shared_ptr<CompoundStmt> block,
+                 std::shared_ptr<Declaration> decl)
+    : init_{init}, cond_{cond}, inc_{inc}, block_{block}, decl_{decl} {}
+
+AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
+
+CaseStmt::CaseStmt(std::int32_t case_value) : case_value_{case_value} {}
+
+CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2)
+    : case_value_range_{case_value, case_value2}, has_range_{true} {}
+
+void CaseStmt::AddStmt(std::shared_ptr<Stmt> stmt) { block_->AddStmt(stmt); }
+
+AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
+
+void DefaultStmt::AddStmt(std::shared_ptr<Stmt> stmt) { block_->AddStmt(stmt); }
+
+AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
+
+SwitchStmt::SwitchStmt(std::shared_ptr<Expr> choose) : choose_{choose} {}
+
+void SwitchStmt::AddCase(std::shared_ptr<CaseStmt> case_stmt) {
+  case_stmts_.push_back(case_stmt);
+}
+
+void SwitchStmt::SetDefault(std::shared_ptr<DefaultStmt> default_stmt) {
+  default_stmt_ = default_stmt;
+}
+
+AstNodeType SwitchStmt::Kind() const { return AstNodeType::kSwitchStmt; }
 
 Expr::Expr(const Token& tok, std::shared_ptr<Type> type)
     : tok_{tok}, type_{type} {}

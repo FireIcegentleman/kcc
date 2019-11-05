@@ -94,6 +94,19 @@ class Parser {
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
 
+  std::unique_ptr<CompoundStmt> ParseCompoundStmt();
+  std::unique_ptr<Stmt> ParseStmt();
+  std::unique_ptr<IfStmt> ParseIfStmt();
+  std::unique_ptr<WhileStmt> ParseWhileStmt();
+  std::unique_ptr<DoWhileStmt> ParseDoWhileStmt();
+  std::unique_ptr<ForStmt> ParseForStmt();
+  std::unique_ptr<ReturnStmt> ParseReturnStmt();
+  std::unique_ptr<Stmt> ParseExpressionStmt();
+  std::unique_ptr<CaseStmt> ParseCaseStmt();
+  std::unique_ptr<DefaultStmt> ParseDefaultStmt();
+  std::unique_ptr<SwitchStmt> ParseSwitchStmt();
+  std::unique_ptr<Stmt> ParseGotoStmt();
+
   void TryAttributeSpec();
   void ParseAttributeList();
   void ParseAttribute();

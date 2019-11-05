@@ -362,11 +362,53 @@ void JsonGen::Visit(const CompoundStmt& node) {
   result_ = root;
 }
 
-void JsonGen::Visit(const IfStmt&) {}
+void JsonGen::Visit(const IfStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+  QJsonArray children;
 
-void JsonGen::Visit(const ReturnStmt&) {}
+  node.cond_->Accept(*this);
+  children.append(result_);
 
-void JsonGen::Visit(const LabelStmt&) {}
+  node.then_block_->Accept(*this);
+  children.append(result_);
+
+  if (node.else_block_) {
+    node.else_block_->Accept(*this);
+    children.append(result_);
+  }
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const ReturnStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+
+  QJsonArray children;
+  if (node.expr_) {
+    node.expr_->Accept(*this);
+    children.append(result_);
+  }
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const LabelStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+
+  QJsonArray children;
+  QJsonObject name;
+  name["name"] = QString::fromStdString("label: " + node.label_);
+  children.append(name);
+
+  root["children"] = children;
+
+  result_ = root;
+}
 
 void JsonGen::Visit(const FuncCallExpr& node) {
   QJsonObject root;
@@ -438,7 +480,17 @@ void JsonGen::Visit(const TranslationUnit& node) {
   result_ = root;
 }
 
-void JsonGen::Visit(const JumpStmt&) {}
+void JsonGen::Visit(const JumpStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+
+  QJsonArray children;
+  node.label_->Accept(*this);
+  children.append(result_);
+  root["children"] = children;
+
+  result_ = root;
+}
 
 // FIXME
 void JsonGen::Visit(const Declaration&) {
@@ -462,6 +514,155 @@ void JsonGen::Visit(const Declaration&) {
   //  result_ = root;
 }
 
-void JsonGen::Visit(const FuncDef&) {}
+void JsonGen::Visit(const FuncDef& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+
+  QJsonArray children;
+
+  node.body_->Accept(*this);
+  children.append(result_);
+
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const ExprStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+  QJsonArray children;
+
+  node.expr_->Accept(*this);
+  children.append(result_);
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const WhileStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+  QJsonArray children;
+
+  node.cond_->Accept(*this);
+  children.append(result_);
+
+  node.block_->Accept(*this);
+  children.append(result_);
+
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const DoWhileStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+  QJsonArray children;
+
+  node.cond_->Accept(*this);
+  children.append(result_);
+
+  node.block_->Accept(*this);
+  children.append(result_);
+
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const ForStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+  QJsonArray children;
+
+  if (node.init_) {
+    node.init_->Accept(*this);
+    children.append(result_);
+  } else if (node.decl_) {
+    node.decl_->Accept(*this);
+    children.append(result_);
+  }
+
+  if (node.cond_) {
+    node.cond_->Accept(*this);
+    children.append(result_);
+  }
+  if (node.inc_) {
+    node.inc_->Accept(*this);
+    children.append(result_);
+  }
+
+  if (node.block_) {
+    node.block_->Accept(*this);
+    children.append(result_);
+  }
+
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const CaseStmt& node) {
+  QJsonObject root;
+
+  if (!node.has_range_) {
+    root["name"] =
+        AstNodeTypes::ToString(node.Kind()) +
+        QString::fromStdString(":" + std::to_string(node.case_value_));
+  } else {
+    root["name"] = AstNodeTypes::ToString(node.Kind()) +
+                   QString::fromStdString(
+                       ":" + std::to_string(node.case_value_range_.first) +
+                       " to " + std::to_string(node.case_value_range_.second));
+  }
+
+  QJsonArray children;
+  if (node.block_) {
+    node.block_->Accept(*this);
+    children.append(result_);
+  }
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const DefaultStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+
+  QJsonArray children;
+  if (node.block_) {
+    node.block_->Accept(*this);
+    children.append(result_);
+  }
+  root["children"] = children;
+
+  result_ = root;
+}
+
+void JsonGen::Visit(const SwitchStmt& node) {
+  QJsonObject root;
+  root["name"] = AstNodeTypes::ToString(node.Kind());
+
+  QJsonArray children;
+  node.choose_->Accept(*this);
+  children.append(result_);
+
+  for (const auto& expr : node.case_stmts_) {
+    expr->Accept(*this);
+    children.append(result_);
+  }
+
+  if (node.default_stmt_) {
+    node.default_stmt_->Accept(*this);
+    children.append(result_);
+  }
+
+  root["children"] = children;
+
+  result_ = root;
+}
 
 }  // namespace kcc

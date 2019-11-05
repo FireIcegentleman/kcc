@@ -38,6 +38,13 @@ class JsonGen : public Visitor {
   virtual void Visit(const JumpStmt& node) override;
   virtual void Visit(const Declaration& node) override;
   virtual void Visit(const FuncDef& node) override;
+  virtual void Visit(const ExprStmt& node) override;
+  virtual void Visit(const WhileStmt& node) override;
+  virtual void Visit(const DoWhileStmt& node) override;
+  virtual void Visit(const ForStmt& node) override;
+  virtual void Visit(const CaseStmt& node) override;
+  virtual void Visit(const DefaultStmt& node) override;
+  virtual void Visit(const SwitchStmt& node) override;
 
   QJsonObject result_;
 };

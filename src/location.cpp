@@ -3,3 +3,13 @@
 //
 
 #include "location.h"
+
+namespace kcc {
+
+SourceLocation SourceLocation::NextColumn() const {
+  auto copy{*this};
+  ++copy.column;
+  return copy;
+}
+
+}  // namespace kcc

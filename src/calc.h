@@ -26,6 +26,7 @@ class CalcExpr : public Visitor {
  public:
   T Calc(std::shared_ptr<Expr> expr);
 
+ private:
   virtual void Visit(const UnaryOpExpr& node) override;
   virtual void Visit(const BinaryOpExpr& node) override;
   virtual void Visit(const ConditionOpExpr& node) override;
@@ -44,8 +45,14 @@ class CalcExpr : public Visitor {
   virtual void Visit(const JumpStmt& node) override;
   virtual void Visit(const Declaration& node) override;
   virtual void Visit(const FuncDef& node) override;
+  virtual void Visit(const ExprStmt& node) override;
+  virtual void Visit(const WhileStmt& node) override;
+  virtual void Visit(const DoWhileStmt& node) override;
+  virtual void Visit(const ForStmt& node) override;
+  virtual void Visit(const CaseStmt& node) override;
+  virtual void Visit(const DefaultStmt& node) override;
+  virtual void Visit(const SwitchStmt& node) override;
 
- private:
   T val_;
 };
 
@@ -267,6 +274,41 @@ void CalcExpr<T>::Visit(const Declaration&) {
 
 template <typename T>
 void CalcExpr<T>::Visit(const FuncDef&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const ExprStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const WhileStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const DoWhileStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const ForStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const CaseStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const DefaultStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const SwitchStmt&) {
   assert(false);
 }
 

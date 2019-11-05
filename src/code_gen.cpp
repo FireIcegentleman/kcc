@@ -3,3 +3,5 @@
 //
 
 #include "code_gen.h"
+
+namespace kcc {}

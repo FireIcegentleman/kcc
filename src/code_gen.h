@@ -5,6 +5,15 @@
 #ifndef KCC_SRC_CODE_GEN_H_
 #define KCC_SRC_CODE_GEN_H_
 
-class CodeGen {};
+#include "visitor.h"
+
+namespace kcc {
+
+class CodeGen : public Visitor {
+ public:
+ private:
+};
+
+}  // namespace kcc
 
 #endif  // KCC_SRC_CODE_GEN_H_

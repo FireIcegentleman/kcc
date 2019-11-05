@@ -12,13 +12,13 @@ using namespace kcc;
 
 int main() {
   Preprocessor preprocessor;
-  auto preprocessed_code{preprocessor.Cpp("test/test.c")};
-  std::ofstream preprocess{"test/test.i"};
+  auto preprocessed_code{preprocessor.Cpp("test/dev/test.c")};
+  std::ofstream preprocess{"test/dev/test.i"};
   preprocess << preprocessed_code << std::flush;
 
   Scanner scanner{std::move(preprocessed_code)};
   auto tokens{scanner.Tokenize()};
-  std::ofstream tokens_file{"test/test.txt"};
+  std::ofstream tokens_file{"test/dev/test.txt"};
   std::transform(std::begin(tokens), std::end(tokens),
                  std::ostream_iterator<std::string>{tokens_file, "\n"},
                  std::mem_fn(&Token::ToString));
@@ -27,7 +27,7 @@ int main() {
   auto unit{parser.ParseTranslationUnit()};
 
   JsonGen json_gen;
-  json_gen.GenJson(unit, "test/test.html");
+  json_gen.GenJson(unit, "test/dev/test.html");
 
   PrintWarnings();
 }

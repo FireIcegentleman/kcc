@@ -1578,6 +1578,52 @@ void Parser::TryAsm() {
   }
 }
 
+std::unique_ptr<CompoundStmt> Parser::ParseCompoundStmt() {
+  return std::unique_ptr<CompoundStmt>();
+}
+
+std::unique_ptr<Stmt> Parser::ParseStmt() { return std::unique_ptr<Stmt>(); }
+
+std::unique_ptr<IfStmt> Parser::ParseIfStmt() {
+  return std::unique_ptr<IfStmt>();
+}
+
+std::unique_ptr<WhileStmt> Parser::ParseWhileStmt() {
+  return std::unique_ptr<WhileStmt>();
+}
+
+std::unique_ptr<DoWhileStmt> Parser::ParseDoWhileStmt() {
+  return std::unique_ptr<DoWhileStmt>();
+}
+
+std::unique_ptr<ForStmt> Parser::ParseForStmt() {
+  return std::unique_ptr<ForStmt>();
+}
+
+std::unique_ptr<ReturnStmt> Parser::ParseReturnStmt() {
+  return std::unique_ptr<ReturnStmt>();
+}
+
+std::unique_ptr<Stmt> Parser::ParseExpressionStmt() {
+  return std::unique_ptr<Stmt>();
+}
+
+std::unique_ptr<CaseStmt> Parser::ParseCaseStmt() {
+  return std::unique_ptr<CaseStmt>();
+}
+
+std::unique_ptr<DefaultStmt> Parser::ParseDefaultStmt() {
+  return std::unique_ptr<DefaultStmt>();
+}
+
+std::unique_ptr<SwitchStmt> Parser::ParseSwitchStmt() {
+  return std::unique_ptr<SwitchStmt>();
+}
+
+std::unique_ptr<Stmt> Parser::ParseGotoStmt() {
+  return std::unique_ptr<Stmt>();
+}
+
 // TODO init
 // void Parser::ParseInitializer(std::set<Initializer>& inits,
 //                              std::shared_ptr<Type> type, std::int32_t offset,

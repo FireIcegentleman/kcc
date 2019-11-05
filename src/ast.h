@@ -114,6 +114,7 @@ class BinaryOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   BinaryOpExpr(const Token& tok, std::shared_ptr<Expr> lhs,
@@ -157,6 +158,7 @@ class UnaryOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   UnaryOpExpr(const Token& tok, std::shared_ptr<Expr> expr);
@@ -183,6 +185,7 @@ class TypeCastExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   TypeCastExpr(std::shared_ptr<Expr> expr, std::shared_ptr<Type> to)
@@ -202,6 +205,7 @@ class ConditionOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   ConditionOpExpr(const Token& tok, std::shared_ptr<Expr> cond,
@@ -227,6 +231,7 @@ class ConditionOpExpr : public Expr {
 
 class FuncCallExpr : public Expr {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   explicit FuncCallExpr(std::shared_ptr<Expr> callee,
@@ -249,6 +254,7 @@ class Constant : public Expr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   Constant(const Token& tok, std::int32_t val)
@@ -290,6 +296,7 @@ enum Linkage { kNone, kInternal, kExternal };
 // 宏名或宏形参名以外的每个标识符都拥有作用域，并且可以拥有链接
 class Identifier : public Expr {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   Identifier(const Token& tok, std::shared_ptr<Type> type, enum Linkage linkage,
@@ -317,6 +324,7 @@ class Enumerator : public Identifier {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   Enumerator(const Token& tok, std::int32_t val);
@@ -342,6 +350,7 @@ class Enumerator : public Identifier {
 // 可选项，表示该对象的标识符
 class Object : public Identifier {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   Object(const Token& tok, std::shared_ptr<Type> type,
@@ -372,6 +381,7 @@ class Stmt : public AstNode {};
 
 class LabelStmt : public Stmt {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   explicit LabelStmt(const std::string& label);
@@ -385,6 +395,7 @@ class LabelStmt : public Stmt {
 
 class IfStmt : public Stmt {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   IfStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> then_block,
@@ -402,6 +413,7 @@ class IfStmt : public Stmt {
 // break / continue / goto
 class JumpStmt : public Stmt {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   explicit JumpStmt(std::shared_ptr<LabelStmt> label);
@@ -415,6 +427,7 @@ class JumpStmt : public Stmt {
 
 class ReturnStmt : public Stmt {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   explicit ReturnStmt(std::shared_ptr<Expr> expr);
@@ -428,6 +441,7 @@ class ReturnStmt : public Stmt {
 
 class CompoundStmt : public Stmt {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   CompoundStmt() = default;
@@ -444,8 +458,128 @@ class CompoundStmt : public Stmt {
   std::shared_ptr<Scope> scope_;
 };
 
+class ExprStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  explicit ExprStmt(std::shared_ptr<Expr> expr);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::shared_ptr<Expr> expr_;
+};
+
+class WhileStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  WhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<CompoundStmt> block);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::shared_ptr<Expr> cond_;
+  std::shared_ptr<CompoundStmt> block_;
+};
+
+class DoWhileStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  DoWhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<CompoundStmt> block);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::shared_ptr<Expr> cond_;
+  std::shared_ptr<CompoundStmt> block_;
+};
+
+class ForStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
+          std::shared_ptr<Expr> inc, std::shared_ptr<CompoundStmt> block,
+          std::shared_ptr<Declaration> decl);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::shared_ptr<Expr> init_, cond_, inc_;
+  std::shared_ptr<CompoundStmt> block_;
+  std::shared_ptr<Declaration> decl_;
+};
+
+class CaseStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  explicit CaseStmt(std::int32_t case_value);
+  CaseStmt(std::int32_t case_value, std::int32_t case_value2);
+
+  void AddStmt(std::shared_ptr<Stmt> stmt);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::int32_t case_value_{};
+  // GCC 扩展
+  std::pair<std::int32_t, std::int32_t> case_value_range_;
+  bool has_range_{false};
+
+  std::shared_ptr<CompoundStmt> block_;
+};
+
+class DefaultStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  DefaultStmt() = default;
+
+  void AddStmt(std::shared_ptr<Stmt> stmt);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::shared_ptr<CompoundStmt> block_;
+};
+
+class SwitchStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  explicit SwitchStmt(std::shared_ptr<Expr> choose);
+
+  void AddCase(std::shared_ptr<CaseStmt> case_stmt);
+  void SetDefault(std::shared_ptr<DefaultStmt> default_stmt);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+
+ private:
+  std::shared_ptr<Expr> choose_;
+  std::vector<std::shared_ptr<CaseStmt>> case_stmts_;
+  std::shared_ptr<DefaultStmt> default_stmt_;
+};
+
 class Initializer {
   friend class JsonGen;
+  friend class CodeGen;
   friend bool operator<(const Initializer& lhs, const Initializer& rhs);
 
  public:
@@ -463,6 +597,7 @@ bool operator<(const Initializer& lhs, const Initializer& rhs);
 
 class Declaration : public Stmt {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   explicit Declaration(std::shared_ptr<Identifier> ident) : ident_{ident} {}
@@ -483,6 +618,7 @@ class Declaration : public Stmt {
 
 class TranslationUnit : public AstNode {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   virtual AstNodeType Kind() const override;
@@ -498,6 +634,7 @@ class TranslationUnit : public AstNode {
 
 class FuncDef : public ExtDecl {
   friend class JsonGen;
+  friend class CodeGen;
 
  public:
   explicit FuncDef(std::shared_ptr<Identifier> ident) : ident_(ident) {}

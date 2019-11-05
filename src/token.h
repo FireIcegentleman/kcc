@@ -11,22 +11,9 @@
 #include <string>
 #include <unordered_set>
 
+#include "location.h"
+
 namespace kcc {
-
-struct SourceLocation {
-  std::string file_name;
-  const char *line_content;
-
-  std::string::size_type line_begin{};
-  std::int32_t row{1};
-  std::int32_t column{1};
-
-  SourceLocation NextColumn() const {
-    auto copy{*this};
-    ++copy.column;
-    return copy;
-  }
-};
 
 class TokenTag : public QObject {
   Q_OBJECT
