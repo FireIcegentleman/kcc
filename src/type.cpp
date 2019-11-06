@@ -61,10 +61,7 @@ bool Type::IsUnsigned() const {
   return p && (p->type_spec_ & kUnsigned);
 }
 
-bool Type::IsVoidTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kVoid);
-}
+bool Type::IsVoidTy() const { return dynamic_cast<const VoidType*>(this); }
 
 bool Type::IsBoolTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
@@ -280,6 +277,32 @@ bool Type::FuncIsNoreturn() const {
 Type::Type(bool complete) : complete_{complete} {}
 
 /*
+ * VoidType
+ */
+std::shared_ptr<VoidType> VoidType::Get() {
+  return std::shared_ptr<VoidType>{new VoidType{}};
+}
+
+std::int32_t VoidType::GetWidth() const {
+  // GNU 扩展
+  return 1;
+}
+
+std::int32_t VoidType::GetAlign() const { return GetWidth(); }
+
+std::string VoidType::ToString() const { return "void"; }
+
+bool VoidType::Compatible(const std::shared_ptr<Type>& other) const {
+  return Equal(other);
+}
+
+bool VoidType::Equal(const std::shared_ptr<Type>& other) const {
+  return other->IsVoidTy();
+}
+
+VoidType::VoidType() : Type{false} {}
+
+/*
  * ArithmeticType
  */
 std::shared_ptr<ArithmeticType> ArithmeticType::Get(std::uint32_t type_spec) {
@@ -379,6 +402,7 @@ std::string ArithmeticType::ToString() const {
 }
 
 // 它们是同一类型（同名或由 typedef 引入的别名）
+// 类型 char 不与 signed char 兼容，且不与 unsigned char 兼容
 bool ArithmeticType::Compatible(const std::shared_ptr<Type>& other) const {
   return Equal(other);
 }
@@ -605,7 +629,7 @@ std::string StructType::ToString() const {
 
   // FIXME 当某成员类型为指向该 struct / union 的指针
   for (const auto& member : members_) {
-    s += member->GetType()->ToString() + ";";
+    s += member->GetQualType()->ToString() + ";";
   }
 
   return s + "}";
@@ -632,7 +656,8 @@ bool StructType::Compatible(const std::shared_ptr<Type>& other) const {
       }
       auto iter{std::end(other_struct->members_)};
       for (const auto& member : members_) {
-        if (!member->GetType()->Compatible((*iter)->GetType().GetType())) {
+        if (!member->GetQualType()->Compatible(
+                (*iter)->GetQualType().GetType())) {
           return false;
         }
 
@@ -663,7 +688,7 @@ bool StructType::Equal(const std::shared_ptr<Type>& other) const {
       }
       auto iter{std::end(other_struct->members_)};
       for (const auto& member : members_) {
-        if (!member->GetType()->Equal((*iter)->GetType().GetType())) {
+        if (!member->GetQualType()->Equal((*iter)->GetQualType().GetType())) {
           return false;
         }
 
@@ -703,7 +728,7 @@ std::shared_ptr<Object> StructType::GetMember(const std::string& name) const {
 }
 
 QualType StructType::GetMemberType(std::int32_t i) const {
-  return members_[i]->GetType();
+  return members_[i]->GetQualType();
 }
 
 std::shared_ptr<Scope> StructType::GetScope() { return scope_; }
@@ -720,19 +745,19 @@ void StructType::AddMember(std::shared_ptr<Object> member) {
   align_ = std::max(align_, member->GetAlign());
 
   if (is_struct_) {
-    offset_ = offset + member->GetType()->GetWidth();
+    offset_ = offset + member->GetQualType()->GetWidth();
     width_ = MakeAlign(offset, align_);
   } else {
     assert(offset_ == 0);
-    width_ = std::max(width_, member->GetType()->GetWidth());
+    width_ = std::max(width_, member->GetQualType()->GetWidth());
     width_ = MakeAlign(width_, align_);
   }
 }
 
 void StructType::MergeAnonymous(std::shared_ptr<Object> anonymous) {
   // 匿名 struct / union
-  auto annoy_type{
-      std::dynamic_pointer_cast<StructType>(anonymous->GetType().GetType())};
+  auto annoy_type{std::dynamic_pointer_cast<StructType>(
+      anonymous->GetQualType().GetType())};
   auto offset = MakeAlign(offset_, anonymous->GetAlign());
 
   for (auto& kv : *annoy_type->scope_) {
@@ -796,7 +821,7 @@ std::string FunctionType::ToString() const {
   std::string s(return_type_->ToString() + "(");
 
   for (const auto& param : params_) {
-    s += param->GetType()->ToString() + ", ";
+    s += param->GetQualType()->ToString() + ", ";
   }
 
   if (is_var_args_) {
@@ -833,7 +858,7 @@ bool FunctionType::Compatible(const std::shared_ptr<Type>& other) const {
 
     auto iter{std::begin(other_func->params_)};
     for (const auto& param : params_) {
-      if (!param->GetType()->Equal((*iter)->GetType().GetType())) {
+      if (!param->GetQualType()->Equal((*iter)->GetQualType().GetType())) {
         return false;
       }
       ++iter;
@@ -857,7 +882,7 @@ bool FunctionType::Equal(const std::shared_ptr<Type>& other) const {
 
     auto iter{std::begin(other_func->params_)};
     for (const auto& param : params_) {
-      if (!param->GetType()->Equal((*iter)->GetType().GetType())) {
+      if (!param->GetQualType()->Equal((*iter)->GetQualType().GetType())) {
         return false;
       }
       ++iter;
@@ -876,7 +901,7 @@ QualType FunctionType::GetReturnType() const { return return_type_; }
 std::int32_t FunctionType::GetNumParams() const { return std::size(params_); }
 
 QualType FunctionType::GetParamType(std::int32_t i) const {
-  return params_[i]->GetType();
+  return params_[i]->GetQualType();
 }
 
 std::vector<std::shared_ptr<Object>> FunctionType::GetParams() const {
@@ -898,4 +923,5 @@ FunctionType::FunctionType(QualType return_type,
       is_var_args_{is_var_args},
       return_type_{return_type},
       params_{param} {}
+
 }  // namespace kcc

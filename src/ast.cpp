@@ -47,7 +47,9 @@ Token Expr::GetToken() const { return tok_; }
 
 void Expr::SetToken(const Token& tok) { tok_ = tok; }
 
-QualType Expr::GetType() const { return type_; }
+QualType Expr::GetQualType() const { return type_; }
+
+std::shared_ptr<Type> Expr::GetType() const { return type_.GetType(); }
 
 bool Expr::IsConst() const { return type_.IsConst(); }
 
@@ -71,9 +73,9 @@ void Expr::EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const {
 }
 
 std::shared_ptr<Expr> Expr::MayCast(const std::shared_ptr<Expr>& expr) {
-  auto type{Type::MayCast(expr->GetType())};
+  auto type{Type::MayCast(expr->GetQualType())};
 
-  if (type != expr->GetType()) {
+  if (type != expr->GetQualType()) {
     return MakeAstNode<TypeCastExpr>(expr, type);
   } else {
     return expr;
@@ -83,7 +85,7 @@ std::shared_ptr<Expr> Expr::MayCast(const std::shared_ptr<Expr>& expr) {
 std::shared_ptr<Expr> Expr::MayCastTo(std::shared_ptr<Expr> expr, QualType to) {
   expr = MayCast(expr);
 
-  if (!expr->GetType()->Equal(to.GetType())) {
+  if (!expr->GetQualType()->Equal(to.GetType())) {
     return MakeAstNode<TypeCastExpr>(expr, to);
   } else {
     return expr;
@@ -112,54 +114,54 @@ bool BinaryOpExpr::IsLValue() const {
   }
 }
 
-void BinaryOpExpr::TypeCheck() {
+void BinaryOpExpr::Check() {
   switch (op_) {
     case Tag::kEqual:
-      AssignOpTypeCheck();
+      AssignOpCheck();
       break;
     case Tag::kPlus:
-      AddOpTypeCheck();
+      AddOpCheck();
       break;
     case Tag::kMinus:
-      SubOpTypeCheck();
+      SubOpCheck();
       break;
     case Tag::kStar:
     case Tag::kPercent:
     case Tag::kSlash:
-      MultiOpTypeCheck();
+      MultiOpCheck();
       break;
     case Tag::kAmp:
     case Tag::kPipe:
     case Tag::kCaret:
-      BitwiseOpTypeCheck();
+      BitwiseOpCheck();
       break;
     case Tag::kLessLess:
     case Tag::kGreaterGreater:
-      ShiftOpTypeCheck();
+      ShiftOpCheck();
       break;
     case Tag::kAmpAmp:
     case Tag::kPipePipe:
-      LogicalOpTypeCheck();
+      LogicalOpCheck();
       break;
     case Tag::kExclaimEqual:
     case Tag::kEqualEqual:
-      EqualityOpTypeCheck();
+      EqualityOpCheck();
       break;
     case Tag::kLess:
     case Tag::kLessEqual:
     case Tag::kGreater:
     case Tag::kGreaterEqual:
-      RelationalOpTypeCheck();
+      RelationalOpCheck();
       break;
     case Tag::kLeftSquare:
-      IndexOpTypeCheck();
+      IndexOpCheck();
       break;
     case Tag::kPeriod:
     case Tag::kArrow:
-      MemberRefOpTypeCheck();
+      MemberRefOpCheck();
       break;
     case Tag::kComma:
-      CommaOpTypeCheck();
+      CommaOpCheck();
       break;
     default:
       assert(false);
@@ -167,8 +169,8 @@ void BinaryOpExpr::TypeCheck() {
 }
 
 std::shared_ptr<Type> BinaryOpExpr::Convert() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   auto type = ArithmeticType::MaxType(lhs_type.GetType(), rhs_type.GetType());
 
@@ -178,9 +180,9 @@ std::shared_ptr<Type> BinaryOpExpr::Convert() {
   return type;
 }
 
-void BinaryOpExpr::AssignOpTypeCheck() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+void BinaryOpExpr::AssignOpCheck() {
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   if (lhs_->IsConst()) {
     Error(lhs_->GetToken(), "left operand of '=' is const qualified: {}",
@@ -200,9 +202,9 @@ void BinaryOpExpr::AssignOpTypeCheck() {
   type_ = lhs_type;
 }
 
-void BinaryOpExpr::AddOpTypeCheck() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+void BinaryOpExpr::AddOpCheck() {
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     type_ = QualType{Convert()};
@@ -219,9 +221,9 @@ void BinaryOpExpr::AddOpTypeCheck() {
   }
 }
 
-void BinaryOpExpr::SubOpTypeCheck() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+void BinaryOpExpr::SubOpCheck() {
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     type_ = QualType{Convert()};
@@ -237,9 +239,9 @@ void BinaryOpExpr::SubOpTypeCheck() {
   }
 }
 
-void BinaryOpExpr::MultiOpTypeCheck() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+void BinaryOpExpr::MultiOpCheck() {
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   if (op_ == Tag::kPercent) {
     if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
@@ -257,19 +259,20 @@ void BinaryOpExpr::MultiOpTypeCheck() {
   type_ = QualType{Convert()};
 }
 
-void BinaryOpExpr::BitwiseOpTypeCheck() {
-  if (!lhs_->GetType()->IsIntegerTy() || !rhs_->GetType()->IsIntegerTy()) {
+void BinaryOpExpr::BitwiseOpCheck() {
+  if (!lhs_->GetQualType()->IsIntegerTy() ||
+      !rhs_->GetQualType()->IsIntegerTy()) {
     Error(tok_,
           "'&' / '|' / '^': the operand should be arithmetic type '{}' vs '{}'",
-          lhs_->GetType()->ToString(), rhs_->GetType()->ToString());
+          lhs_->GetQualType()->ToString(), rhs_->GetQualType()->ToString());
   }
 
   type_ = QualType{Convert()};
 }
 
-void BinaryOpExpr::ShiftOpTypeCheck() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+void BinaryOpExpr::ShiftOpCheck() {
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
     Error(tok_.GetLoc(),
@@ -282,21 +285,22 @@ void BinaryOpExpr::ShiftOpTypeCheck() {
   rhs_ =
       Expr::MayCastTo(rhs_, ArithmeticType::IntegerPromote(rhs_type.GetType()));
 
-  type_ = lhs_->GetType();
+  type_ = lhs_->GetQualType();
 }
 
-void BinaryOpExpr::LogicalOpTypeCheck() {
-  if (!lhs_->GetType()->IsScalarTy() || !rhs_->GetType()->IsScalarTy()) {
+void BinaryOpExpr::LogicalOpCheck() {
+  if (!lhs_->GetQualType()->IsScalarTy() ||
+      !rhs_->GetQualType()->IsScalarTy()) {
     Error(tok_, "'&&' or '||': the operand should be scalar type '{}' vs '{}'",
-          lhs_->GetType()->ToString(), rhs_->GetType()->ToString());
+          lhs_->GetQualType()->ToString(), rhs_->GetQualType()->ToString());
   }
 
   type_ = QualType{ArithmeticType::Get(32)};
 }
 
-void BinaryOpExpr::EqualityOpTypeCheck() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+void BinaryOpExpr::EqualityOpCheck() {
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
     EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
@@ -310,9 +314,9 @@ void BinaryOpExpr::EqualityOpTypeCheck() {
   type_ = QualType{ArithmeticType::Get(32)};
 }
 
-void BinaryOpExpr::RelationalOpTypeCheck() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+void BinaryOpExpr::RelationalOpCheck() {
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
     EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
@@ -328,27 +332,27 @@ void BinaryOpExpr::RelationalOpTypeCheck() {
   type_ = QualType{ArithmeticType::Get(32)};
 }
 
-void BinaryOpExpr::IndexOpTypeCheck() {
-  if (!lhs_->GetType()->IsPointerTy()) {
+void BinaryOpExpr::IndexOpCheck() {
+  if (!lhs_->GetQualType()->IsPointerTy()) {
     Error(tok_, "'[]': the operand should be pointer type: '{}'",
-          lhs_->GetType()->ToString());
+          lhs_->GetQualType()->ToString());
   }
 
-  if (!rhs_->GetType()->IsIntegerTy()) {
+  if (!rhs_->GetQualType()->IsIntegerTy()) {
     Error(tok_, "'[]': the operand should be integer type: '{}'",
-          lhs_->GetType()->ToString());
+          lhs_->GetQualType()->ToString());
   }
 
-  if (lhs_->GetType()->PointerGetElementType()->IsArrayTy()) {
-    type_ = lhs_->GetType()->PointerGetElementType()->ArrayGetElementType();
+  if (lhs_->GetQualType()->PointerGetElementType()->IsArrayTy()) {
+    type_ = lhs_->GetQualType()->PointerGetElementType()->ArrayGetElementType();
   } else {
-    type_ = QualType{lhs_->GetType()->PointerGetElementType()};
+    type_ = QualType{lhs_->GetQualType()->PointerGetElementType()};
   }
 }
 
-void BinaryOpExpr::MemberRefOpTypeCheck() { type_ = rhs_->GetType(); }
+void BinaryOpExpr::MemberRefOpCheck() { type_ = rhs_->GetQualType(); }
 
-void BinaryOpExpr::CommaOpTypeCheck() { type_ = rhs_->GetType(); }
+void BinaryOpExpr::CommaOpCheck() { type_ = rhs_->GetQualType(); }
 
 /*
  * UnaryOpExpr
@@ -366,35 +370,35 @@ AstNodeType UnaryOpExpr::Kind() const { return AstNodeType::kUnaryOpExpr; }
 
 bool UnaryOpExpr::IsLValue() const { return op_ == Tag::kStar; }
 
-void UnaryOpExpr::TypeCheck() {
+void UnaryOpExpr::Check() {
   switch (op_) {
     case Tag::kPlusPlus:
     case Tag::kMinusMinus:
-      IncDecOpTypeCheck();
+      IncDecOpCheck();
       break;
     case Tag::kPlus:
     case Tag::kMinus:
-      UnaryAddSubOpTypeCheck();
+      UnaryAddSubOpCheck();
       break;
     case Tag::kTilde:
-      NotOpTypeCheck();
+      NotOpCheck();
       break;
     case Tag::kExclaim:
-      LogicNotOpTypeCheck();
+      LogicNotOpCheck();
       break;
     case Tag::kStar:
-      DerefOpTypeCheck();
+      DerefOpCheck();
       break;
     case Tag::kAmp:
-      AddrOpTypeCheck();
+      AddrOpCheck();
       break;
     default:
       assert(false);
   }
 }
 
-void UnaryOpExpr::IncDecOpTypeCheck() {
-  auto expr_type{expr_->GetType()};
+void UnaryOpExpr::IncDecOpCheck() {
+  auto expr_type{expr_->GetQualType()};
 
   if (expr_->IsConst()) {
     Error(expr_->GetToken(),
@@ -413,56 +417,56 @@ void UnaryOpExpr::IncDecOpTypeCheck() {
   }
 }
 
-void UnaryOpExpr::UnaryAddSubOpTypeCheck() {
-  if (!expr_->GetType()->IsArithmeticTy()) {
+void UnaryOpExpr::UnaryAddSubOpCheck() {
+  if (!expr_->GetQualType()->IsArithmeticTy()) {
     Error(expr_->GetToken(), "'+' / '-': expect operand of arithmetic type: {}",
-          expr_->GetType()->ToString());
+          expr_->GetQualType()->ToString());
   }
 
-  auto new_type{ArithmeticType::IntegerPromote(expr_->GetType().GetType())};
+  auto new_type{ArithmeticType::IntegerPromote(expr_->GetQualType().GetType())};
   Expr::MayCastTo(expr_, new_type);
 
-  type_ = expr_->GetType();
+  type_ = expr_->GetQualType();
 }
 
-void UnaryOpExpr::NotOpTypeCheck() {
-  if (!expr_->GetType()->IsIntegerTy()) {
+void UnaryOpExpr::NotOpCheck() {
+  if (!expr_->GetQualType()->IsIntegerTy()) {
     Error(expr_->GetToken(), "'~': expect operand of arithmetic type: {}",
-          expr_->GetType()->ToString());
+          expr_->GetQualType()->ToString());
   }
 
-  auto new_type{ArithmeticType::IntegerPromote(expr_->GetType().GetType())};
+  auto new_type{ArithmeticType::IntegerPromote(expr_->GetQualType().GetType())};
   Expr::MayCastTo(expr_, new_type);
 
-  type_ = expr_->GetType();
+  type_ = expr_->GetQualType();
 }
 
-void UnaryOpExpr::LogicNotOpTypeCheck() {
-  if (!expr_->GetType()->IsScalarTy()) {
+void UnaryOpExpr::LogicNotOpCheck() {
+  if (!expr_->GetQualType()->IsScalarTy()) {
     Error(expr_->GetToken(), "'~': expect operand of scalar type: {}",
-          expr_->GetType()->ToString());
+          expr_->GetQualType()->ToString());
   }
 
   type_ = QualType{ArithmeticType::Get(32)};
 }
 
-void UnaryOpExpr::DerefOpTypeCheck() {
-  if (!expr_->GetType()->IsPointerTy()) {
+void UnaryOpExpr::DerefOpCheck() {
+  if (!expr_->GetQualType()->IsPointerTy()) {
     Error(expr_->GetToken(), "'~': expect operand of pointer type: {}",
-          expr_->GetType()->ToString());
+          expr_->GetQualType()->ToString());
   }
 
-  type_ = expr_->GetType()->PointerGetElementType();
+  type_ = expr_->GetQualType()->PointerGetElementType();
 }
 
-void UnaryOpExpr::AddrOpTypeCheck() {
-  if (!expr_->GetType()->IsFunctionTy() && !expr_->IsLValue()) {
+void UnaryOpExpr::AddrOpCheck() {
+  if (!expr_->GetQualType()->IsFunctionTy() && !expr_->IsLValue()) {
     Error(expr_->GetToken(),
           "'&': expression must be an lvalue or function: {}",
-          expr_->GetType()->ToString());
+          expr_->GetQualType()->ToString());
   }
 
-  type_ = QualType{PointerType::Get(expr_->GetType())};
+  type_ = QualType{PointerType::Get(expr_->GetQualType())};
 }
 
 /*
@@ -475,7 +479,7 @@ AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
 
 bool TypeCastExpr::IsLValue() const { return false; }
 
-void TypeCastExpr::TypeCheck() {
+void TypeCastExpr::Check() {
   // TODO more check
 }
 
@@ -491,14 +495,14 @@ bool ConditionOpExpr::IsLValue() const {
   return false;
 }
 
-void ConditionOpExpr::TypeCheck() {
-  if (!cond_->GetType()->IsScalarTy()) {
+void ConditionOpExpr::Check() {
+  if (!cond_->GetQualType()->IsScalarTy()) {
     Error(tok_, "value of type '{}' is not contextually convertible to 'bool'",
-          cond_->GetType()->ToString());
+          cond_->GetQualType()->ToString());
   }
 
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
   // TODO 处理得不正确
   if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     type_ = Convert();
@@ -509,8 +513,8 @@ void ConditionOpExpr::TypeCheck() {
 }
 
 std::shared_ptr<Type> ConditionOpExpr::Convert() {
-  auto lhs_type{lhs_->GetType()};
-  auto rhs_type{rhs_->GetType()};
+  auto lhs_type{lhs_->GetQualType()};
+  auto rhs_type{rhs_->GetQualType()};
 
   auto type = ArithmeticType::MaxType(lhs_type.GetType(), rhs_type.GetType());
 
@@ -533,48 +537,49 @@ AstNodeType FuncCallExpr::Kind() const {
 
 bool FuncCallExpr::IsLValue() const { return false; }
 
-void FuncCallExpr::TypeCheck() {
-  if (callee_->GetType()->IsPointerTy()) {
-    if (!callee_->GetType()->PointerGetElementType()->IsFunctionTy()) {
+void FuncCallExpr::Check() {
+  if (callee_->GetQualType()->IsPointerTy()) {
+    if (!callee_->GetQualType()->PointerGetElementType()->IsFunctionTy()) {
       Error(tok_, "called object is not a function or function pointer: {}",
-            callee_->GetType()->ToString());
+            callee_->GetQualType()->ToString());
     }
 
     callee_ = MakeAstNode<UnaryOpExpr>(callee_->GetToken(),
                                        Token::Get(Tag::kStar), callee_);
   }
 
-  auto func_type{callee_->GetType().GetType()};
+  auto func_type{callee_->GetQualType().GetType()};
   if (!func_type) {
     Error(tok_, "called object is not a function or function pointer: {}",
-          callee_->GetType()->ToString());
+          callee_->GetQualType()->ToString());
   }
 
   auto args_iter{std::begin(args_)};
 
-  for (const auto& param : callee_->GetType()->FuncGetParams()) {
+  for (const auto& param : callee_->GetQualType()->FuncGetParams()) {
     if (args_iter == std::end(args_)) {
       Error(tok_, "too few arguments for function call");
     }
-    *args_iter = Expr::MayCastTo(*args_iter, param->GetType());
+    *args_iter = Expr::MayCastTo(*args_iter, param->GetQualType());
     ++args_iter;
   }
 
-  if (args_iter != std::end(args_) && !callee_->GetType()->FuncIsVarArgs()) {
+  if (args_iter != std::end(args_) &&
+      !callee_->GetQualType()->FuncIsVarArgs()) {
     Error(tok_, "too many arguments for function call");
   }
 
   while (args_iter != std::end(args_)) {
     // 浮点提升
-    if ((*args_iter)->GetType()->IsFloatTy()) {
+    if ((*args_iter)->GetQualType()->IsFloatTy()) {
       *args_iter = Expr::MayCastTo(
           *args_iter, QualType{ArithmeticType::Get(kDouble),
-                               (*args_iter)->GetType().GetTypeQual()});
-    } else if ((*args_iter)->GetType()->IsIntegerTy()) {
+                               (*args_iter)->GetQualType().GetTypeQual()});
+    } else if ((*args_iter)->GetQualType()->IsIntegerTy()) {
       *args_iter = Expr::MayCastTo(
           *args_iter, QualType{ArithmeticType::IntegerPromote(
-                                   (*args_iter)->GetType().GetType()),
-                               (*args_iter)->GetType().GetTypeQual()});
+                                   (*args_iter)->GetQualType().GetType()),
+                               (*args_iter)->GetQualType().GetTypeQual()});
     }
     ++args_iter;
   }
@@ -583,10 +588,10 @@ void FuncCallExpr::TypeCheck() {
 }
 
 std::shared_ptr<Type> FuncCallExpr::GetFuncType() const {
-  if (callee_->GetType()->IsPointerTy()) {
-    return callee_->GetType()->PointerGetElementType().GetType();
+  if (callee_->GetQualType()->IsPointerTy()) {
+    return callee_->GetQualType()->PointerGetElementType().GetType();
   } else {
-    return callee_->GetType().GetType();
+    return callee_->GetQualType().GetType();
   }
 }
 
@@ -597,7 +602,7 @@ AstNodeType Constant::Kind() const { return AstNodeType::kConstantExpr; }
 
 bool Constant::IsLValue() const { return false; }
 
-void Constant::TypeCheck() {}
+void Constant::Check() {}
 
 long Constant::GetIntegerVal() const { return integer_val_; }
 
@@ -616,7 +621,7 @@ AstNodeType Identifier::Kind() const { return AstNodeType::kIdentifier; }
 
 bool Identifier::IsLValue() const { return false; }
 
-void Identifier::TypeCheck() {}
+void Identifier::Check() {}
 
 enum Linkage Identifier::GetLinkage() const { return linkage_; }
 
@@ -643,7 +648,7 @@ AstNodeType Enumerator::Kind() const { return AstNodeType::kEnumerator; }
 
 bool Enumerator::IsLValue() const { return false; }
 
-void Enumerator::TypeCheck() {}
+void Enumerator::Check() {}
 
 std::int32_t Enumerator::GetVal() const { return val_; }
 
@@ -661,7 +666,7 @@ AstNodeType Object::Kind() const { return AstNodeType::kObject; }
 
 bool Object::IsLValue() const { return true; }
 
-void Object::TypeCheck() {}
+void Object::Check() {}
 
 bool Object::IsStatic() const {
   return storage_class_spec_ & kStatic || GetLinkage() != kNone;
@@ -692,13 +697,32 @@ AstNodeType FuncDef::Kind() const { return AstNodeType::kFuncDef; }
 /*
  * FuncDef
  */
-void FuncDef::SetBody(std::shared_ptr<CompoundStmt> body) { body_ = body; }
+void FuncDef::SetBody(std::shared_ptr<CompoundStmt> body) {
+  if (ident_->GetType()->IsComplete()) {
+    Error(ident_->GetToken(), "redefinition of func {}", ident_->GetName());
+  } else {
+    body_ = body;
+    ident_->GetType()->SetComplete(true);
+  }
+}
 
 std::string FuncDef::GetName() const { return ident_->GetName(); }
 
 enum Linkage FuncDef::GetLinkage() const { return ident_->GetLinkage(); }
 
-QualType FuncDef::GetFuncType() const { return ident_->GetType(); }
+QualType FuncDef::GetFuncType() const { return ident_->GetQualType(); }
+
+void FuncDef::Check() {
+  if (std::empty(ident_->GetName())) {
+    Error(ident_->GetToken(), "func def need a name");
+  }
+
+  for (const auto& param : ident_->GetQualType()->FuncGetParams()) {
+    if (param->Anonymous()) {
+      Error(param->GetToken(), "param name omitted");
+    }
+  }
+}
 
 /*
  * TranslationUnit
@@ -708,7 +732,18 @@ AstNodeType TranslationUnit::Kind() const {
 }
 
 void TranslationUnit::AddExtDecl(std::shared_ptr<ExtDecl> ext_decl) {
-  ext_decls_.push_back(ext_decl);
+  // _Static_assert / typedef / e.g. int; / 前向声明等情况
+  if (ext_decl == nullptr) {
+    return;
+  }
+  // 是声明而不是函数定义
+  if (auto p{std::dynamic_pointer_cast<CompoundStmt>(ext_decl)}; p) {
+    for (const auto& decl : p->GetStmts()) {
+      ext_decls_.push_back(decl);
+    }
+  } else {
+    ext_decls_.push_back(ext_decl);
+  }
 }
 
 /*

@@ -14,15 +14,75 @@ Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {}
 
 std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
   auto unit{MakeAstNode<TranslationUnit>()};
-  curr_scope_ = std::make_shared<Scope>(nullptr, kFile);
 
   while (HasNext()) {
-    if (auto decl{ParseExternalDecl()}; decl) {
-      unit->AddExtDecl(decl);
-    }
+    unit->AddExtDecl(ParseExternalDecl());
   }
 
   return unit;
+}
+
+std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
+  std::shared_ptr<CompoundStmt> ext_decl;
+
+  ext_decl = ParseDecl(true);
+
+  if (ext_decl == nullptr) {
+    return nullptr;
+  }
+
+  TryAsm();
+  TryAttributeSpec();
+
+  if (Test(Tag::kLeftBrace)) {
+    auto stmt{ext_decl->GetStmts()};
+    if (std::size(stmt) != 1) {
+      Error(Peek(), "func def error");
+    }
+
+    return ParseFuncDef(std::dynamic_pointer_cast<Declaration>(stmt.front()));
+  } else {
+    Expect(Tag::kSemicolon);
+    return ext_decl;
+  }
+}
+
+std::shared_ptr<FuncDef> Parser::ParseFuncDef(
+    const std::shared_ptr<Declaration>& decl) {
+  auto ident{decl->GetIdent()};
+  if (!ident->GetQualType()->IsFunctionTy()) {
+    Error(Peek(), "func def need func type");
+  }
+
+  EnterFunc(ident);
+  curr_func_def_->SetBody(ParseCompoundStmt(ident->GetType()));
+  auto ret{curr_func_def_};
+  ExitFunc();
+
+  return ret;
+}
+
+std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
+  if (Try(Tag::kStaticAssert)) {
+    ParseStaticAssertDecl();
+    return nullptr;
+  } else {
+    std::uint32_t storage_class_spec{}, func_spec;
+    std::int32_t align{};
+    auto base_type{ParseDeclSpec(&storage_class_spec, &func_spec, &align)};
+
+    if (Try(Tag::kSemicolon)) {
+      return nullptr;
+    } else {
+      if (maybe_func_def) {
+        return ParseInitDeclaratorList(base_type);
+      } else {
+        auto ret{ParseInitDeclaratorList(base_type)};
+        Expect(Tag::kSemicolon);
+        return ret;
+      }
+    }
+  }
 }
 
 bool Parser::HasNext() { return !Peek().TagIs(Tag::kEof); }
@@ -348,27 +408,6 @@ std::shared_ptr<Expr> Parser::ParseMultiplicativeExpr() {
   return lhs;
 }
 
-std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
-  if (Try(Tag::kStaticAssert)) {
-    ParseStaticAssertDecl();
-    return nullptr;
-  } else {
-    auto base_type{ParseDeclSpec(false)};
-
-    if (Try(Tag::kSemicolon)) {
-      return nullptr;
-    } else {
-      if (maybe_func_def) {
-        return ParseInitDeclaratorList(base_type);
-      } else {
-        auto ret{ParseInitDeclaratorList(base_type)};
-        Expect(Tag::kSemicolon);
-        return ret;
-      }
-    }
-  }
-}
-
 std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
     std::shared_ptr<Type>& base_type) {
   std::vector<std::shared_ptr<Stmt>> stmts;
@@ -428,31 +467,30 @@ void Parser::ParseDirectDeclarator(Token& tok,
 // 不支持在 struct / union 中使用 _Alignas
 // 不支持在函数参数列表中使用 storage class specifier
 // 在 struct / union 中和函数参数声明中只能使用 type specifier 和 type qualifier
-std::shared_ptr<Type> Parser::ParseDeclSpec(bool only_spec_and_qual) {
+QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
+                               std::uint32_t* func_spec, std::int32_t* align) {
 #define CheckAndSetStorageClassSpec(spec)                       \
-  if (storage_class_spec != 0) {                                \
+  if (*storage_class_spec != 0) {                               \
     Error(tok, "duplicated storage class specifier");           \
-  } else if (only_spec_and_qual) {                              \
+  } else if (!storage_class_spec) {                             \
     Error(tok, "storage class specifier are not allowed here"); \
   }                                                             \
-  storage_class_spec |= spec;
+  *storage_class_spec |= spec;
 
 #define CheckAndSetFuncSpec(spec)                                       \
-  if (func_spec & spec) {                                               \
+  if (*func_spec & spec) {                                              \
     Warning(tok, "duplicate function specifier declaration specifier"); \
-  } else if (only_spec_and_qual) {                                      \
+  } else if (!func_spec) {                                              \
     Error(tok, "function specifiers are not allowed here");             \
   }                                                                     \
-  func_spec |= spec;
+  *func_spec |= spec;
 
 #define ERROR Error(tok, "two or more data types in declaration specifiers");
 
-  std::uint32_t type_spec{}, type_qualifiers{}, storage_class_spec{},
-      func_spec{};
-  std::int32_t align{};
+  std::uint32_t type_spec{}, type_qual{};
 
   Token tok;
-  std::shared_ptr<Type> type;
+  QualType type;
 
   while (true) {
     tok = Next();
@@ -564,10 +602,10 @@ std::shared_ptr<Type> Parser::ParseDeclSpec(bool only_spec_and_qual) {
 
         // Type qualifier
       case Tag::kConst:
-        type_qualifiers |= kConst;
+        type_qual |= kConst;
         break;
       case Tag::kRestrict:
-        type_qualifiers |= kRestrict;
+        type_qual |= kRestrict;
         break;
       case Tag::kVolatile:
         Error(tok, "Does not support volatile");
@@ -579,17 +617,16 @@ std::shared_ptr<Type> Parser::ParseDeclSpec(bool only_spec_and_qual) {
         CheckAndSetFuncSpec(kNoreturn) break;
 
       case Tag::kAlignas:
-        if (only_spec_and_qual) {
+        if (!align) {
           Error(tok, "_Alignas are not allowed here");
         }
-        align = std::max(ParseAlignas(), align);
+        *align = std::max(ParseAlignas(), *align);
         break;
 
       default: {
         if (type_spec == 0 && IsTypeName(tok)) {
           auto ident{curr_scope_->FindNormal(tok.GetStr())};
-          type = ident->GetType();
-          // TODO ???
+          type = ident->GetQualType();
           type_spec |= kTypedefName;
         } else {
           goto finish;
@@ -601,21 +638,24 @@ std::shared_ptr<Type> Parser::ParseDeclSpec(bool only_spec_and_qual) {
 finish:
   PutBack();
 
-  if (!type_spec) {
-    Error(tok, "type specifier missing: {}", tok.GetStr());
-  }
-
-  if (!type) {
-    type = Type::Get(type_spec);
-  }
-  type->SetAlign(align);
-  type->SetTypeQualifiers(type_qualifiers);
-  type->SetFuncSpec(func_spec);
-  type->SetStorageClassSpec(storage_class_spec);
-
+  // TODO 在什么情况下
   TryAttributeSpec();
 
-  return type;
+  switch (type_spec) {
+    case 0:
+      Error(tok, "type specifier missing: {}", tok.GetStr());
+    case kVoid:
+      type = QualType{VoidType::Get()};
+      break;
+    case kStructUnionSpec:
+    case kEnumSpec:
+    case kTypedefName:
+      break;
+    default:
+      type = QualType{ArithmeticType::Get(type_spec)};
+  }
+
+  return QualType{type.GetType(), type.GetTypeQual() | type_qual};
 
 #undef CheckAndSetStorageClassSpec
 #undef CheckAndSetFuncSpec
@@ -643,13 +683,13 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
         Expect(Tag::kRightBrace);
         return type;
       } else {
-        if (tag->GetType()->IsComplete()) {
+        if (tag->GetQualType()->IsComplete()) {
           Error(tok, "redefinition:{}", tag_name);
         } else {
           ParseStructDeclList(
-              std::dynamic_pointer_cast<StructType>(tag->GetType()));
+              std::dynamic_pointer_cast<StructType>(tag->GetQualType()));
           Expect(Tag::kRightBrace);
-          return tag->GetType();
+          return tag->GetQualType();
         }
       }
     } else {
@@ -657,7 +697,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
       auto tag{curr_scope_->FindTag(tag_name)};
 
       if (tag) {
-        return tag->GetType();
+        return tag->GetQualType();
       }
 
       auto type{StructType::Get(is_struct, true, curr_scope_)};
@@ -786,7 +826,7 @@ std::shared_ptr<Type> Parser::ParseEnumSpec() {
       // 只能是普通声明
       auto tag{curr_scope_->FindTag(tag_name)};
       if (tag) {
-        return tag->GetType();
+        return tag->GetQualType();
       } else {
         Error(tok, "unknown enumeration: {}", tag_name);
       }
@@ -897,7 +937,7 @@ void Parser::ParseDirectDeclaratorTail(std::shared_ptr<Type>& base_type) {
 std::size_t Parser::ParseArrayLength() {
   auto expr{ParseAssignExpr()};
 
-  if (!expr->GetType()->IsIntegerTy()) {
+  if (!expr->GetQualType()->IsIntegerTy()) {
     Error(expr->GetToken(), "The array size must be an integer");
   }
 
@@ -927,7 +967,7 @@ Parser::ParseParamTypeList() {
   }
 
   auto param{ParseParamDecl()};
-  if (param->GetType()->IsVoidTy()) {
+  if (param->GetQualType()->IsVoidTy()) {
     return {{}, false};
   }
 
@@ -940,7 +980,7 @@ Parser::ParseParamTypeList() {
     }
 
     param = ParseParamDecl();
-    if (param->GetType()->IsVoidTy()) {
+    if (param->GetQualType()->IsVoidTy()) {
       Error("error");
     }
     params.push_back(param);
@@ -1061,9 +1101,9 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
     auto ident{curr_scope_->FindNormalInCurrScope(name)};
     if (ident) {
       // 如果两次定义的类型兼容是可以的
-      if (!type->Compatible(ident->GetType())) {
+      if (!type->Compatible(ident->GetQualType())) {
         Error(tok, "typedef redefinition with different types('{}' vs '{}'",
-              type->ToString(), ident->GetType()->ToString());
+              type->ToString(), ident->GetQualType()->ToString());
       } else {
         Warning(tok, "Typedef redefinition");
       }
@@ -1127,7 +1167,8 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(
           ident->GetName());
   }
 
-  if (!ident->GetType()->IsComplete() && !ident->GetType()->IsArrayTy()) {
+  if (!ident->GetQualType()->IsComplete() &&
+      !ident->GetQualType()->IsArrayTy()) {
     Error(ident->GetToken(),
           "variable '{}' has initializer but incomplete type",
           ident->GetName());
@@ -1136,52 +1177,6 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(
   std::set<Initializer> inits;
   // ParseInitializer(inits, ident->GetType(), 0, false, true);
   return inits;
-}
-
-std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
-  std::shared_ptr<CompoundStmt> ext_decl;
-
-  ext_decl = ParseDecl(true);
-
-  if (ext_decl == nullptr) {
-    return nullptr;
-  }
-
-  TryAsm();
-  TryAttributeSpec();
-
-  if (Test(Tag::kLeftBrace)) {
-    auto stmt{ext_decl->GetStmts()};
-    if (std::size(stmt) != 1) {
-      Error(Peek(), "func def error");
-    }
-
-    auto ident{
-        std::dynamic_pointer_cast<Declaration>(stmt.front())->GetIdent()};
-    EnterFunc(ident);
-
-    if (curr_func_def_->GetFuncType()->IsComplete()) {
-      Error(ident->GetToken(), "redefinition of {}", ident->GetName());
-    }
-
-    ident->GetType()->SetComplete(true);
-    for (const auto& param : ident->GetType()->GetFunctionParams()) {
-      if (param->Anonymous()) {
-        Error(param->GetToken(), "param name omitted");
-      }
-    }
-
-    curr_func_def_->SetBody(ParseCompoundStmt(ident->GetType()));
-
-    auto ret{curr_func_def_};
-
-    ExitFunc();
-
-    return ret;
-  } else {
-    Expect(Tag::kSemicolon);
-    return ext_decl;
-  }
 }
 
 std::shared_ptr<Expr> Parser::ParseCastExpr() {
@@ -1281,7 +1276,7 @@ std::shared_ptr<Expr> Parser::ParseSizeof() {
     Expect(Tag::kRightParen);
   } else {
     auto expr{ParseUnaryExpr()};
-    type = expr->GetType();
+    type = expr->GetQualType();
   }
 
   if (!type->IsComplete()) {
@@ -1336,7 +1331,7 @@ std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
         auto member{Expect(Tag::kIdentifier)};
         auto member_name{member.GetStr()};
 
-        auto type{expr->GetType()};
+        auto type{expr->GetQualType()};
         if (!type->IsStructTy()) {
           Error(tok, "an struct/union expected");
         }
@@ -1353,7 +1348,7 @@ std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
         auto member{Expect(Tag::kIdentifier)};
         auto member_name{member.GetStr()};
 
-        auto type{expr->GetType()};
+        auto type{expr->GetQualType()};
         if (!type->IsStructTy()) {
           Error(tok, "an struct/union expected");
         }
@@ -1687,7 +1682,7 @@ std::shared_ptr<IfStmt> Parser::ParseIfStmt() {
 
   auto tok{Peek()};
   auto cond{ParseExpr()};
-  if (!cond->GetType()->IsScalarTy()) {
+  if (!cond->GetQualType()->IsScalarTy()) {
     Error(tok, "expect scalar");
   }
 
@@ -1707,7 +1702,7 @@ std::shared_ptr<WhileStmt> Parser::ParseWhileStmt() {
 
   auto tok{Peek()};
   auto cond{ParseExpr()};
-  if (!cond->GetType()->IsScalarTy()) {
+  if (!cond->GetQualType()->IsScalarTy()) {
     Error(tok, "expect scalar");
   }
   Expect(Tag::kRightParen);
@@ -1725,7 +1720,7 @@ std::shared_ptr<DoWhileStmt> Parser::ParseDoWhileStmt() {
 
   auto tok{Peek()};
   auto cond{ParseExpr()};
-  if (!cond->GetType()->IsScalarTy()) {
+  if (!cond->GetQualType()->IsScalarTy()) {
     Error(tok, "expect scalar");
   }
   Expect(Tag::kRightParen);
@@ -1795,14 +1790,14 @@ std::shared_ptr<CaseStmt> Parser::ParseCaseStmt() {
   Expect(Tag::kCase);
 
   auto expr{ParseExpr()};
-  if (!expr->GetType()->IsIntegerTy()) {
+  if (!expr->GetQualType()->IsIntegerTy()) {
     Error(expr->GetToken(), "expect integer");
   }
   auto val{CalcExpr<std::int32_t>{}.Calc(expr)};
 
   if (Try(Tag::kEllipsis)) {
     auto expr2{ParseExpr()};
-    if (!expr2->GetType()->IsIntegerTy()) {
+    if (!expr2->GetQualType()->IsIntegerTy()) {
       Error(expr2->GetToken(), "expect integer");
     }
     auto val2{CalcExpr<std::int32_t>{}.Calc(expr)};
@@ -1889,7 +1884,7 @@ bool Parser::IsDecl(const Token& tok) {
   return false;
 }
 
-void Parser::EnterFunc(std::shared_ptr<Identifier> ident) {
+void Parser::EnterFunc(const std::shared_ptr<Identifier>& ident) {
   curr_func_def_ = MakeAstNode<FuncDef>(ident);
 }
 

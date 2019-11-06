@@ -22,6 +22,13 @@ class Parser {
 
  private:
   std::shared_ptr<ExtDecl> ParseExternalDecl();
+  std::shared_ptr<FuncDef> ParseFuncDef(
+      const std::shared_ptr<Declaration> &decl);
+
+  std::shared_ptr<CompoundStmt> ParseDecl(bool maybe_func_def = false);
+  QualType ParseDeclSpec(std::uint32_t *storage_class_spec,
+                         std::uint32_t *func_spec, std::int32_t *align);
+
   std::shared_ptr<Type> ParseStructUnionSpec(bool is_struct);
   std::shared_ptr<Type> ParseEnumSpec();
   void ParseEnumerator(std::shared_ptr<Type> type);
@@ -40,9 +47,8 @@ class Parser {
   void ParseTypeQualList(QualType &type);
   void ParseDirectAbstractDeclarator(QualType &type);
 
-  std::shared_ptr<CompoundStmt> ParseDecl(bool maybe_func_def = false);
   void ParseStaticAssertDecl();
-  QualType ParseDeclSpec(bool only_spec_and_qual);
+
   void ParseDeclarator(Token &tok, QualType &base_type);
   void ParseDirectDeclarator(Token &tok, QualType &base_type);
   void ParseDirectDeclaratorTail(QualType &base_type);
@@ -94,13 +100,14 @@ class Parser {
 
   void EnterBlock(QualType func_type = {});
   void ExitBlock();
-  void EnterFunc(std::shared_ptr<Identifier> ident);
+  void EnterFunc(const std::shared_ptr<Identifier> &ident);
   void ExitFunc();
   std::shared_ptr<Stmt> ParseStmt();
   std::shared_ptr<LabelStmt> ParseLabelStmt();
   std::shared_ptr<CaseStmt> ParseCaseStmt();
   std::shared_ptr<DefaultStmt> ParseDefaultStmt();
-  std::shared_ptr<CompoundStmt> ParseCompoundStmt(QualType func_type = {});
+  std::shared_ptr<CompoundStmt> ParseCompoundStmt(
+      std::shared_ptr<Type> func_type = nullptr);
   std::shared_ptr<ExprStmt> ParseExprStmt();
   std::shared_ptr<IfStmt> ParseIfStmt();
   std::shared_ptr<SwitchStmt> ParseSwitchStmt();
@@ -122,7 +129,7 @@ class Parser {
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
-  std::shared_ptr<Scope> curr_scope_;
+  std::shared_ptr<Scope> curr_scope_{std::make_shared<Scope>(nullptr, kFile)};
   std::map<std::string, std::shared_ptr<LabelStmt>> curr_labels_;
   std::shared_ptr<FuncDef> curr_func_def_;
 };

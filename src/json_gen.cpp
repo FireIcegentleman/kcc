@@ -323,9 +323,9 @@ void JsonGen::Visit(const TypeCastExpr& node) {
 
 void JsonGen::Visit(const Constant& node) {
   auto str{AstNodeTypes::ToString(node.Kind()).append(' ')};
-  if (node.GetType()->IsIntegerTy()) {
+  if (node.GetQualType()->IsIntegerTy()) {
     str.append(QString::fromStdString(std::to_string(node.integer_val_)));
-  } else if (node.GetType()->IsFloatPointTy()) {
+  } else if (node.GetQualType()->IsFloatPointTy()) {
     str.append(QString::fromStdString(std::to_string(node.float_point_val_)));
   } else {
     str.append(QString::fromStdString(node.str_val_));
@@ -434,7 +434,7 @@ void JsonGen::Visit(const Identifier& node) {
   QJsonArray children;
 
   QJsonObject type;
-  type["name"] = QString::fromStdString("type: " + node.GetType()->ToString());
+  type["name"] = QString::fromStdString("type: " + node.GetQualType()->ToString());
   children.append(type);
 
   QJsonObject name;
@@ -453,7 +453,7 @@ void JsonGen::Visit(const Object& node) {
   QJsonArray children;
 
   QJsonObject type;
-  type["name"] = QString::fromStdString("type: " + node.GetType()->ToString());
+  type["name"] = QString::fromStdString("type: " + node.GetQualType()->ToString());
   children.append(type);
 
   QJsonObject name;
@@ -515,7 +515,7 @@ void JsonGen::Visit(const Declaration& node) {
 
   QJsonObject type;
   type["name"] =
-      QString::fromStdString("type: " + node.GetIdent()->GetType()->ToString());
+      QString::fromStdString("type: " + node.GetIdent()->GetQualType()->ToString());
   children.append(type);
 
   QJsonObject name;

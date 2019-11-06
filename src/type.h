@@ -114,6 +114,7 @@ class Type : public std::enable_shared_from_this<Type> {
   virtual std::int32_t GetAlign() const = 0;
   virtual std::string ToString() const = 0;
   // 这里忽略了 cvr
+  // 若涉及同一对象或函数的二个声明不使用兼容类型，则程序的行为未定义。
   virtual bool Compatible(const std::shared_ptr<Type>& other) const = 0;
   virtual bool Equal(const std::shared_ptr<Type>& other) const = 0;
 
@@ -189,6 +190,20 @@ class Type : public std::enable_shared_from_this<Type> {
 
  private:
   mutable bool complete_{false};
+};
+
+class VoidType : public Type {
+ public:
+  static std::shared_ptr<VoidType> Get();
+
+  virtual std::int32_t GetWidth() const override;
+  virtual std::int32_t GetAlign() const override;
+  virtual std::string ToString() const override;
+  virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
+  virtual bool Equal(const std::shared_ptr<Type>& other) const override;
+
+ private:
+  VoidType();
 };
 
 class ArithmeticType : public Type {

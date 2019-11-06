@@ -117,8 +117,8 @@ void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
       break;
     }
     case Tag::kPercent: {
-      if (!node.lhs_->GetType()->IsIntegerTy() ||
-          !node.rhs_->GetType()->IsIntegerTy()) {
+      if (!node.lhs_->GetQualType()->IsIntegerTy() ||
+          !node.rhs_->GetQualType()->IsIntegerTy()) {
         Error(node.lhs_->GetToken(), "Need integer type");
       }
       auto lhs{I_L};
@@ -178,7 +178,7 @@ void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
 
 template <typename T>
 void CalcExpr<T>::Visit(const ConditionOpExpr& node) {
-  auto cond_type{node.GetType()};
+  auto cond_type{node.GetQualType()};
   bool flag{};
 
   if (cond_type->IsIntegerTy()) {
@@ -201,7 +201,7 @@ void CalcExpr<T>::Visit(const ConditionOpExpr& node) {
 
 template <typename T>
 void CalcExpr<T>::Visit(const TypeCastExpr& node) {
-  if (node.expr_->GetType()->IsArithmeticTy() && node.to_->IsIntegerTy()) {
+  if (node.expr_->GetQualType()->IsArithmeticTy() && node.to_->IsIntegerTy()) {
     val_ = CalcExpr<T>{}.Calc(node.expr_);
   } else {
     Error(node.expr_->GetToken(), "expect constant expression");
@@ -210,9 +210,9 @@ void CalcExpr<T>::Visit(const TypeCastExpr& node) {
 
 template <typename T>
 void CalcExpr<T>::Visit(const Constant& node) {
-  if (node.GetType()->IsIntegerTy()) {
+  if (node.GetQualType()->IsIntegerTy()) {
     val_ = static_cast<T>(node.GetIntegerVal());
-  } else if (node.GetType()->IsFloatTy()) {
+  } else if (node.GetQualType()->IsFloatTy()) {
     val_ = static_cast<T>(node.GetFloatPointVal());
   } else {
     assert(false);

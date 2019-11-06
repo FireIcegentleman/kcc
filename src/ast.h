@@ -74,6 +74,7 @@ class AstNode {
 
   virtual AstNodeType Kind() const = 0;
   virtual void Accept(Visitor& visitor) const = 0;
+  virtual void Check() = 0;
 };
 
 using ExtDecl = AstNode;
@@ -83,12 +84,13 @@ class Expr : public AstNode {
   explicit Expr(const Token& tok, QualType type = {});
 
   virtual bool IsLValue() const = 0;
-  virtual void TypeCheck() = 0;
 
   Token GetToken() const;
   void SetToken(const Token& tok);
 
-  QualType GetType() const;
+  QualType GetQualType() const;
+  std::shared_ptr<Type> GetType() const;
+
   bool IsConst() const;
   bool IsRestrict() const;
 
@@ -126,24 +128,24 @@ class BinaryOpExpr : public Expr {
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
 
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
  private:
   // 通常算术转换
   std::shared_ptr<Type> Convert();
 
-  void AssignOpTypeCheck();
-  void AddOpTypeCheck();
-  void SubOpTypeCheck();
-  void MultiOpTypeCheck();
-  void BitwiseOpTypeCheck();
-  void ShiftOpTypeCheck();
-  void LogicalOpTypeCheck();
-  void EqualityOpTypeCheck();
-  void RelationalOpTypeCheck();
-  void IndexOpTypeCheck();
-  void MemberRefOpTypeCheck();
-  void CommaOpTypeCheck();
+  void AssignOpCheck();
+  void AddOpCheck();
+  void SubOpCheck();
+  void MultiOpCheck();
+  void BitwiseOpCheck();
+  void ShiftOpCheck();
+  void LogicalOpCheck();
+  void EqualityOpCheck();
+  void RelationalOpCheck();
+  void IndexOpCheck();
+  void MemberRefOpCheck();
+  void CommaOpCheck();
 
   Tag op_;
   std::shared_ptr<Expr> lhs_;
@@ -169,15 +171,15 @@ class UnaryOpExpr : public Expr {
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
 
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
  private:
-  void IncDecOpTypeCheck();
-  void UnaryAddSubOpTypeCheck();
-  void NotOpTypeCheck();
-  void LogicNotOpTypeCheck();
-  void DerefOpTypeCheck();
-  void AddrOpTypeCheck();
+  void IncDecOpCheck();
+  void UnaryAddSubOpCheck();
+  void NotOpCheck();
+  void LogicNotOpCheck();
+  void DerefOpCheck();
+  void AddrOpCheck();
 
   Tag op_;
   std::shared_ptr<Expr> expr_;
@@ -195,7 +197,7 @@ class TypeCastExpr : public Expr {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> expr_;
@@ -219,7 +221,7 @@ class ConditionOpExpr : public Expr {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
   // 通常算术转换
   std::shared_ptr<Type> Convert();
@@ -241,7 +243,7 @@ class FuncCallExpr : public Expr {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
   std::shared_ptr<Type> GetFuncType() const;
 
@@ -269,7 +271,7 @@ class Constant : public Expr {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
   long GetIntegerVal() const;
   double GetFloatPointVal() const;
@@ -305,7 +307,7 @@ class Identifier : public Expr {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
   enum Linkage GetLinkage() const;
   void SetLinkage(enum Linkage linkage);
@@ -331,7 +333,7 @@ class Enumerator : public Identifier {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
   std::int32_t GetVal() const;
 
@@ -359,7 +361,7 @@ class Object : public Identifier {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
-  virtual void TypeCheck() override;
+  virtual void Check() override;
 
   bool IsStatic() const;
   void SetStorageClassSpec(std::uint32_t storage_class_spec);
@@ -391,6 +393,7 @@ class LabelStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Identifier> ident_;
@@ -406,6 +409,7 @@ class IfStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> cond_;
@@ -422,6 +426,7 @@ class ReturnStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> expr_;
@@ -437,6 +442,7 @@ class CompoundStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
   std::shared_ptr<Scope> GetScope();
   std::vector<std::shared_ptr<Stmt>> GetStmts();
@@ -455,6 +461,7 @@ class ExprStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> expr_;
@@ -469,6 +476,7 @@ class WhileStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> cond_;
@@ -484,6 +492,7 @@ class DoWhileStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> cond_;
@@ -501,6 +510,7 @@ class ForStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> init_, cond_, inc_;
@@ -519,6 +529,7 @@ class CaseStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::int32_t case_value_{};
@@ -537,6 +548,7 @@ class DefaultStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Stmt> block_;
@@ -551,6 +563,7 @@ class SwitchStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Expr> cond_;
@@ -564,6 +577,7 @@ class BreakStmt : public Stmt {
  public:
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 };
 
 class ContinueStmt : public Stmt {
@@ -573,6 +587,7 @@ class ContinueStmt : public Stmt {
  public:
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 };
 
 class GotoStmt : public Stmt {
@@ -584,6 +599,7 @@ class GotoStmt : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
  private:
   std::shared_ptr<Identifier> ident_;
@@ -616,6 +632,7 @@ class Declaration : public Stmt {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
   void AddInit(const Initializer& init);
   void AddInits(const std::set<Initializer>& inits) { inits_ = inits; }
@@ -635,6 +652,7 @@ class TranslationUnit : public AstNode {
  public:
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
   void AddExtDecl(std::shared_ptr<ExtDecl> ext_decl);
 
@@ -651,6 +669,7 @@ class FuncDef : public ExtDecl {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
 
   void SetBody(std::shared_ptr<CompoundStmt> body);
   std::string GetName() const;
@@ -665,9 +684,7 @@ class FuncDef : public ExtDecl {
 template <typename T, typename... Args>
 std::shared_ptr<T> MakeAstNode(Args&&... args) {
   auto t{std::make_shared<T>(std::forward<Args>(args)...)};
-  if (auto p{std::dynamic_pointer_cast<Expr>(t)}; p) {
-    p->TypeCheck();
-  }
+  t->Check();
   return t;
 }
 

@@ -10,12 +10,12 @@ void Scope::PrintCurrScope() const {
   for (const auto& item : normal_) {
     std::cout << "func / object / typedef / enumerator :\n";
     std::cout << item.first << ' ';
-    std::cout << item.second->GetType()->ToString() << '\n';
+    std::cout << item.second->GetQualType()->ToString() << '\n';
   }
   std::cout << "struct / union / enum :\n";
   for (const auto& item : tags_) {
     std::cout << item.first << ' ';
-    std::cout << item.second->GetType()->ToString() << '\n';
+    std::cout << item.second->GetQualType()->ToString() << '\n';
   }
 }
 
