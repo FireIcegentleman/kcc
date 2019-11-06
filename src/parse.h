@@ -28,6 +28,16 @@ class Parser {
   std::shared_ptr<CompoundStmt> ParseDecl(bool maybe_func_def = false);
   QualType ParseDeclSpec(std::uint32_t *storage_class_spec,
                          std::uint32_t *func_spec, std::int32_t *align);
+  std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(
+      QualType &base_type, std::uint32_t storage_class_spec,
+      std::uint32_t func_spec, std::int32_t align);
+  std::shared_ptr<Declaration> ParseInitDeclarator(
+      QualType &base_type, std::uint32_t storage_class_spec,
+      std::uint32_t func_spec, std::int32_t align);
+  void ParseDeclarator(Token &tok, QualType &base_type);
+  void ParseDirectDeclarator(Token &tok, QualType &base_type);
+  void ParseDirectDeclaratorTail(QualType &base_type);
+  void ParsePointer(QualType &type);
 
   std::shared_ptr<Type> ParseStructUnionSpec(bool is_struct);
   std::shared_ptr<Type> ParseEnumSpec();
@@ -39,23 +49,21 @@ class Parser {
   std::pair<std::vector<std::shared_ptr<Object>>, bool> ParseParamTypeList();
   bool IsTypeName(const Token &tok);
   bool IsDecl(const Token &tok);
-  std::shared_ptr<Type> ParseTypeName();
+  QualType ParseTypeName();
   void ParseStructDeclList(std::shared_ptr<StructType> base_type);
   std::shared_ptr<Object> ParseParamDecl();
-  void ParseAbstractDeclarator(std::shared_ptr<Type> &type);
-  void ParsePointer(std::shared_ptr<Type> &type);
-  void ParseTypeQualList(QualType &type);
+  void ParseAbstractDeclarator(QualType &type);
+
+  std::uint32_t ParseTypeQualList();
   void ParseDirectAbstractDeclarator(QualType &type);
 
   void ParseStaticAssertDecl();
 
-  void ParseDeclarator(Token &tok, QualType &base_type);
-  void ParseDirectDeclarator(Token &tok, QualType &base_type);
-  void ParseDirectDeclaratorTail(QualType &base_type);
-  std::shared_ptr<CompoundStmt> ParseInitDeclaratorList(QualType &base_type);
-  std::shared_ptr<Declaration> ParseInitDeclarator(QualType &base_type);
   std::shared_ptr<Declaration> MakeDeclarator(const Token &tok,
-                                              const QualType &type);
+                                              const QualType &type,
+                                              std::uint32_t storage_class_spec,
+                                              std::uint32_t func_spec,
+                                              std::int32_t align);
   std::shared_ptr<Expr> ParseConstantExpr();
   std::shared_ptr<Constant> ParseStringLiteral(bool handle_escape);
   std::set<Initializer> ParseInitDeclaratorSub(
@@ -98,7 +106,7 @@ class Parser {
   std::shared_ptr<Expr> ParseCommaExpr();
   std::shared_ptr<Expr> ParseExpr();
 
-  void EnterBlock(QualType func_type = {});
+  void EnterBlock(std::shared_ptr<Type> func_type = nullptr);
   void ExitBlock();
   void EnterFunc(const std::shared_ptr<Identifier> &ident);
   void ExitFunc();

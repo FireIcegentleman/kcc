@@ -192,7 +192,7 @@ class TypeCastExpr : public Expr {
   friend class CodeGen;
 
  public:
-  TypeCastExpr(std::shared_ptr<Expr> expr, std::shared_ptr<Type> to);
+  TypeCastExpr(std::shared_ptr<Expr> expr, QualType to);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -355,7 +355,7 @@ class Object : public Identifier {
   friend class CodeGen;
 
  public:
-  Object(const Token& tok, QualType type, std::uint32_t storage_class_spec,
+  Object(const Token& tok, QualType type, std::uint32_t storage_class_spec = 0,
          enum Linkage linkage = kNone, bool anonymous = false);
 
   virtual AstNodeType Kind() const override;
@@ -437,6 +437,7 @@ class CompoundStmt : public Stmt {
   friend class CodeGen;
 
  public:
+  CompoundStmt() = default;
   explicit CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts,
                         std::shared_ptr<Scope> scope);
 
@@ -446,6 +447,7 @@ class CompoundStmt : public Stmt {
 
   std::shared_ptr<Scope> GetScope();
   std::vector<std::shared_ptr<Stmt>> GetStmts();
+  void AddStmt(std::shared_ptr<Stmt> stmt);
 
  private:
   std::vector<std::shared_ptr<Stmt>> stmts_;

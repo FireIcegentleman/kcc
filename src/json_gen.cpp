@@ -254,9 +254,10 @@ void JsonGen::GenJson(const std::shared_ptr<TranslationUnit>& root,
 
 void JsonGen::Visit(const UnaryOpExpr& node) {
   QJsonObject root;
-  root["name"] = AstNodeTypes::ToString(node.Kind())
-                     .append(' ')
-                     .append(QString::fromStdString(ToString(node.op_)));
+  root["name"] =
+      AstNodeTypes::ToString(node.Kind())
+          .append(' ')
+          .append(QString::fromStdString(TokenTag::ToString(node.op_)));
 
   QJsonArray children;
   node.expr_->Accept(*this);
@@ -268,9 +269,10 @@ void JsonGen::Visit(const UnaryOpExpr& node) {
 
 void JsonGen::Visit(const BinaryOpExpr& node) {
   QJsonObject root;
-  root["name"] = AstNodeTypes::ToString(node.Kind())
-                     .append(' ')
-                     .append(QString::fromStdString(ToString(node.op_)));
+  root["name"] =
+      AstNodeTypes::ToString(node.Kind())
+          .append(' ')
+          .append(QString::fromStdString(TokenTag::ToString(node.op_)));
 
   QJsonArray children;
 
@@ -339,10 +341,9 @@ void JsonGen::Visit(const Constant& node) {
 
 void JsonGen::Visit(const Enumerator& node) {
   QJsonObject root;
-  root["name"] =
-      AstNodeTypes::ToString(node.Kind())
-          .append(' ')
-          .append(QString::fromStdString(std::to_string(node.val_->integer_val_)));
+  root["name"] = AstNodeTypes::ToString(node.Kind())
+                     .append(' ')
+                     .append(QString::fromStdString(std::to_string(node.val_)));
 
   result_ = root;
 }
@@ -434,7 +435,8 @@ void JsonGen::Visit(const Identifier& node) {
   QJsonArray children;
 
   QJsonObject type;
-  type["name"] = QString::fromStdString("type: " + node.GetQualType()->ToString());
+  type["name"] =
+      QString::fromStdString("type: " + node.GetQualType()->ToString());
   children.append(type);
 
   QJsonObject name;
@@ -453,7 +455,8 @@ void JsonGen::Visit(const Object& node) {
   QJsonArray children;
 
   QJsonObject type;
-  type["name"] = QString::fromStdString("type: " + node.GetQualType()->ToString());
+  type["name"] =
+      QString::fromStdString("type: " + node.GetQualType()->ToString());
   children.append(type);
 
   QJsonObject name;
@@ -514,8 +517,8 @@ void JsonGen::Visit(const Declaration& node) {
   QJsonArray children;
 
   QJsonObject type;
-  type["name"] =
-      QString::fromStdString("type: " + node.GetIdent()->GetQualType()->ToString());
+  type["name"] = QString::fromStdString(
+      "type: " + node.GetIdent()->GetQualType()->ToString());
   children.append(type);
 
   QJsonObject name;

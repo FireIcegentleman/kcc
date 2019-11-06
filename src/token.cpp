@@ -35,8 +35,8 @@ std::string Token::ToString() const {
                   std::to_string(location_.row) + ":" +
                   std::to_string(location_.column) + ">");
 
-  return fmt::format("{:<25}str: {:<25}loc: {:<25}", kcc::ToString(tag_), str_,
-                     loc);
+  return fmt::format("{:<25}str: {:<25}loc: {:<25}", TokenTag::ToString(tag_),
+                     str_, loc);
 }
 
 bool Token::IsTypeSpecQual() const {

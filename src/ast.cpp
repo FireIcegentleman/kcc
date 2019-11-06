@@ -472,7 +472,7 @@ void UnaryOpExpr::AddrOpCheck() {
 /*
  * TypeCastExpr
  */
-TypeCastExpr::TypeCastExpr(std::shared_ptr<Expr> expr, std::shared_ptr<Type> to)
+TypeCastExpr::TypeCastExpr(std::shared_ptr<Expr> expr, QualType to)
     : Expr(expr->GetToken(), to), expr_{expr}, to_{to} {}
 
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
@@ -544,8 +544,8 @@ void FuncCallExpr::Check() {
             callee_->GetQualType()->ToString());
     }
 
-    callee_ = MakeAstNode<UnaryOpExpr>(callee_->GetToken(),
-                                       Token::Get(Tag::kStar), callee_);
+    callee_ =
+        MakeAstNode<UnaryOpExpr>(callee_->GetToken(), Tag::kStar, callee_);
   }
 
   auto func_type{callee_->GetQualType().GetType()};
@@ -713,10 +713,6 @@ enum Linkage FuncDef::GetLinkage() const { return ident_->GetLinkage(); }
 QualType FuncDef::GetFuncType() const { return ident_->GetQualType(); }
 
 void FuncDef::Check() {
-  if (std::empty(ident_->GetName())) {
-    Error(ident_->GetToken(), "func def need a name");
-  }
-
   for (const auto& param : ident_->GetQualType()->FuncGetParams()) {
     if (param->Anonymous()) {
       Error(param->GetToken(), "param name omitted");
@@ -732,7 +728,7 @@ AstNodeType TranslationUnit::Kind() const {
 }
 
 void TranslationUnit::AddExtDecl(std::shared_ptr<ExtDecl> ext_decl) {
-  // _Static_assert / typedef / e.g. int; / 前向声明等情况
+  // _Static_assert / e.g. int;
   if (ext_decl == nullptr) {
     return;
   }
@@ -745,6 +741,8 @@ void TranslationUnit::AddExtDecl(std::shared_ptr<ExtDecl> ext_decl) {
     ext_decls_.push_back(ext_decl);
   }
 }
+
+void TranslationUnit::Check() {}
 
 /*
  * LabelStmt
@@ -769,6 +767,8 @@ ReturnStmt::ReturnStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
 
 AstNodeType ReturnStmt::Kind() const { return AstNodeType::kReturnStmt; }
 
+void ReturnStmt::Check() {}
+
 /*
  * CompoundStmt
  */
@@ -782,6 +782,13 @@ std::shared_ptr<Scope> CompoundStmt::GetScope() { return scope_; }
 
 std::vector<std::shared_ptr<Stmt>> CompoundStmt::GetStmts() { return stmts_; }
 
+void CompoundStmt::AddStmt(std::shared_ptr<Stmt> stmt) {
+  // 非 typedef
+  if (stmt) {
+    stmts_.push_back(stmt);
+  }
+}
+
 /*
  * Declaration
  */
@@ -790,6 +797,8 @@ AstNodeType Declaration::Kind() const { return AstNodeType::kDeclaration; }
 void Declaration::AddInit(const Initializer& init) { inits_.insert(init); }
 
 bool Declaration::HasInit() const { return std::size(inits_); }
+
+void Declaration::Check() {}
 
 bool operator<(const Initializer& lhs, const Initializer& rhs) {
   return lhs.offset_ < rhs.offset_;
@@ -810,12 +819,16 @@ AstNodeType ContinueStmt::Kind() const { return AstNodeType::kContinueStmt; }
  */
 AstNodeType GotoStmt::Kind() const { return AstNodeType::kGotoStmt; }
 
+void GotoStmt::Check() {}
+
 /*
  * ExprStmt
  */
 ExprStmt::ExprStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
 
 AstNodeType ExprStmt::Kind() const { return AstNodeType::kExprStmt; }
+
+void ExprStmt::Check() {}
 
 /*
  * WhileStmt
@@ -824,6 +837,8 @@ WhileStmt::WhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block)
     : cond_{cond}, block_{block} {}
 
 AstNodeType WhileStmt::Kind() const { return AstNodeType::kWhileStmt; }
+
+void WhileStmt::Check() {}
 
 /*
  * DoWhileStmt
@@ -834,6 +849,8 @@ DoWhileStmt::DoWhileStmt(std::shared_ptr<Expr> cond,
 
 AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
 
+void DoWhileStmt::Check() {}
+
 /*
  * ForStmt
  */
@@ -843,6 +860,8 @@ ForStmt::ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
     : init_{init}, cond_{cond}, inc_{inc}, block_{block}, decl_{decl} {}
 
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
+
+void ForStmt::Check() {}
 
 /*
  * CaseStmt
@@ -858,12 +877,16 @@ CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2,
 
 AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
+void CaseStmt::Check() {}
+
 /*
  * DefaultStmt
  */
 AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
 
 DefaultStmt::DefaultStmt(std::shared_ptr<Stmt> block) : block_{block} {}
+
+void DefaultStmt::Check() {}
 
 /*
  * SwitchStmt
@@ -872,5 +895,17 @@ SwitchStmt::SwitchStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block)
     : cond_{cond}, block_{block} {}
 
 AstNodeType SwitchStmt::Kind() const { return AstNodeType::kSwitchStmt; }
+
+void ContinueStmt::Check() {}
+
+void BreakStmt::Check() {}
+
+void SwitchStmt::Check() {}
+
+void CompoundStmt::Check() {}
+
+void IfStmt::Check() {}
+
+void LabelStmt::Check() {}
 
 }  // namespace kcc

@@ -19,7 +19,7 @@ void PrintWarnings() {
   fmt::print(fmt::fg(fmt::terminal_color::red), fmt("{}:{}:{}: error: "),
              loc.file_name, loc.row, loc.column);
   fmt::print(fmt::fg(fmt::terminal_color::red), "expected {}, but got {}",
-             ToString(tag), ToString(actual.GetTag()));
+             TokenTag::ToString(tag), TokenTag::ToString(actual.GetTag()));
   fmt::print("\n");
 
   std::string str;

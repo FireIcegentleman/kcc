@@ -49,7 +49,7 @@ class CodeGen : public Visitor {
   virtual void Visit(const GotoStmt &node) override;
 
  private:
-  llvm::Value *result_{};
+  // llvm::Value *result_{};
 };
 
 }  // namespace kcc
