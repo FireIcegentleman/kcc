@@ -28,5 +28,7 @@
 #include <stdio.h>
 
 int main(void) {
-  printf("Hello World!");
+  int a2;
+  int b2;
+  printf("%d\n", a2 && b2);
 }

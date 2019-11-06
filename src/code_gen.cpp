@@ -103,6 +103,22 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
 }
 
 void CodeGen::Visit(const BinaryOpExpr& node) {
+  switch (node.op_) {
+    case Tag::kPipePipe:
+      result_ = LogicOrOp(node);
+      return;
+    case Tag::kAmpAmp:
+      result_ = LogicAndOp(node);
+      return;
+    case Tag::kEqual:
+      result_ = AssignOp(node);
+    case Tag::kArrow:
+      result_ = Builder.CreateLoad(GetPtr(node));
+      return;
+    default:
+      break;
+  }
+
   node.lhs_->Accept(*this);
   auto lhs{result_};
   node.rhs_->Accept(*this);
@@ -421,6 +437,8 @@ llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
                              bool is_unsigned) {
   if (to->isIntegerTy(1)) {
     return CastToBool(value);
+  } else if (value->getType()->isIntegerTy(1) && to->isIntegerTy()) {
+    return Builder.CreateZExtOrTrunc(value, to);
   }
 
   if (IsIntegerTy(value) && to->isIntegerTy()) {
@@ -449,6 +467,7 @@ llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
     return value;
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
@@ -583,6 +602,7 @@ llvm::Value* CodeGen::EqualOp(llvm::Value* lhs, llvm::Value* rhs) {
     return CastTo(value, Builder.getInt32Ty(), false);
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
@@ -595,6 +615,7 @@ llvm::Value* CodeGen::NotEqualOp(llvm::Value* lhs, llvm::Value* rhs) {
     return CastTo(value, Builder.getInt32Ty(), false);
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
@@ -605,6 +626,7 @@ llvm::Value* CodeGen::CastToBool(llvm::Value* value) {
     return Builder.CreateFCmpONE(value, GetZero(value->getType()));
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
@@ -635,6 +657,7 @@ llvm::Value* CodeGen::GetZero(llvm::Type* type) {
     return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
@@ -647,7 +670,58 @@ std::int32_t CodeGen::FloatPointRank(llvm::Type* type) const {
     return 2;
   } else {
     assert(false);
+    return 0;
   }
 }
+
+llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
+  auto block{Builder.GetInsertBlock()};
+  auto parent_func{block->getParent()};
+  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+
+  node.lhs_->Accept(*this);
+  result_ = CastToBool(result_);
+  Builder.CreateCondBr(result_, after_block, rhs_block);
+
+  Builder.SetInsertPoint(rhs_block);
+  node.rhs_->Accept(*this);
+  result_ = CastToBool(result_);
+  Builder.CreateBr(after_block);
+
+  Builder.SetInsertPoint(after_block);
+  auto phi{Builder.CreatePHI(Builder.getInt1Ty(), 2)};
+  phi->addIncoming(Builder.getTrue(), block);
+  phi->addIncoming(result_, rhs_block);
+
+  return CastTo(phi, Builder.getInt32Ty(), false);
+}
+
+llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
+  auto block{Builder.GetInsertBlock()};
+  auto parent_func{block->getParent()};
+  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+
+  node.lhs_->Accept(*this);
+  result_ = CastToBool(result_);
+  Builder.CreateCondBr(result_, rhs_block, after_block);
+
+  Builder.SetInsertPoint(rhs_block);
+  node.rhs_->Accept(*this);
+  result_ = CastToBool(result_);
+  Builder.CreateBr(after_block);
+
+  Builder.SetInsertPoint(after_block);
+  auto phi{Builder.CreatePHI(Builder.getInt1Ty(), 2)};
+  phi->addIncoming(Builder.getFalse(), block);
+  phi->addIncoming(result_, rhs_block);
+
+  return CastTo(phi, Builder.getInt32Ty(), false);
+}
+
+llvm::Value* CodeGen::AssignOp(const BinaryOpExpr&) { return nullptr; }
+
+llvm::Value* CodeGen::GetPtr(const AstNode&) { return nullptr; }
 
 }  // namespace kcc

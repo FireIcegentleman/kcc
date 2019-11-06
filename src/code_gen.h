@@ -57,12 +57,11 @@ class CodeGen : public Visitor {
   bool IsLongDoubleTy(llvm::Value *value) const;
   llvm::Value *GetZero(llvm::Type *type);
   std::int32_t FloatPointRank(llvm::Type *type) const;
+  llvm::Value *LogicOrOp(const BinaryOpExpr &node);
+  llvm::Value *LogicAndOp(const BinaryOpExpr &node);
+  llvm::Value *AssignOp(const BinaryOpExpr &node);
+  llvm::Value *GetPtr(const AstNode &node);
 
-  /*
-   * =
-   * && ||
-   * [] . ->
-   */
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const BinaryOpExpr &node) override;
   virtual void Visit(const ConditionOpExpr &node) override;

@@ -552,5 +552,7 @@ extern int __overflow (FILE *, int);
 # 29 "test/dev/test.c" 2
 
 int main(void) {
-  printf("Hello World!");
+  int a2;
+  int b2;
+  printf("%d\n", a2 && b2);
 }

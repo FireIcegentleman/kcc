@@ -1619,10 +1619,20 @@ LeftParen                str: (                        loc: <test/dev/test.c:30:
 Void                     str: void                     loc: <test/dev/test.c:30:10>  
 RightParen               str: )                        loc: <test/dev/test.c:30:14>  
 LeftBrace                str: {                        loc: <test/dev/test.c:30:16>  
-Identifier               str: printf                   loc: <test/dev/test.c:31:3>   
-LeftParen                str: (                        loc: <test/dev/test.c:31:9>   
-StringLiteral            str: "Hello World!"           loc: <test/dev/test.c:31:10>  
-RightParen               str: )                        loc: <test/dev/test.c:31:24>  
-Semicolon                str: ;                        loc: <test/dev/test.c:31:25>  
-RightBrace               str: }                        loc: <test/dev/test.c:32:1>   
-Eof                      str:                          loc: <test/dev/test.c:33:1>   
+Int                      str: int                      loc: <test/dev/test.c:31:3>   
+Identifier               str: a2                       loc: <test/dev/test.c:31:7>   
+Semicolon                str: ;                        loc: <test/dev/test.c:31:9>   
+Int                      str: int                      loc: <test/dev/test.c:32:3>   
+Identifier               str: b2                       loc: <test/dev/test.c:32:7>   
+Semicolon                str: ;                        loc: <test/dev/test.c:32:9>   
+Identifier               str: printf                   loc: <test/dev/test.c:33:3>   
+LeftParen                str: (                        loc: <test/dev/test.c:33:9>   
+StringLiteral            str: "%d\n"                   loc: <test/dev/test.c:33:10>  
+Comma                    str: ,                        loc: <test/dev/test.c:33:16>  
+Identifier               str: a2                       loc: <test/dev/test.c:33:18>  
+AmpAmp                   str: &&                       loc: <test/dev/test.c:33:21>  
+Identifier               str: b2                       loc: <test/dev/test.c:33:24>  
+RightParen               str: )                        loc: <test/dev/test.c:33:26>  
+Semicolon                str: ;                        loc: <test/dev/test.c:33:27>  
+RightBrace               str: }                        loc: <test/dev/test.c:34:1>   
+Eof                      str:                          loc: <test/dev/test.c:35:1>   
