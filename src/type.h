@@ -5,6 +5,8 @@
 #ifndef KCC_SRC_TYPE_H_
 #define KCC_SRC_TYPE_H_
 
+#include <llvm/IR/Type.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -112,14 +114,16 @@ class Type : public std::enable_shared_from_this<Type> {
   // 位数而不是字节数
   virtual std::int32_t GetWidth() const = 0;
   virtual std::int32_t GetAlign() const = 0;
-  virtual std::string ToString() const = 0;
   // 这里忽略了 cvr
   // 若涉及同一对象或函数的二个声明不使用兼容类型，则程序的行为未定义。
   virtual bool Compatible(const std::shared_ptr<Type>& other) const = 0;
   virtual bool Equal(const std::shared_ptr<Type>& other) const = 0;
 
+  std::string ToString() const;
+  llvm::Type* GetLLVMType() const;
+
   bool IsComplete() const;
-  void SetComplete(bool complete) const;
+  void SetComplete(bool complete);
 
   bool IsUnsigned() const;
   bool IsVoidTy() const;
@@ -175,6 +179,7 @@ class Type : public std::enable_shared_from_this<Type> {
   void StructAddMember(std::shared_ptr<Object> member);
   void StructMergeAnonymous(std::shared_ptr<Object> anonymous);
   std::int32_t StructGetOffset() const;
+  void StructFinish();
 
   bool FuncIsVarArgs() const;
   QualType FuncGetReturnType() const;
@@ -187,6 +192,7 @@ class Type : public std::enable_shared_from_this<Type> {
 
  protected:
   explicit Type(bool complete);
+  llvm::Type* llvm_type_{};
 
  private:
   mutable bool complete_{false};
@@ -198,7 +204,6 @@ class VoidType : public Type {
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
-  virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& other) const override;
 
@@ -218,7 +223,6 @@ class ArithmeticType : public Type {
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
-  virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& other) const override;
 
@@ -238,7 +242,6 @@ class PointerType : public Type {
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
-  virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& type) const override;
 
@@ -257,7 +260,6 @@ class ArrayType : public Type {
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
-  virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& other) const override;
 
@@ -276,12 +278,12 @@ class StructType : public Type {
   friend class Type;
 
  public:
-  static std::shared_ptr<StructType> Get(bool is_struct, bool has_name,
+  static std::shared_ptr<StructType> Get(bool is_struct,
+                                         const std::string& name,
                                          std::shared_ptr<Scope> parent);
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
-  virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& other) const override;
 
@@ -299,16 +301,16 @@ class StructType : public Type {
 
   void AddMember(std::shared_ptr<Object> member);
   void MergeAnonymous(std::shared_ptr<Object> anonymous);
+  void Finish();
 
  private:
-  StructType(bool is_struct, bool has_name, std::shared_ptr<Scope> parent);
+  StructType(bool is_struct, const std::string& name,
+             std::shared_ptr<Scope> parent);
 
   // 计算新成员的开始位置
   static std::int32_t MakeAlign(std::int32_t offset, std::int32_t align);
 
   bool is_struct_{};
-  bool has_name_{};
-
   std::string name_;
   std::vector<std::shared_ptr<Object>> members_;
   std::shared_ptr<Scope> scope_;
@@ -326,7 +328,6 @@ class FunctionType : public Type {
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
-  virtual std::string ToString() const override;
   virtual bool Compatible(const std::shared_ptr<Type>& other) const override;
   virtual bool Equal(const std::shared_ptr<Type>& other) const override;
 

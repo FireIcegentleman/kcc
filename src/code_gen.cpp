@@ -24,7 +24,6 @@ namespace kcc {
 llvm::LLVMContext Context;
 // 一个辅助对象, 跟踪当前位置并且可以插入 LLVM 指令
 llvm::IRBuilder<> Builder{Context};
-// std::unique_ptr<llvm::Module> module;
 // 包含函数和全局变量, 它拥有生成的所有 IR 的内存, 所以使用 llvm::Value*
 // 而不使用智能指针
 auto Module{std::make_unique<llvm::Module>("main", Context)};
@@ -96,13 +95,36 @@ void CodeGen::Visit(const Identifier&) {}
 
 void CodeGen::Visit(const Object&) {}
 
-void CodeGen::Visit(const TranslationUnit&) {}
+void CodeGen::Visit(const TranslationUnit& node) {
+  for (const auto& item : node.ext_decls_) {
+    item->Accept(*this);
+  }
+}
 
-void CodeGen::Visit(const Declaration&) {}
+void CodeGen::Visit(const Declaration& node) {
+  auto type{node.GetIdent()->GetType()};
+
+  if (type->IsFunctionTy()) {
+    auto func = Module->getFunction(node.GetIdent()->GetName());
+    if (!func) {
+      llvm::Function::Create(
+          llvm::cast<llvm::FunctionType>(type->GetLLVMType()),
+          node.GetIdent()->GetLinkage() == kInternal
+              ? llvm::Function::InternalLinkage
+              : llvm::Function::ExternalLinkage,
+          node.GetIdent()->GetName(), Module.get());
+    }
+  } else {
+  }
+}
 
 void CodeGen::Visit(const FuncDef&) {}
 
-void CodeGen::Visit(const ExprStmt&) {}
+void CodeGen::Visit(const ExprStmt& node) {
+  if (node.expr_) {
+    node.expr_->Accept(*this);
+  }
+}
 
 void CodeGen::Visit(const WhileStmt&) {}
 

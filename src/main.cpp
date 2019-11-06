@@ -41,17 +41,22 @@ int main() {
   JsonGen{}.GenJson(unit, "test/dev/test.html");
 
   CodeGen{"test/dev/test.c"}.GenCode(unit);
-  Optimization(OptLevel::kO3);
+  // Optimization(OptLevel::kO3);
 
   std::error_code error_code;
   llvm::raw_fd_ostream ir_file{"test/dev/test.ll", error_code};
   ir_file << *Module;
 
+  std::system("llc test/dev/test.ll");
+  std::system(
+      "clang test/dev/test.c -o test/dev/standard.ll -std=c17 -S -emit-llvm");
+  std::system("lli test/dev/test.ll");
+
   ObjGen("test/dev/test.o");
 
   std::system("clang test/dev/test.o -o test/dev/test");
 
-  std::system("./test/dev/test");
+  // std::system("./test/dev/test");
 
   PrintWarnings();
 }

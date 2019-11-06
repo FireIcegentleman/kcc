@@ -725,7 +725,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
       auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
       // 无前向声明
       if (!tag) {
-        auto type{StructType::Get(is_struct, true, curr_scope_)};
+        auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
         auto ident{MakeAstNode<Identifier>(tok, QualType{type}, kNone, true)};
         curr_scope_->InsertTag(tag_name, ident);
 
@@ -751,8 +751,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
         return tag->GetType();
       }
 
-      auto type{StructType::Get(is_struct, true, curr_scope_)};
-      type->SetName(tag_name);
+      auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
       auto ident{MakeAstNode<Identifier>(tok, QualType{type}, kNone, true)};
       curr_scope_->InsertTag(tag_name, ident);
       return type;
@@ -761,7 +760,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
     // 无标识符只能是定义
     Expect(Tag::kLeftBrace);
 
-    auto type{StructType::Get(is_struct, false, curr_scope_)};
+    auto type{StructType::Get(is_struct, "", curr_scope_)};
     ParseStructDeclList(type);
 
     Expect(Tag::kRightBrace);

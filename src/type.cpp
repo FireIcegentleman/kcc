@@ -4,13 +4,23 @@
 
 #include "type.h"
 
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Support/raw_os_ostream.h>
+
 #include <cassert>
+#include <memory>
 
 #include "ast.h"
 #include "scope.h"
 
 namespace kcc {
 
+extern llvm::IRBuilder<> Builder;
+extern llvm::LLVMContext Context;
+extern std::unique_ptr<llvm::Module> Module;
 /*
  * QualType
  */
@@ -50,9 +60,24 @@ QualType Type::MayCast(QualType type, bool in_proto) {
   }
 }
 
+std::string Type::ToString() const {
+  std::string s;
+  llvm::raw_string_ostream rso{s};
+  llvm_type_->print(rso);
+  return rso.str();
+}
+
+llvm::Type* Type::GetLLVMType() const { return llvm_type_; }
+
 bool Type::IsComplete() const { return complete_; }
 
-void Type::SetComplete(bool complete) const { complete_ = complete; }
+void Type::SetComplete(bool complete) {
+  complete_ = complete;
+
+  if (IsStructTy() || IsUnionTy()) {
+    StructFinish();
+  }
+}
 
 bool Type::IsUnsigned() const {
   assert(IsIntegerTy());
@@ -242,6 +267,8 @@ std::int32_t Type::StructGetOffset() const {
   return dynamic_cast<const StructType*>(this)->GetOffset();
 }
 
+void Type::StructFinish() { dynamic_cast<StructType*>(this)->Finish(); }
+
 bool Type::FuncIsVarArgs() const {
   return dynamic_cast<const FunctionType*>(this)->IsVarArgs();
 }
@@ -285,12 +312,10 @@ std::shared_ptr<VoidType> VoidType::Get() {
 
 std::int32_t VoidType::GetWidth() const {
   // GNU 扩展
-  return 1;
+  return 8;
 }
 
 std::int32_t VoidType::GetAlign() const { return GetWidth(); }
-
-std::string VoidType::ToString() const { return "void"; }
 
 bool VoidType::Compatible(const std::shared_ptr<Type>& other) const {
   return Equal(other);
@@ -300,7 +325,7 @@ bool VoidType::Equal(const std::shared_ptr<Type>& other) const {
   return other->IsVoidTy();
 }
 
-VoidType::VoidType() : Type{false} {}
+VoidType::VoidType() : Type{false} { llvm_type_ = Builder.getVoidTy(); }
 
 /*
  * ArithmeticType
@@ -387,22 +412,6 @@ std::int32_t ArithmeticType::GetWidth() const {
 
 std::int32_t ArithmeticType::GetAlign() const { return GetWidth(); }
 
-std::string ArithmeticType::ToString() const {
-  if (IsIntegerTy()) {
-    return std::string(IsUnsigned() ? "u" : "") + "int" +
-           std::to_string(GetWidth());
-  } else if (IsFloatTy()) {
-    return "float";
-  } else if (IsDoubleTy()) {
-    return "double";
-  } else if (IsLongDoubleTy()) {
-    return "long double";
-  } else {
-    assert(false);
-    return 0;
-  }
-}
-
 // 它们是同一类型（同名或由 typedef 引入的别名）
 // 类型 char 不与 signed char 兼容，且不与 unsigned char 兼容
 bool ArithmeticType::Compatible(const std::shared_ptr<Type>& other) const {
@@ -460,6 +469,26 @@ ArithmeticType::ArithmeticType(std::uint32_t type_spec) : Type{true} {
   }
 
   type_spec_ = type_spec;
+
+  if (IsBoolTy()) {
+    llvm_type_ = Builder.getInt1Ty();
+  } else if (IsCharacterTy()) {
+    llvm_type_ = Builder.getInt8Ty();
+  } else if (IsShortTy()) {
+    llvm_type_ = Builder.getInt16Ty();
+  } else if (IsIntTy()) {
+    llvm_type_ = Builder.getInt32Ty();
+  } else if (IsLongTy() || IsLongLongTy()) {
+    llvm_type_ = Builder.getInt64Ty();
+  } else if (IsFloatTy()) {
+    llvm_type_ = Builder.getFloatTy();
+  } else if (IsDoubleTy()) {
+    llvm_type_ = Builder.getDoubleTy();
+  } else if (IsLongDoubleTy()) {
+    llvm_type_ = llvm::Type::getX86_FP80Ty(Context);
+  } else {
+    assert(false);
+  }
 }
 
 std::int32_t ArithmeticType::Rank() const {
@@ -500,17 +529,9 @@ std::shared_ptr<PointerType> PointerType::Get(QualType element_type) {
   return std::shared_ptr<PointerType>{new PointerType{element_type}};
 }
 
-std::int32_t PointerType::GetWidth() const { return 8; }
+std::int32_t PointerType::GetWidth() const { return 64; }
 
 std::int32_t PointerType::GetAlign() const { return GetWidth(); }
-
-std::string PointerType::ToString() const {
-  if (element_type_->IsStructTy() || element_type_->IsUnionTy()) {
-    return element_type_->StructGetName() + "*";
-  } else {
-    return element_type_->ToString() + "*";
-  }
-}
 
 // 它们是指针类型，并指向兼容类型
 bool PointerType::Compatible(const std::shared_ptr<Type>& other) const {
@@ -534,7 +555,13 @@ bool PointerType::Equal(const std::shared_ptr<Type>& other) const {
 QualType PointerType::GetElementType() const { return element_type_; }
 
 PointerType::PointerType(QualType element_type)
-    : Type{true}, element_type_{element_type} {}
+    : Type{true}, element_type_{element_type} {
+  if (element_type_->IsVoidTy()) {
+    llvm_type_ = Builder.getInt8PtrTy();
+  } else {
+    llvm_type_ = element_type_->GetLLVMType()->getPointerTo();
+  }
+}
 
 /*
  * ArrayType
@@ -551,20 +578,6 @@ std::int32_t ArrayType::GetWidth() const {
 }
 
 std::int32_t ArrayType::GetAlign() const { return GetWidth(); }
-
-std::string ArrayType::ToString() const {
-  if (contained_type_->IsArrayTy()) {
-    auto str{contained_type_->ToString()};
-    auto begin{str.find_last_of('[')};
-    auto end{std::size(str) - 2};
-    auto num_str{str.substr(begin + 1, end - begin)};
-    str.replace(begin + 1, end - begin, std::to_string(num_elements_));
-    return str + '[' + num_str + ']';
-  } else {
-    return contained_type_->ToString() + '[' + std::to_string(num_elements_) +
-           ']';
-  }
-}
 
 // 其元素类型兼容，且
 // 若都拥有常量大小，则大小相同。
@@ -616,31 +629,23 @@ QualType ArrayType::GetElementType() const { return contained_type_; }
 ArrayType::ArrayType(QualType contained_type, std::size_t num_elements)
     : Type{num_elements > 0},
       contained_type_{contained_type},
-      num_elements_{num_elements} {}
+      num_elements_{num_elements} {
+  llvm_type_ =
+      llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
+}
 
 /*
  * StructType
  */
-std::shared_ptr<StructType> StructType::Get(bool is_struct, bool has_name,
+std::shared_ptr<StructType> StructType::Get(bool is_struct,
+                                            const std::string& name,
                                             std::shared_ptr<Scope> parent) {
-  return std::shared_ptr<StructType>{
-      new StructType{is_struct, has_name, parent}};
+  return std::shared_ptr<StructType>{new StructType{is_struct, name, parent}};
 }
 
 std::int32_t StructType::GetWidth() const { return width_; }
 
 std::int32_t StructType::GetAlign() const { return align_; }
-
-std::string StructType::ToString() const {
-  std::string s(is_struct_ ? "struct" : "union");
-  s += "{";
-
-  for (const auto& member : members_) {
-    s += member->GetQualType()->ToString() + ";";
-  }
-
-  return s + "}";
-}
 
 // (C99)若一者以标签声明，则另一者必须以同一标签声明。
 // 若它们都是完整类型，则其成员必须在数量上准确对应，以兼容类型声明，并拥有匹配的名称。
@@ -713,7 +718,7 @@ bool StructType::Equal(const std::shared_ptr<Type>& other) const {
 
 bool StructType::IsStruct() const { return is_struct_; }
 
-bool StructType::HasName() const { return has_name_; }
+bool StructType::HasName() const { return !std::empty(name_); }
 
 void StructType::SetName(const std::string& name) { name_ = name; }
 
@@ -798,9 +803,32 @@ void StructType::MergeAnonymous(std::shared_ptr<Object> anonymous) {
   }
 }
 
-StructType::StructType(bool is_struct, bool has_name,
+void StructType::Finish() {
+  std::vector<llvm::Type*> members;
+  for (const auto& item : members_) {
+    members.push_back(item->GetType()->GetLLVMType());
+  }
+
+  auto p{llvm::cast<llvm::StructType>(llvm_type_)};
+  p->setBody(members);
+}
+
+StructType::StructType(bool is_struct, const std::string& name,
                        std::shared_ptr<Scope> parent)
-    : Type{false}, is_struct_{is_struct}, has_name_{has_name}, scope_{parent} {}
+    : Type{false}, is_struct_{is_struct}, name_{name}, scope_{parent} {
+  if (HasName()) {
+    for (const auto& item : Module->getIdentifiedStructTypes()) {
+      if (item->getName() == name) {
+        llvm_type_ = item;
+        return;
+      }
+    }
+
+    llvm_type_ = llvm::StructType::create(Context, name);
+  } else {
+    llvm_type_ = llvm::StructType::create(Context);
+  }
+}
 
 std::int32_t StructType::MakeAlign(std::int32_t offset, std::int32_t align) {
   if (offset % align == 0) {
@@ -828,28 +856,6 @@ std::int32_t FunctionType::GetWidth() const {
 std::int32_t FunctionType::GetAlign() const {
   assert(false);
   return 0;
-}
-
-std::string FunctionType::ToString() const {
-  std::string s(return_type_->ToString() + "(");
-
-  for (const auto& param : params_) {
-    s += param->GetQualType()->ToString() + ", ";
-  }
-
-  if (is_var_args_) {
-    s += "...)";
-    return s;
-  } else {
-    if (std::size(params_) != 0) {
-      s.pop_back();
-      s.pop_back();
-    } else {
-      s += "void";
-    }
-
-    return s + ")";
-  }
 }
 
 // 其返回类型兼容
@@ -935,6 +941,14 @@ FunctionType::FunctionType(QualType return_type,
     : Type{false},
       is_var_args_{is_var_args},
       return_type_{return_type},
-      params_{param} {}
+      params_{param} {
+  std::vector<llvm::Type*> params;
+  for (const auto& item : params_) {
+    params.push_back(item->GetType()->GetLLVMType());
+  }
+
+  llvm_type_ = llvm::FunctionType::get(return_type_->GetLLVMType(), params,
+                                       is_var_args_);
+}
 
 }  // namespace kcc
