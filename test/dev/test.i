@@ -551,4 +551,6 @@ extern int __uflow (FILE *);
 extern int __overflow (FILE *, int);
 # 29 "test/dev/test.c" 2
 
-int main(void) { printf("Hello World!"); }
+int main(void) {
+  printf("Hello World!");
+}

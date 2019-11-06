@@ -5,6 +5,9 @@
 #ifndef KCC_SRC_AST_H_
 #define KCC_SRC_AST_H_
 
+#include <llvm/IR/GlobalValue.h>
+#include <llvm/IR/Instructions.h>
+
 #include <QMetaEnum>
 #include <QObject>
 #include <QString>
@@ -278,8 +281,8 @@ class Constant : public Expr {
   std::string GetStrVal() const;
 
  private:
-  std::uint64_t integer_val_;
-  double float_point_val_;
+  std::uint64_t integer_val_{};
+  double float_point_val_{};
   std::string str_val_;
 };
 
@@ -356,7 +359,8 @@ class Object : public Identifier {
 
  public:
   Object(const Token& tok, QualType type, std::uint32_t storage_class_spec = 0,
-         enum Linkage linkage = kNone, bool anonymous = false);
+         enum Linkage linkage = kNone, bool anonymous = false,
+         bool in_global = false);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -380,6 +384,10 @@ class Object : public Identifier {
   std::int32_t align_{};
   std::int32_t offset_{};
   std::shared_ptr<Declaration> decl_;
+
+  bool in_global_{};
+  llvm::AllocaInst* local_ptr_{};
+  llvm::GlobalValue* global_ptr_{};
 };
 
 class Stmt : public AstNode {};
@@ -677,6 +685,7 @@ class FuncDef : public ExtDecl {
   std::string GetName() const;
   enum Linkage GetLinkage() const;
   QualType GetFuncType() const;
+  std::shared_ptr<Identifier> GetIdent() const;
 
  private:
   std::shared_ptr<Identifier> ident_;

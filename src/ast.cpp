@@ -657,11 +657,12 @@ std::int32_t Enumerator::GetVal() const { return val_; }
  */
 Object::Object(const Token& tok, QualType type,
                std::uint32_t storage_class_spec, enum Linkage linkage,
-               bool anonymous)
+               bool anonymous, bool in_global)
     : Identifier{tok, type, linkage, false},
       anonymous_{anonymous},
       storage_class_spec_{storage_class_spec},
-      align_{type->GetAlign()} {}
+      align_{type->GetAlign()},
+      in_global_{in_global} {}
 
 AstNodeType Object::Kind() const { return AstNodeType::kObject; }
 
@@ -712,6 +713,8 @@ std::string FuncDef::GetName() const { return ident_->GetName(); }
 enum Linkage FuncDef::GetLinkage() const { return ident_->GetLinkage(); }
 
 QualType FuncDef::GetFuncType() const { return ident_->GetQualType(); }
+
+std::shared_ptr<Identifier> FuncDef::GetIdent() const { return ident_; }
 
 void FuncDef::Check() {
   for (const auto& param : ident_->GetQualType()->FuncGetParams()) {

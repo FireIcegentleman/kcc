@@ -111,7 +111,7 @@ class Type : public std::enable_shared_from_this<Type> {
 
   virtual ~Type() = default;
 
-  // 位数而不是字节数
+  // 字节数
   virtual std::int32_t GetWidth() const = 0;
   virtual std::int32_t GetAlign() const = 0;
   // 这里忽略了 cvr

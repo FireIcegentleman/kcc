@@ -22,6 +22,47 @@ class CodeGen : public Visitor {
   void GenCode(const std::shared_ptr<TranslationUnit> &root);
 
  private:
+  // 在栈上分配内存
+  static llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *parent,
+                                                  llvm::Type *type,
+                                                  std::int32_t align,
+                                                  const std::string &name);
+  llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *SubOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *MulOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *DivOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *ModOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *OrOp(llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *AndOp(llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *XorOp(llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *ShlOp(llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *ShrOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *LessEqualOp(llvm::Value *lhs, llvm::Value *rhs,
+                           bool is_unsigned);
+  llvm::Value *LessOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *GreaterEqualOp(llvm::Value *lhs, llvm::Value *rhs,
+                              bool is_unsigned);
+  llvm::Value *GreaterOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
+  llvm::Value *EqualOp(llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *NotEqualOp(llvm::Value *lhs, llvm::Value *rhs);
+
+  llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned);
+  llvm::Value *CastToBool(llvm::Value *value);
+  bool IsArithmeticTy(llvm::Value *value) const;
+  bool IsIntegerTy(llvm::Value *value) const;
+  bool IsFloatingPointTy(llvm::Value *value) const;
+  bool IsPointerTy(llvm::Value *value) const;
+  bool IsFloatTy(llvm::Value *value) const;
+  bool IsDoubleTy(llvm::Value *value) const;
+  bool IsLongDoubleTy(llvm::Value *value) const;
+  llvm::Value *GetZero(llvm::Type *type);
+  std::int32_t FloatPointRank(llvm::Type *type) const;
+
+  /*
+   * =
+   * && ||
+   * [] . ->
+   */
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const BinaryOpExpr &node) override;
   virtual void Visit(const ConditionOpExpr &node) override;

@@ -998,7 +998,7 @@ std::size_t Parser::ParseArrayLength() {
   auto len{CalcExpr<std::int32_t>{}.Calc(expr)};
 
   if (len <= 0) {
-    Error(expr->GetToken(), "Array size must be greater than 0");
+    Error(expr->GetToken(), "Array size must be greater than 0: {}", len);
   }
 
   return len;
@@ -1093,8 +1093,6 @@ std::shared_ptr<Constant> Parser::ParseStringLiteral(bool handle_escape) {
     str += Scanner{tok.GetStr()}.ScanStringLiteral(handle_escape);
   }
 
-  str += '\0';
-
   return MakeAstNode<Constant>(
       tok, ArrayType::Get(QualType{ArithmeticType::Get(8)}, std::size(str)),
       str);
@@ -1166,7 +1164,11 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
     }
     ret = MakeAstNode<Identifier>(tok, type, linkage, false);
   } else {
-    ret = MakeAstNode<Object>(tok, type, 0, linkage, false);
+    ret = MakeAstNode<Object>(tok, type, 0, linkage, false,
+                              curr_func_def_ == nullptr);
+    if (align > 0) {
+      std::dynamic_pointer_cast<Object>(ret)->SetAlign(align);
+    }
   }
 
   curr_scope_->InsertNormal(name, ret);
@@ -1304,9 +1306,8 @@ std::shared_ptr<Expr> Parser::ParseSizeof() {
     Error(tok, "sizeof(incomplete type)");
   }
 
-  return MakeAstNode<Constant>(
-      tok, ArithmeticType::Get(kLong | kUnsigned),
-      static_cast<std::uint64_t>(type->GetWidth() / 8));
+  return MakeAstNode<Constant>(tok, ArithmeticType::Get(kLong | kUnsigned),
+                               static_cast<std::uint64_t>(type->GetWidth()));
 }
 
 std::shared_ptr<Expr> Parser::ParseAlignof() {

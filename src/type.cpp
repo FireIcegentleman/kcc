@@ -312,7 +312,7 @@ std::shared_ptr<VoidType> VoidType::Get() {
 
 std::int32_t VoidType::GetWidth() const {
   // GNU 扩展
-  return 8;
+  return 1;
 }
 
 std::int32_t VoidType::GetAlign() const { return GetWidth(); }
@@ -385,25 +385,25 @@ std::int32_t ArithmeticType::GetWidth() const {
       return 1;
     case kChar:
     case kChar | kUnsigned:
-      return 8;
+      return 1;
     case kShort:
     case kShort | kUnsigned:
-      return 16;
+      return 2;
     case kInt:
     case kInt | kUnsigned:
-      return 32;
+      return 4;
     case kLong:
     case kLong | kUnsigned:
-      return 64;
+      return 8;
     case kLongLong:
     case kLongLong | kUnsigned:
-      return 64;
+      return 8;
     case kFloat:
-      return 32;
+      return 4;
     case kDouble:
-      return 64;
+      return 8;
     case kDouble | kLong:
-      return 128;
+      return 16;
     default:
       assert(false);
       return 0;
@@ -529,7 +529,7 @@ std::shared_ptr<PointerType> PointerType::Get(QualType element_type) {
   return std::shared_ptr<PointerType>{new PointerType{element_type}};
 }
 
-std::int32_t PointerType::GetWidth() const { return 64; }
+std::int32_t PointerType::GetWidth() const { return 8; }
 
 std::int32_t PointerType::GetAlign() const { return GetWidth(); }
 
