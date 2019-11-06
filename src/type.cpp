@@ -381,6 +381,7 @@ std::int32_t ArithmeticType::GetWidth() const {
       return 128;
     default:
       assert(false);
+      return 0;
   }
 }
 
@@ -398,6 +399,7 @@ std::string ArithmeticType::ToString() const {
     return "long double";
   } else {
     assert(false);
+    return 0;
   }
 }
 
@@ -438,6 +440,7 @@ std::uint64_t ArithmeticType::MaxIntegerValue() const {
       return std::numeric_limits<std::uint64_t>::max();
     default:
       assert(false);
+      return 0;
   }
 }
 
@@ -486,6 +489,7 @@ std::int32_t ArithmeticType::Rank() const {
       return 8;
     default:
       assert(false);
+      return 0;
   }
 }
 
@@ -816,9 +820,15 @@ std::shared_ptr<FunctionType> FunctionType::Get(
       new FunctionType{return_type, params, is_var_args}};
 }
 
-std::int32_t FunctionType::GetWidth() const { assert(false); }
+std::int32_t FunctionType::GetWidth() const {
+  assert(false);
+  return 0;
+}
 
-std::int32_t FunctionType::GetAlign() const { assert(false); }
+std::int32_t FunctionType::GetAlign() const {
+  assert(false);
+  return 0;
+}
 
 std::string FunctionType::ToString() const {
   std::string s(return_type_->ToString() + "(");

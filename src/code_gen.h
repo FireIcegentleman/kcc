@@ -8,6 +8,7 @@
 #include <llvm/IR/Value.h>
 
 #include <memory>
+#include <string>
 
 #include "ast.h"
 #include "visitor.h"
@@ -16,7 +17,7 @@ namespace kcc {
 
 class CodeGen : public Visitor {
  public:
-  CodeGen();
+  CodeGen(const std::string &file_name);
 
   void GenCode(const std::shared_ptr<TranslationUnit> &root);
 
@@ -49,7 +50,7 @@ class CodeGen : public Visitor {
   virtual void Visit(const GotoStmt &node) override;
 
  private:
-  // llvm::Value *result_{};
+  llvm::Value *result_{};
 };
 
 }  // namespace kcc

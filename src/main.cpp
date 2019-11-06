@@ -40,7 +40,7 @@ int main() {
 
   JsonGen{}.GenJson(unit, "test/dev/test.html");
 
-  CodeGen{}.GenCode(unit);
+  CodeGen{"test/dev/test.c"}.GenCode(unit);
   Optimization(OptLevel::kO3);
 
   std::error_code error_code;

@@ -33,8 +33,8 @@ llvm::DataLayout DataLayout{Module.get()};
 
 std::unique_ptr<llvm::TargetMachine> TargetMachine;
 
-CodeGen::CodeGen() {
-  Module = std::make_unique<llvm::Module>("test.c", Context);
+CodeGen::CodeGen(const std::string& file_name) {
+  Module = std::make_unique<llvm::Module>(file_name, Context);
   DataLayout = llvm::DataLayout{Module.get()};
 
   // 初始化
@@ -66,6 +66,7 @@ CodeGen::CodeGen() {
 }
 
 void CodeGen::GenCode(const std::shared_ptr<TranslationUnit>& root) {
+  (void)result_;
   root->Accept(*this);
 }
 

@@ -21,6 +21,10 @@ set(sanitizer
       STRING
       "Compile with a sanitizer. Options are: Address, Thread, Undefined, None")
 
+if(CMAKE_BUILD_TYPE MATCHES "Release")
+  set(sanitizer "None")
+endif()
+
 file(GLOB cppsrc src/*.cpp src/*.h)
 file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
 
