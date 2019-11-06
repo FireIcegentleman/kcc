@@ -660,7 +660,8 @@ Object::Object(const Token& tok, QualType type,
                bool anonymous)
     : Identifier{tok, type, linkage, false},
       anonymous_{anonymous},
-      storage_class_spec_{storage_class_spec} {}
+      storage_class_spec_{storage_class_spec},
+      align_{type->GetAlign()} {}
 
 AstNodeType Object::Kind() const { return AstNodeType::kObject; }
 

@@ -991,7 +991,8 @@ std::size_t Parser::ParseArrayLength() {
   auto expr{ParseAssignExpr()};
 
   if (!expr->GetQualType()->IsIntegerTy()) {
-    Error(expr->GetToken(), "The array size must be an integer");
+    Error(expr->GetToken(), "The array size must be an integer: '{}'",
+          expr->GetType()->ToString());
   }
 
   // 不支持变长数组
@@ -1205,7 +1206,7 @@ std::shared_ptr<Expr> Parser::ParseCastExpr() {
     }
 
     auto type{ParseTypeName()};
-    Expect(Tag::kRightBrace);
+    Expect(Tag::kRightParen);
 
     // TODO 复合字面量 ???
 
@@ -1304,8 +1305,9 @@ std::shared_ptr<Expr> Parser::ParseSizeof() {
     Error(tok, "sizeof(incomplete type)");
   }
 
-  return MakeAstNode<Constant>(tok, ArithmeticType::Get(kLong | kUnsigned),
-                               static_cast<std::uint64_t>(type->GetWidth()));
+  return MakeAstNode<Constant>(
+      tok, ArithmeticType::Get(kLong | kUnsigned),
+      static_cast<std::uint64_t>(type->GetWidth() / 8));
 }
 
 std::shared_ptr<Expr> Parser::ParseAlignof() {

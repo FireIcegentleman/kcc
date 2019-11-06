@@ -273,6 +273,8 @@ class ArrayType : public Type {
 };
 
 class StructType : public Type {
+  friend class Type;
+
  public:
   static std::shared_ptr<StructType> Get(bool is_struct, bool has_name,
                                          std::shared_ptr<Scope> parent);

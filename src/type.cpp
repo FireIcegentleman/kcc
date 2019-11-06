@@ -100,7 +100,7 @@ bool Type::IsDoubleTy() const {
 
 bool Type::IsLongDoubleTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & (kLong | kDouble));
+  return p && (p->type_spec_ == (kLong | kDouble));
 }
 
 bool Type::IsComplexTy() const {
@@ -121,7 +121,7 @@ bool Type::IsArrayTy() const { return dynamic_cast<const ArrayType*>(this); }
 
 bool Type::IsStructTy() const {
   auto p{dynamic_cast<const StructType*>(this)};
-  return p && p->IsStructTy();
+  return p && p->is_struct_;
 }
 
 bool Type::IsUnionTy() const {
@@ -501,7 +501,11 @@ std::int32_t PointerType::GetWidth() const { return 8; }
 std::int32_t PointerType::GetAlign() const { return GetWidth(); }
 
 std::string PointerType::ToString() const {
-  return element_type_->ToString() + "*";
+  if (element_type_->IsStructTy() || element_type_->IsUnionTy()) {
+    return element_type_->StructGetName() + "*";
+  } else {
+    return element_type_->ToString() + "*";
+  }
 }
 
 // 它们是指针类型，并指向兼容类型
@@ -627,7 +631,6 @@ std::string StructType::ToString() const {
   std::string s(is_struct_ ? "struct" : "union");
   s += "{";
 
-  // FIXME 当某成员类型为指向该 struct / union 的指针
   for (const auto& member : members_) {
     s += member->GetQualType()->ToString() + ";";
   }
