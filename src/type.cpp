@@ -54,7 +54,11 @@ QualType Type::MayCast(QualType type, bool in_proto) {
     return QualType{type->GetPointerTo()};
   } else if (type->IsArrayTy()) {
     auto ret{PointerType::Get(type->ArrayGetElementType())};
-    return QualType{ret, in_proto ? 0U : kConst};
+    if (in_proto) {
+      return QualType{ret};
+    } else {
+      return QualType{ret, kConst};
+    }
   } else {
     return type;
   }
