@@ -552,9 +552,11 @@ void JsonGen::Visit(const ExprStmt& node) {
   root["name"] = AstNodeTypes::ToString(node.Kind());
   QJsonArray children;
 
-  node.expr_->Accept(*this);
-  children.append(result_);
-  root["children"] = children;
+  if (node.expr_) {
+    node.expr_->Accept(*this);
+    children.append(result_);
+    root["children"] = children;
+  }
 
   result_ = root;
 }

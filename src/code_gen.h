@@ -8,6 +8,7 @@
 #include <llvm/IR/Value.h>
 
 #include <memory>
+#include <stack>
 #include <string>
 
 #include "ast.h"
@@ -61,6 +62,13 @@ class CodeGen : public Visitor {
   llvm::Value *LogicAndOp(const BinaryOpExpr &node);
   llvm::Value *AssignOp(const BinaryOpExpr &node);
   llvm::Value *GetPtr(const AstNode &node);
+  llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs);
+  void VisitForNoInc(const ForStmt &node);
+  void VisitForNoCond(const ForStmt &node);
+  void VisitForNoIncCond(const ForStmt &node);
+  llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
+  llvm::Value *LogicNotOp(llvm::Value *value);
+  std::string LLVMTypeToStr(llvm::Type *type) const;
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const BinaryOpExpr &node) override;
@@ -89,8 +97,19 @@ class CodeGen : public Visitor {
   virtual void Visit(const ContinueStmt &node) override;
   virtual void Visit(const GotoStmt &node) override;
 
+  void PushBlock(llvm::BasicBlock *continue_block,
+                 llvm::BasicBlock *break_stack);
+  void PopBlock();
+  bool HasBrOrReturn() const;
+
  private:
   llvm::Value *result_{};
+
+  std::stack<llvm::BasicBlock *> continue_stack_;
+  std::stack<llvm::BasicBlock *> break_stack_;
+  std::stack<std::pair<bool, bool>> has_br_or_return_;
+
+  bool need_bool_{false};
 };
 
 }  // namespace kcc

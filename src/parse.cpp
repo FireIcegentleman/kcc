@@ -402,9 +402,9 @@ std::shared_ptr<Expr> Parser::ParseEqualityExpr() {
   auto tok{Peek()};
 
   while (true) {
-    if (Try(Tag::kEqual)) {
+    if (Try(Tag::kEqualEqual)) {
       auto rhs{ParseRelationExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kEqual, lhs, rhs);
+      lhs = MakeAstNode<BinaryOpExpr>(tok, Tag::kEqualEqual, lhs, rhs);
       tok = Peek();
     } else if (Try(Tag::kExclaimEqual)) {
       auto rhs{ParseRelationExpr()};
@@ -1739,10 +1739,10 @@ std::shared_ptr<DoWhileStmt> Parser::ParseDoWhileStmt() {
   Expect(Tag::kWhile);
   Expect(Tag::kLeftParen);
 
-  auto tok{Peek()};
   auto cond{ParseExpr()};
 
   Expect(Tag::kRightParen);
+  Expect(Tag::kSemicolon);
 
   return MakeAstNode<DoWhileStmt>(cond, stmt);
 }

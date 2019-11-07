@@ -39,7 +39,7 @@ find_package(LLVM REQUIRED CONFIG)
 find_package(Qt5 REQUIRED COMPONENTS Core)
 
 include_directories(${LLVM_INCLUDE_DIRS})
-add_definitions(-DAPP_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
+add_definitions(-DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
                 ${LLVM_DEFINITIONS})
 
 add_executable(${PROJECT_NAME} ${cppsrc})

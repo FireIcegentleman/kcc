@@ -8,17 +8,9 @@ main:                                   # @main
 # %bb.0:
 	pushq	%rax
 	.cfi_def_cfa_offset 16
-	cmpl	$0, (%rsp)
-	je	.LBB0_1
-# %bb.2:
-	cmpl	$0, 4(%rsp)
-	setne	%al
-	jmp	.LBB0_3
-.LBB0_1:
-	xorl	%eax, %eax
-.LBB0_3:
-	movzbl	%al, %esi
+	movl	$10, 4(%rsp)
 	movl	$.L__unnamed_1, %edi
+	movl	$4, %esi
 	xorl	%eax, %eax
 	callq	printf
 	xorl	%eax, %eax

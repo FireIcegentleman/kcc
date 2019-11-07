@@ -25,10 +25,11 @@
 //#include <wchar.h>
 //#include <wctype.h>
 
-#include <stdio.h>
-
+//#include <stdio.h>
+int printf(const char *s, ...);
 int main(void) {
-  int a2;
-  int b2;
-  printf("%d\n", a2 && b2);
+  int a;
+  a = 10;
+
+  printf("%d\n", a ? 4 : 8);
 }

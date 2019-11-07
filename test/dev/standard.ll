@@ -8,24 +8,13 @@ target triple = "x86_64-pc-linux-gnu"
 ; Function Attrs: noinline nounwind optnone sspstrong uwtable
 define dso_local i32 @main() #0 {
   %1 = alloca i32, align 4
-  %2 = alloca i32, align 4
-  %3 = alloca i32, align 4
-  store i32 0, i32* %1, align 4
-  %4 = load i32, i32* %2, align 4
-  %5 = icmp ne i32 %4, 0
-  br i1 %5, label %6, label %9
-
-6:                                                ; preds = %0
-  %7 = load i32, i32* %3, align 4
-  %8 = icmp ne i32 %7, 0
-  br label %9
-
-9:                                                ; preds = %6, %0
-  %10 = phi i1 [ false, %0 ], [ %8, %6 ]
-  %11 = zext i1 %10 to i32
-  %12 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str, i64 0, i64 0), i32 %11)
-  %13 = load i32, i32* %1, align 4
-  ret i32 %13
+  store i32 10, i32* %1, align 4
+  %2 = load i32, i32* %1, align 4
+  %3 = icmp ne i32 %2, 0
+  %4 = zext i1 %3 to i64
+  %5 = select i1 %3, i32 4, i32 8
+  %6 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str, i64 0, i64 0), i32 %5)
+  ret i32 0
 }
 
 declare i32 @printf(i8*, ...) #1
