@@ -9,3 +9,7 @@ else()
   add_compile_options(-Wall -Wextra -Wpedantic -Werror)
   add_link_options(-fuse-ld=lld)
 endif()
+
+if(CMAKE_BUILD_TYPE MATCHES "Release")
+  append("-flto" CMAKE_CXX_FLAGS)
+endif()

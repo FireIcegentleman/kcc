@@ -1,8 +1,7 @@
 Checks: '-*,clang-diagnostic-*,clang-analyzer-*,llvm-namespace-comment,llvm-twine-local,misc-*,
         -misc-unused-parameters,-misc-non-private-member-variables-in-classes,
         readability-identifier-naming'
-WarningsAsErrors: '-*,clang-diagnostic-*,clang-analyzer-*,llvm-namespace-comment,llvm-twine-local,misc-*,
-        -misc-unused-parameters,-misc-non-private-member-variables-in-classes'
+WarningsAsErrors: '*'
 CheckOptions:
   - key:             readability-identifier-naming.MacroDefinitionCase
     value:           UPPER_CASE

@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <wait.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -305,23 +306,56 @@ int main(int argc, char *argv[]) /*try*/ {
 
 void RunDev() {
   Preprocessor preprocessor;
-  auto preprocessed_code{preprocessor.Cpp("test/dev/test.c")};
+  std::string preprocessed_code;
+  {
+    std::cout << "cpp ............................ ";
+    const auto kT0{std::chrono::system_clock::now()};
+    preprocessed_code = preprocessor.Cpp("test/dev/test.c");
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::system_clock::now() - kT0)
+                     .count()
+              << " us\n";
+  }
   std::ofstream preprocess_file{"test/dev/test.i"};
   preprocess_file << preprocessed_code << std::flush;
 
   Scanner scanner{std::move(preprocessed_code)};
-  auto tokens{scanner.Tokenize()};
+  std::vector<Token> tokens;
+  {
+    std::cout << "lex ............................ ";
+    const auto kT0{std::chrono::system_clock::now()};
+    tokens = scanner.Tokenize();
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::system_clock::now() - kT0)
+                     .count()
+              << " us\n";
+  }
   std::ofstream tokens_file{"test/dev/test.txt"};
   std::transform(std::begin(tokens), std::end(tokens),
                  std::ostream_iterator<std::string>{tokens_file, "\n"},
                  std::mem_fn(&Token::ToString));
 
   Parser parser{std::move(tokens)};
-  auto unit{parser.ParseTranslationUnit()};
-
+  std::shared_ptr<TranslationUnit> unit;
+  {
+    std::cout << "parse ............................ ";
+    const auto kT0{std::chrono::system_clock::now()};
+    unit = parser.ParseTranslationUnit();
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::system_clock::now() - kT0)
+                     .count()
+              << " us\n";
+  }
   JsonGen{}.GenJson(unit, "test/dev/test.html");
-
-  CodeGen{"test/dev/test.c"}.GenCode(unit);
+  {
+    std::cout << "code gen ............................ ";
+    const auto kT0{std::chrono::system_clock::now()};
+    CodeGen{"test/dev/test.c"}.GenCode(unit);
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::system_clock::now() - kT0)
+                     .count()
+              << " us\n";
+  }
   Optimization(OptLevel::kO0);
 
   std::error_code error_code;

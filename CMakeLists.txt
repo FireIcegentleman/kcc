@@ -5,32 +5,20 @@ project(
   VERSION 0.1
   LANGUAGES CXX)
 
-if(NOT (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Darwin"
-       ))
-  message(FATAL_ERROR "Only support linux system and macOS")
-endif()
-
-if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES
-                                               "Clang"))
-  message(FATAL_ERROR "Only supports gcc and clang")
-endif()
-
-set(sanitizer
-    "Undefined"
-    CACHE
-      STRING
-      "Compile with a sanitizer. Options are: Address, Thread, Undefined, None")
+file(GLOB cppsrc src/*.h src/*.cpp)
+file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
 
 if(CMAKE_BUILD_TYPE MATCHES "Release")
   set(sanitizer "None")
+else()
+  # Address Thread Undefined None
+  set(sanitizer "Undefined")
 endif()
 
-file(GLOB cppsrc src/*.cpp src/*.h)
-file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
-
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-include(compiler-options)
+include(check)
 include(sanitizers)
+include(compiler-options)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -46,4 +34,4 @@ add_executable(${PROJECT_NAME} ${cppsrc})
 
 include(format)
 
-target_link_libraries(${PROJECT_NAME} LLVM fmt::fmt Qt5::Core)
+target_link_libraries(${PROJECT_NAME} Qt5::Core fmt::fmt LLVM)

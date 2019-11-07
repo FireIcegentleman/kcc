@@ -35,5 +35,6 @@
 .idea
 cmake-build-debug
 cmake-build-release
+build
 compile_commands.json
 test/dev/test
