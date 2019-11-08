@@ -12,7 +12,7 @@ namespace kcc {
 
 Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {}
 
-std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
+TranslationUnit* Parser::ParseTranslationUnit() {
   auto unit{MakeAstNode<TranslationUnit>()};
 
   while (HasNext()) {
@@ -22,8 +22,8 @@ std::shared_ptr<TranslationUnit> Parser::ParseTranslationUnit() {
   return unit;
 }
 
-std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
-  std::shared_ptr<CompoundStmt> ext_decl;
+ExtDecl* Parser::ParseExternalDecl() {
+  CompoundStmt* ext_decl;
 
   ext_decl = ParseDecl(true);
 
@@ -40,15 +40,14 @@ std::shared_ptr<ExtDecl> Parser::ParseExternalDecl() {
       Error(Peek(), "func def error");
     }
 
-    return ParseFuncDef(std::dynamic_pointer_cast<Declaration>(stmt.front()));
+    return ParseFuncDef(dynamic_cast<Declaration*>(stmt.front()));
   } else {
     Expect(Tag::kSemicolon);
     return ext_decl;
   }
 }
 
-std::shared_ptr<FuncDef> Parser::ParseFuncDef(
-    const std::shared_ptr<Declaration>& decl) {
+FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
   auto ident{decl->GetIdent()};
   if (!ident->GetQualType()->IsFunctionTy()) {
     Error(Peek(), "func def need func type");
@@ -62,7 +61,7 @@ std::shared_ptr<FuncDef> Parser::ParseFuncDef(
   return ret;
 }
 
-std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
+CompoundStmt* Parser::ParseDecl(bool maybe_func_def) {
   if (Try(Tag::kStaticAssert)) {
     ParseStaticAssertDecl();
     return nullptr;
@@ -87,9 +86,10 @@ std::shared_ptr<CompoundStmt> Parser::ParseDecl(bool maybe_func_def) {
   }
 }
 
-std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
-    QualType& base_type, std::uint32_t storage_class_spec,
-    std::uint32_t func_spec, std::int32_t align) {
+CompoundStmt* Parser::ParseInitDeclaratorList(QualType& base_type,
+                                              std::uint32_t storage_class_spec,
+                                              std::uint32_t func_spec,
+                                              std::int32_t align) {
   auto stmts{MakeAstNode<CompoundStmt>()};
 
   do {
@@ -100,9 +100,10 @@ std::shared_ptr<CompoundStmt> Parser::ParseInitDeclaratorList(
   return stmts;
 }
 
-std::shared_ptr<Declaration> Parser::ParseInitDeclarator(
-    QualType& base_type, std::uint32_t storage_class_spec,
-    std::uint32_t func_spec, std::int32_t align) {
+Declaration* Parser::ParseInitDeclarator(QualType& base_type,
+                                         std::uint32_t storage_class_spec,
+                                         std::uint32_t func_spec,
+                                         std::int32_t align) {
   Token tok;
   ParseDeclarator(tok, base_type);
 
@@ -234,9 +235,9 @@ Token Parser::Expect(Tag tag) {
   }
 }
 
-std::shared_ptr<Expr> Parser::ParseExpr() { return ParseCommaExpr(); }
+Expr* Parser::ParseExpr() { return ParseCommaExpr(); }
 
-std::shared_ptr<Expr> Parser::ParseCommaExpr() {
+Expr* Parser::ParseCommaExpr() {
   auto lhs{ParseAssignExpr()};
 
   auto tok{Peek()};
@@ -250,9 +251,9 @@ std::shared_ptr<Expr> Parser::ParseCommaExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseAssignExpr() {
+Expr* Parser::ParseAssignExpr() {
   auto lhs{ParseConditionExpr()};
-  std::shared_ptr<Expr> rhs;
+  Expr* rhs;
 
   auto tok{Next()};
 
@@ -309,7 +310,7 @@ std::shared_ptr<Expr> Parser::ParseAssignExpr() {
   return MakeAstNode<BinaryOpExpr>(tok, Tag::kEqual, lhs, rhs);
 }
 
-std::shared_ptr<Expr> Parser::ParseConditionExpr() {
+Expr* Parser::ParseConditionExpr() {
   auto cond{ParseLogicalOrExpr()};
   auto tok{Peek()};
 
@@ -327,7 +328,7 @@ std::shared_ptr<Expr> Parser::ParseConditionExpr() {
   return cond;
 }
 
-std::shared_ptr<Expr> Parser::ParseLogicalOrExpr() {
+Expr* Parser::ParseLogicalOrExpr() {
   auto lhs{ParseLogicalAndExpr()};
   auto tok{Peek()};
 
@@ -341,7 +342,7 @@ std::shared_ptr<Expr> Parser::ParseLogicalOrExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseLogicalAndExpr() {
+Expr* Parser::ParseLogicalAndExpr() {
   auto lhs{ParseBitwiseOrExpr()};
   auto tok{Peek()};
 
@@ -355,7 +356,7 @@ std::shared_ptr<Expr> Parser::ParseLogicalAndExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseBitwiseOrExpr() {
+Expr* Parser::ParseBitwiseOrExpr() {
   auto lhs{ParseBitwiseXorExpr()};
   auto tok{Peek()};
 
@@ -369,7 +370,7 @@ std::shared_ptr<Expr> Parser::ParseBitwiseOrExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseBitwiseXorExpr() {
+Expr* Parser::ParseBitwiseXorExpr() {
   auto lhs{ParseBitwiseAndExpr()};
   auto tok{Peek()};
 
@@ -383,7 +384,7 @@ std::shared_ptr<Expr> Parser::ParseBitwiseXorExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseBitwiseAndExpr() {
+Expr* Parser::ParseBitwiseAndExpr() {
   auto lhs{ParseEqualityExpr()};
   auto tok{Peek()};
 
@@ -397,7 +398,7 @@ std::shared_ptr<Expr> Parser::ParseBitwiseAndExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseEqualityExpr() {
+Expr* Parser::ParseEqualityExpr() {
   auto lhs{ParseRelationExpr()};
   auto tok{Peek()};
 
@@ -418,7 +419,7 @@ std::shared_ptr<Expr> Parser::ParseEqualityExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseRelationExpr() {
+Expr* Parser::ParseRelationExpr() {
   auto lhs{ParseShiftExpr()};
   auto tok{Peek()};
 
@@ -447,7 +448,7 @@ std::shared_ptr<Expr> Parser::ParseRelationExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseShiftExpr() {
+Expr* Parser::ParseShiftExpr() {
   auto lhs{ParseAdditiveExpr()};
   auto tok{Peek()};
 
@@ -468,7 +469,7 @@ std::shared_ptr<Expr> Parser::ParseShiftExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseAdditiveExpr() {
+Expr* Parser::ParseAdditiveExpr() {
   auto lhs{ParseMultiplicativeExpr()};
   auto tok{Peek()};
 
@@ -489,7 +490,7 @@ std::shared_ptr<Expr> Parser::ParseAdditiveExpr() {
   return lhs;
 }
 
-std::shared_ptr<Expr> Parser::ParseMultiplicativeExpr() {
+Expr* Parser::ParseMultiplicativeExpr() {
   auto lhs{ParseCastExpr()};
   auto tok{Peek()};
 
@@ -712,7 +713,7 @@ finish:
 #undef ERROR
 }
 
-std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
+Type* Parser::ParseStructUnionSpec(bool is_struct) {
   TryAttributeSpec();
 
   auto tok{Peek()};
@@ -736,8 +737,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
         if (tag->GetType()->IsComplete()) {
           Error(tok, "redefinition struct or union :{}", tag_name);
         } else {
-          ParseStructDeclList(
-              std::dynamic_pointer_cast<StructType>(tag->GetType()));
+          ParseStructDeclList(dynamic_cast<StructType*>(tag->GetType()));
 
           Expect(Tag::kRightBrace);
           return tag->GetType();
@@ -768,7 +768,7 @@ std::shared_ptr<Type> Parser::ParseStructUnionSpec(bool is_struct) {
   }
 }
 
-void Parser::ParseStructDeclList(std::shared_ptr<StructType> type) {
+void Parser::ParseStructDeclList(StructType* type) {
   // TODO 为什么会指向相同的地方
   auto scope_backup{*curr_scope_};
   *curr_scope_ = *type->GetScope();
@@ -854,7 +854,7 @@ finalize:
   *curr_scope_ = scope_backup;
 }
 
-std::shared_ptr<Type> Parser::ParseEnumSpec() {
+Type* Parser::ParseEnumSpec() {
   TryAttributeSpec();
 
   std::string tag_name;
@@ -896,7 +896,7 @@ std::shared_ptr<Type> Parser::ParseEnumSpec() {
   }
 }
 
-void Parser::ParseEnumerator(std::shared_ptr<Type> type) {
+void Parser::ParseEnumerator(Type* type) {
   std::int32_t val{};
 
   do {
@@ -1010,8 +1010,7 @@ void Parser::EnterProto() {
 
 void Parser::ExitProto() { curr_scope_ = curr_scope_->GetParent(); }
 
-std::pair<std::vector<std::shared_ptr<Object>>, bool>
-Parser::ParseParamTypeList() {
+std::pair<std::vector<Object*>, bool> Parser::ParseParamTypeList() {
   if (Test(Tag::kRightParen)) {
     Warning(
         Next(),
@@ -1024,7 +1023,7 @@ Parser::ParseParamTypeList() {
     return {{}, false};
   }
 
-  std::vector<std::shared_ptr<Object>> params;
+  std::vector<Object*> params;
   params.push_back(param);
 
   while (Try(Tag::kComma)) {
@@ -1044,7 +1043,7 @@ Parser::ParseParamTypeList() {
 
 // declaration-specifiers declarator
 // declaration-specifiers abstract-declarator（此时不能是函数定义）
-std::shared_ptr<Object> Parser::ParseParamDecl() {
+Object* Parser::ParseParamDecl() {
   std::uint32_t storage_class_spec{}, func_spec{};
   auto base_type{ParseDeclSpec(&storage_class_spec, &func_spec, nullptr)};
 
@@ -1058,7 +1057,7 @@ std::shared_ptr<Object> Parser::ParseParamDecl() {
 
   auto ident{MakeDeclarator(tok, base_type, storage_class_spec, func_spec, -1)};
 
-  return std::dynamic_pointer_cast<Object>(ident->GetIdent());
+  return dynamic_cast<Object*>(ident->GetIdent());
 }
 
 bool Parser::IsTypeName(const Token& tok) {
@@ -1080,11 +1079,9 @@ QualType Parser::ParseTypeName() {
   return base_type;
 }
 
-std::shared_ptr<Expr> Parser::ParseConstantExpr() {
-  return ParseConditionExpr();
-}
+Expr* Parser::ParseConstantExpr() { return ParseConditionExpr(); }
 
-std::shared_ptr<Constant> Parser::ParseStringLiteral(bool handle_escape) {
+Constant* Parser::ParseStringLiteral(bool handle_escape) {
   auto tok{Expect(Tag::kStringLiteral)};
 
   auto str{Scanner{tok.GetStr()}.ScanStringLiteral(handle_escape)};
@@ -1099,9 +1096,10 @@ std::shared_ptr<Constant> Parser::ParseStringLiteral(bool handle_escape) {
 }
 
 // TODO check
-std::shared_ptr<Declaration> Parser::MakeDeclarator(
-    const Token& tok, const QualType& type, std::uint32_t storage_class_spec,
-    std::uint32_t func_spec, std::int32_t align) {
+Declaration* Parser::MakeDeclarator(const Token& tok, const QualType& type,
+                                    std::uint32_t storage_class_spec,
+                                    std::uint32_t func_spec,
+                                    std::int32_t align) {
   (void)func_spec;
   auto name{tok.GetStr()};
 
@@ -1157,7 +1155,7 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
   //    }
   //  }
 
-  std::shared_ptr<Identifier> ret;
+  Identifier* ret;
   if (type->IsFunctionTy()) {
     if (align > 0) {
       Error(tok, "'_Alignas' attribute only applies to variables and fields");
@@ -1167,7 +1165,7 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
     ret = MakeAstNode<Object>(tok, type, 0, linkage, false,
                               curr_func_def_ == nullptr);
     if (align > 0) {
-      std::dynamic_pointer_cast<Object>(ret)->SetAlign(align);
+      dynamic_cast<Object*>(ret)->SetAlign(align);
     }
   }
 
@@ -1176,8 +1174,7 @@ std::shared_ptr<Declaration> Parser::MakeDeclarator(
   return MakeAstNode<Declaration>(ret);
 }
 
-std::set<Initializer> Parser::ParseInitDeclaratorSub(
-    std::shared_ptr<Identifier> ident) {
+std::set<Initializer> Parser::ParseInitDeclaratorSub(Identifier* ident) {
   if (!curr_scope_->IsFileScope() && ident->GetLinkage() == kExternal) {
     Error(ident->GetToken(), "{} has both 'extern' and initializer",
           ident->GetName());
@@ -1195,7 +1192,7 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(
   return inits;
 }
 
-std::shared_ptr<Expr> Parser::ParseCastExpr() {
+Expr* Parser::ParseCastExpr() {
   auto tok{Peek()};
 
   if (Try(Tag::kLeftParen)) {
@@ -1217,7 +1214,7 @@ std::shared_ptr<Expr> Parser::ParseCastExpr() {
   }
 }
 
-std::shared_ptr<Expr> Parser::ParsePrimaryExpr() {
+Expr* Parser::ParsePrimaryExpr() {
   auto tok{Peek()};
 
   if (Try(Tag::kLeftParen)) {
@@ -1244,7 +1241,7 @@ std::shared_ptr<Expr> Parser::ParsePrimaryExpr() {
   }
 }
 
-std::shared_ptr<Expr> Parser::ParsePostfixExpr() {
+Expr* Parser::ParsePostfixExpr() {
   // TODO 复合字面量
   return ParsePostfixExprTail(ParsePrimaryExpr());
 }
@@ -1255,7 +1252,7 @@ std::shared_ptr<Expr> Parser::ParsePostfixExpr() {
  * !
  * * &
  */
-std::shared_ptr<Expr> Parser::ParseUnaryExpr() {
+Expr* Parser::ParseUnaryExpr() {
   auto tok{Next()};
 
   switch (tok.GetTag()) {
@@ -1286,7 +1283,7 @@ std::shared_ptr<Expr> Parser::ParseUnaryExpr() {
   }
 }
 
-std::shared_ptr<Expr> Parser::ParseSizeof() {
+Expr* Parser::ParseSizeof() {
   QualType type;
   auto tok{Peek()};
 
@@ -1310,7 +1307,7 @@ std::shared_ptr<Expr> Parser::ParseSizeof() {
                                static_cast<std::uint64_t>(type->GetWidth()));
 }
 
-std::shared_ptr<Expr> Parser::ParseAlignof() {
+Expr* Parser::ParseAlignof() {
   QualType type;
   auto tok{Peek()};
 
@@ -1326,7 +1323,7 @@ std::shared_ptr<Expr> Parser::ParseAlignof() {
   return MakeAstNode<Constant>(tok, type->GetAlign());
 }
 
-std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
+Expr* Parser::ParsePostfixExprTail(Expr* expr) {
   while (true) {
     auto tok{Next()};
 
@@ -1339,7 +1336,7 @@ std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
             MakeAstNode<BinaryOpExpr>(tok, Tag::kPlus, expr, rhs));
       }
       case Tag::kLeftParen: {
-        std::vector<std::shared_ptr<Expr>> args;
+        std::vector<Expr*> args;
         while (!Try(Tag::kRightParen)) {
           args.push_back(ParseAssignExpr());
           if (!Test(Tag::kRightParen)) {
@@ -1395,7 +1392,7 @@ std::shared_ptr<Expr> Parser::ParsePostfixExprTail(std::shared_ptr<Expr> expr) {
   }
 }
 
-std::shared_ptr<Expr> Parser::ParseConstant() {
+Expr* Parser::ParseConstant() {
   if (Peek().IsIntegerConstant()) {
     return ParseInteger();
   } else if (Peek().IsFloatConstant()) {
@@ -1408,7 +1405,7 @@ std::shared_ptr<Expr> Parser::ParseConstant() {
   }
 }
 
-std::shared_ptr<Expr> Parser::ParseFloat() {
+Expr* Parser::ParseFloat() {
   auto tok{Next()};
   auto str{tok.GetStr()};
   double val;
@@ -1437,7 +1434,7 @@ std::shared_ptr<Expr> Parser::ParseFloat() {
   return MakeAstNode<Constant>(tok, ArithmeticType::Get(type_spec), val);
 }
 
-std::shared_ptr<Expr> Parser::ParseInteger() {
+Expr* Parser::ParseInteger() {
   auto tok{Next()};
   auto str{tok.GetStr()};
   std::uint64_t val;
@@ -1543,7 +1540,7 @@ std::shared_ptr<Expr> Parser::ParseInteger() {
   return MakeAstNode<Constant>(tok, ArithmeticType::Get(type_spec), val);
 }
 
-std::shared_ptr<Expr> Parser::ParseCharacter() {
+Expr* Parser::ParseCharacter() {
   auto tok{Next()};
   auto val{Scanner{tok.GetStr()}.ScanCharacter()};
   return MakeAstNode<Constant>(tok, val);
@@ -1632,7 +1629,7 @@ void Parser::TryAsm() {
   }
 }
 
-std::shared_ptr<Stmt> Parser::ParseStmt() {
+Stmt* Parser::ParseStmt() {
   auto tok{Peek()};
 
   TryAttributeSpec();
@@ -1677,13 +1674,12 @@ std::shared_ptr<Stmt> Parser::ParseStmt() {
   }
 }
 
-std::shared_ptr<CompoundStmt> Parser::ParseCompoundStmt(
-    std::shared_ptr<Type> func_type) {
+CompoundStmt* Parser::ParseCompoundStmt(Type* func_type) {
   Expect(Tag::kLeftBrace);
 
   EnterBlock(func_type);
 
-  std::vector<std::shared_ptr<Stmt>> stmts;
+  std::vector<Stmt*> stmts;
   while (!Try(Tag::kRightBrace)) {
     if (IsDecl(Peek())) {
       stmts.push_back(ParseDecl());
@@ -1699,7 +1695,7 @@ std::shared_ptr<CompoundStmt> Parser::ParseCompoundStmt(
   return MakeAstNode<CompoundStmt>(stmts, scope);
 }
 
-std::shared_ptr<IfStmt> Parser::ParseIfStmt() {
+IfStmt* Parser::ParseIfStmt() {
   Expect(Tag::kIf);
   Expect(Tag::kLeftParen);
 
@@ -1719,7 +1715,7 @@ std::shared_ptr<IfStmt> Parser::ParseIfStmt() {
   }
 }
 
-std::shared_ptr<WhileStmt> Parser::ParseWhileStmt() {
+WhileStmt* Parser::ParseWhileStmt() {
   Expect(Tag::kWhile);
   Expect(Tag::kLeftParen);
 
@@ -1731,7 +1727,7 @@ std::shared_ptr<WhileStmt> Parser::ParseWhileStmt() {
   return MakeAstNode<WhileStmt>(cond, ParseStmt());
 }
 
-std::shared_ptr<DoWhileStmt> Parser::ParseDoWhileStmt() {
+DoWhileStmt* Parser::ParseDoWhileStmt() {
   Expect(Tag::kDo);
 
   auto stmt{ParseStmt()};
@@ -1747,13 +1743,13 @@ std::shared_ptr<DoWhileStmt> Parser::ParseDoWhileStmt() {
   return MakeAstNode<DoWhileStmt>(cond, stmt);
 }
 
-std::shared_ptr<ForStmt> Parser::ParseForStmt() {
+ForStmt* Parser::ParseForStmt() {
   Expect(Tag::kFor);
   Expect(Tag::kLeftParen);
 
-  std::shared_ptr<Expr> init, cond, inc;
-  std::shared_ptr<Stmt> block;
-  std::shared_ptr<Stmt> decl;
+  Expr *init, *cond, *inc;
+  Stmt* block;
+  Stmt* decl;
 
   EnterBlock();
   auto tok{Peek()};
@@ -1780,9 +1776,8 @@ std::shared_ptr<ForStmt> Parser::ParseForStmt() {
   return MakeAstNode<ForStmt>(init, cond, inc, block, decl);
 }
 
-std::shared_ptr<ReturnStmt> Parser::ParseReturnStmt() {
+ReturnStmt* Parser::ParseReturnStmt() {
   Expect(Tag::kReturn);
-
   if (Try(Tag::kSemicolon)) {
     return MakeAstNode<ReturnStmt>();
   } else {
@@ -1795,7 +1790,7 @@ std::shared_ptr<ReturnStmt> Parser::ParseReturnStmt() {
   }
 }
 
-std::shared_ptr<ExprStmt> Parser::ParseExprStmt() {
+ExprStmt* Parser::ParseExprStmt() {
   if (Try(Tag::kSemicolon)) {
     return MakeAstNode<ExprStmt>();
   } else {
@@ -1805,7 +1800,7 @@ std::shared_ptr<ExprStmt> Parser::ParseExprStmt() {
   }
 }
 
-std::shared_ptr<CaseStmt> Parser::ParseCaseStmt() {
+CaseStmt* Parser::ParseCaseStmt() {
   Expect(Tag::kCase);
 
   auto expr{ParseExpr()};
@@ -1828,14 +1823,14 @@ std::shared_ptr<CaseStmt> Parser::ParseCaseStmt() {
   }
 }
 
-std::shared_ptr<DefaultStmt> Parser::ParseDefaultStmt() {
+DefaultStmt* Parser::ParseDefaultStmt() {
   Expect(Tag::kDefault);
   Expect(Tag::kColon);
 
   return MakeAstNode<DefaultStmt>(ParseStmt());
 }
 
-std::shared_ptr<SwitchStmt> Parser::ParseSwitchStmt() {
+SwitchStmt* Parser::ParseSwitchStmt() {
   Expect(Tag::kSwitch);
   Expect(Tag::kLeftParen);
 
@@ -1845,7 +1840,7 @@ std::shared_ptr<SwitchStmt> Parser::ParseSwitchStmt() {
   return MakeAstNode<SwitchStmt>(cond, ParseStmt());
 }
 
-std::shared_ptr<GotoStmt> Parser::ParseGotoStmt() {
+GotoStmt* Parser::ParseGotoStmt() {
   Expect(Tag::kGoto);
   auto tok{Expect(Tag::kIdentifier)};
   Expect(Tag::kSemicolon);
@@ -1854,7 +1849,7 @@ std::shared_ptr<GotoStmt> Parser::ParseGotoStmt() {
       MakeAstNode<Identifier>(tok, QualType{VoidType::Get()}, kNone, false));
 }
 
-std::shared_ptr<LabelStmt> Parser::ParseLabelStmt() {
+LabelStmt* Parser::ParseLabelStmt() {
   auto tok{Expect(Tag::kIdentifier)};
   Expect(Tag::kColon);
 
@@ -1864,21 +1859,21 @@ std::shared_ptr<LabelStmt> Parser::ParseLabelStmt() {
       MakeAstNode<Identifier>(tok, QualType{VoidType::Get()}, kNone, false));
 }
 
-std::shared_ptr<ContinueStmt> Parser::ParseContinueStmt() {
+ContinueStmt* Parser::ParseContinueStmt() {
   Expect(Tag::kContinue);
   Expect(Tag::kSemicolon);
 
   return MakeAstNode<ContinueStmt>();
 }
 
-std::shared_ptr<BreakStmt> Parser::ParseBreakStmt() {
+BreakStmt* Parser::ParseBreakStmt() {
   Expect(Tag::kBreak);
   Expect(Tag::kSemicolon);
 
   return MakeAstNode<BreakStmt>();
 }
 
-void Parser::EnterBlock(std::shared_ptr<Type> func_type) {
+void Parser::EnterBlock(Type* func_type) {
   curr_scope_ = std::make_shared<Scope>(curr_scope_, kBlock);
 
   if (func_type) {
@@ -1903,7 +1898,7 @@ bool Parser::IsDecl(const Token& tok) {
   return false;
 }
 
-void Parser::EnterFunc(const std::shared_ptr<Identifier>& ident) {
+void Parser::EnterFunc(Identifier* ident) {
   curr_func_def_ = MakeAstNode<FuncDef>(ident);
 }
 

@@ -2794,9 +2794,4 @@ extern wctrans_t wctrans (const char *__property) __attribute__ ((__nothrow__ ))
 extern wint_t towctrans (wint_t __wc, wctrans_t __desc) __attribute__ ((__nothrow__ ));
 # 27 "test/dev/test.c" 2
 
-int main(void) {
-  int a;
-  a = 10;
-
-  printf("%d\n", a ? 4 : 8);
-}
+int main(void) { printf("Hello World"); }

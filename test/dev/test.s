@@ -8,9 +8,7 @@ main:                                   # @main
 # %bb.0:
 	pushq	%rax
 	.cfi_def_cfa_offset 16
-	movl	$10, 4(%rsp)
 	movl	$.L__unnamed_1, %edi
-	movl	$4, %esi
 	xorl	%eax, %eax
 	callq	printf
 	xorl	%eax, %eax
@@ -24,8 +22,8 @@ main:                                   # @main
 	.type	.L__unnamed_1,@object   # @0
 	.section	.rodata.str1.1,"aMS",@progbits,1
 .L__unnamed_1:
-	.asciz	"%d\n"
-	.size	.L__unnamed_1, 4
+	.asciz	"Hello World"
+	.size	.L__unnamed_1, 12
 
 
 	.section	".note.GNU-stack","",@progbits

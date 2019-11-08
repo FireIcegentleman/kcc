@@ -4,9 +4,37 @@
 
 #include "ast.h"
 
+#include "memory_pool.h"
 #include "visitor.h"
 
 namespace kcc {
+
+MemoryPool<BinaryOpExpr> BinaryOpExprPool;
+MemoryPool<Enumerator> EnumeratorPool;
+MemoryPool<Identifier> IdentifierPool;
+MemoryPool<Constant> ConstantPool;
+MemoryPool<FuncCallExpr> FuncCallExprPool;
+MemoryPool<TypeCastExpr> TypeCastExprPool;
+MemoryPool<ConditionOpExpr> ConditionOpExprPool;
+MemoryPool<UnaryOpExpr> UnaryOpExprPool;
+MemoryPool<LabelStmt> LabelStmtPool;
+MemoryPool<ReturnStmt> ReturnStmtPool;
+MemoryPool<IfStmt> IfStmtPool;
+MemoryPool<CompoundStmt> CompoundStmtPool;
+MemoryPool<Object> ObjectPool;
+MemoryPool<TranslationUnit> TranslationUnitPool;
+MemoryPool<Declaration> DeclarationPool;
+MemoryPool<FuncDef> FuncDefPool;
+MemoryPool<ExprStmt> ExprStmtPool;
+MemoryPool<WhileStmt> WhileStmtPool;
+MemoryPool<DoWhileStmt> DoWhileStmtPool;
+MemoryPool<ForStmt> ForStmtPool;
+MemoryPool<CaseStmt> CaseStmtPool;
+MemoryPool<DefaultStmt> DefaultStmtPool;
+MemoryPool<SwitchStmt> SwitchStmtPool;
+MemoryPool<GotoStmt> GotoStmtPool;
+MemoryPool<ContinueStmt> ContinueStmtPool;
+MemoryPool<BreakStmt> BreakStmtPool;
 
 #define ACCEPT(ClassName) \
   void ClassName::Accept(Visitor& visitor) const { visitor.Visit(*this); }
@@ -49,7 +77,7 @@ void Expr::SetToken(const Token& tok) { tok_ = tok; }
 
 QualType Expr::GetQualType() const { return type_; }
 
-std::shared_ptr<Type> Expr::GetType() const { return type_.GetType(); }
+const Type* Expr::GetType() const { return type_.GetType(); }
 
 bool Expr::IsConst() const { return type_.IsConst(); }
 
@@ -72,7 +100,7 @@ void Expr::EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const {
   }
 }
 
-std::shared_ptr<Expr> Expr::MayCast(const std::shared_ptr<Expr>& expr) {
+Expr* Expr::MayCast(Expr* expr) {
   auto type{Type::MayCast(expr->GetQualType())};
 
   if (type != expr->GetQualType()) {
@@ -82,7 +110,7 @@ std::shared_ptr<Expr> Expr::MayCast(const std::shared_ptr<Expr>& expr) {
   }
 }
 
-std::shared_ptr<Expr> Expr::MayCastTo(std::shared_ptr<Expr> expr, QualType to) {
+Expr* Expr::MayCastTo(Expr* expr, QualType to) {
   expr = MayCast(expr);
 
   if (!expr->GetQualType()->Equal(to.GetType())) {
@@ -92,11 +120,12 @@ std::shared_ptr<Expr> Expr::MayCastTo(std::shared_ptr<Expr> expr, QualType to) {
   }
 }
 
+Type* Expr::GetType() { return type_.GetType(); }
+
 /*
  * BinaryOpExpr
  */
-BinaryOpExpr::BinaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> lhs,
-                           std::shared_ptr<Expr> rhs)
+BinaryOpExpr::BinaryOpExpr(const Token& tok, Tag tag, Expr* lhs, Expr* rhs)
     : Expr(tok), op_(tag), lhs_(MayCast(lhs)), rhs_(MayCast(rhs)) {}
 
 AstNodeType BinaryOpExpr::Kind() const { return AstNodeType::kBinaryOpExpr; }
@@ -168,7 +197,7 @@ void BinaryOpExpr::Check() {
   }
 }
 
-std::shared_ptr<Type> BinaryOpExpr::Convert() {
+Type* BinaryOpExpr::Convert() {
   auto lhs_type{lhs_->GetQualType()};
   auto rhs_type{rhs_->GetQualType()};
 
@@ -354,10 +383,15 @@ void BinaryOpExpr::MemberRefOpCheck() { type_ = rhs_->GetQualType(); }
 
 void BinaryOpExpr::CommaOpCheck() { type_ = rhs_->GetQualType(); }
 
+BinaryOpExpr* BinaryOpExpr::Get(const Token& tok, Tag tag, Expr* lhs,
+                                Expr* rhs) {
+  return new (BinaryOpExprPool.Allocate()) BinaryOpExpr{tok, tag, lhs, rhs};
+}
+
 /*
  * UnaryOpExpr
  */
-UnaryOpExpr::UnaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> expr)
+UnaryOpExpr::UnaryOpExpr(const Token& tok, Tag tag, Expr* expr)
     : Expr(tok), op_(tag) {
   if (op_ == Tag::kAmp) {
     expr_ = expr;
@@ -469,10 +503,14 @@ void UnaryOpExpr::AddrOpCheck() {
   type_ = QualType{PointerType::Get(expr_->GetQualType())};
 }
 
+UnaryOpExpr* UnaryOpExpr::Get(const Token& tok, Tag tag, Expr* expr) {
+  return new (UnaryOpExprPool.Allocate()) UnaryOpExpr{tok, tag, expr};
+}
+
 /*
  * TypeCastExpr
  */
-TypeCastExpr::TypeCastExpr(std::shared_ptr<Expr> expr, QualType to)
+TypeCastExpr::TypeCastExpr(Expr* expr, QualType to)
     : Expr(expr->GetToken(), to), expr_{expr}, to_{to} {}
 
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
@@ -481,6 +519,10 @@ bool TypeCastExpr::IsLValue() const { return false; }
 
 void TypeCastExpr::Check() {
   // TODO more check
+}
+
+TypeCastExpr* TypeCastExpr::Get(Expr* expr, QualType to) {
+  return new (TypeCastExprPool.Allocate()) TypeCastExpr{expr, to};
 }
 
 /*
@@ -512,7 +554,7 @@ void ConditionOpExpr::Check() {
   }
 }
 
-std::shared_ptr<Type> ConditionOpExpr::Convert() {
+Type* ConditionOpExpr::Convert() {
   auto lhs_type{lhs_->GetQualType()};
   auto rhs_type{rhs_->GetQualType()};
 
@@ -524,11 +566,16 @@ std::shared_ptr<Type> ConditionOpExpr::Convert() {
   return type;
 }
 
+ConditionOpExpr* ConditionOpExpr::Get(const Token& tok, Expr* cond, Expr* lhs,
+                                      Expr* rhs) {
+  return new (ConditionOpExprPool.Allocate())
+      ConditionOpExpr{tok, cond, lhs, rhs};
+}
+
 /*
  * FuncCallExpr
  */
-FuncCallExpr::FuncCallExpr(std::shared_ptr<Expr> callee,
-                           std::vector<std::shared_ptr<Expr>> args)
+FuncCallExpr::FuncCallExpr(Expr* callee, std::vector<Expr*> args)
     : Expr{callee->GetToken()}, callee_{callee}, args_{std::move(args)} {}
 
 AstNodeType FuncCallExpr::Kind() const {
@@ -587,12 +634,16 @@ void FuncCallExpr::Check() {
   type_ = func_type->FuncGetReturnType();
 }
 
-std::shared_ptr<Type> FuncCallExpr::GetFuncType() const {
+Type* FuncCallExpr::GetFuncType() const {
   if (callee_->GetQualType()->IsPointerTy()) {
     return callee_->GetQualType()->PointerGetElementType().GetType();
   } else {
     return callee_->GetQualType().GetType();
   }
+}
+
+FuncCallExpr* FuncCallExpr::Get(Expr* callee, std::vector<Expr*> args) {
+  return new (FuncCallExprPool.Allocate()) FuncCallExpr{callee, args};
 }
 
 /*
@@ -609,6 +660,22 @@ long Constant::GetIntegerVal() const { return integer_val_; }
 double Constant::GetFloatPointVal() const { return float_point_val_; }
 
 std::string Constant::GetStrVal() const { return str_val_; }
+
+Constant* Constant::Get(const Token& tok, std::int32_t val) {
+  return new (ConstantPool.Allocate()) Constant{tok, val};
+}
+
+Constant* Constant::Get(const Token& tok, Type* type, std::uint64_t val) {
+  return new (ConstantPool.Allocate()) Constant{tok, type, val};
+}
+
+Constant* Constant::Get(const Token& tok, Type* type, double val) {
+  return new (ConstantPool.Allocate()) Constant{tok, type, val};
+}
+
+Constant* Constant::Get(const Token& tok, Type* type, const std::string& val) {
+  return new (ConstantPool.Allocate()) Constant{tok, type, val};
+}
 
 /*
  * Identifier
@@ -637,6 +704,12 @@ bool Identifier::IsEnumerator() const {
   return dynamic_cast<const Enumerator*>(this);
 }
 
+Identifier* Identifier::Get(const Token& tok, QualType type,
+                            enum Linkage linkage, bool is_type_name) {
+  return new (IdentifierPool.Allocate())
+      Identifier{tok, type, linkage, is_type_name};
+}
+
 /*
  * Enumerator
  */
@@ -651,6 +724,10 @@ bool Enumerator::IsLValue() const { return false; }
 void Enumerator::Check() {}
 
 std::int32_t Enumerator::GetVal() const { return val_; }
+
+Enumerator* Enumerator::Get(const Token& tok, std::int32_t val) {
+  return new (EnumeratorPool.Allocate()) Enumerator{tok, val};
+}
 
 /*
  * Object
@@ -686,20 +763,27 @@ std::int32_t Object::GetOffset() const { return offset_; }
 
 void Object::SetOffset(std::int32_t offset) { offset_ = offset; }
 
-std::shared_ptr<Declaration> Object::GetDecl() { return decl_; }
+Declaration* Object::GetDecl() { return decl_; }
 
-void Object::SetDecl(std::shared_ptr<Declaration> decl) { decl_ = decl; }
+void Object::SetDecl(Declaration* decl) { decl_ = decl; }
 
 bool Object::HasInit() const { return decl_->HasInit(); }
 
 bool Object::Anonymous() const { return anonymous_; }
+
+Object* Object::Get(const Token& tok, QualType type,
+                    std::uint32_t storage_class_spec, enum Linkage linkage,
+                    bool anonymous, bool in_global) {
+  return new (ObjectPool.Allocate())
+      Object{tok, type, storage_class_spec, linkage, anonymous, in_global};
+}
 
 AstNodeType FuncDef::Kind() const { return AstNodeType::kFuncDef; }
 
 /*
  * FuncDef
  */
-void FuncDef::SetBody(std::shared_ptr<CompoundStmt> body) {
+void FuncDef::SetBody(CompoundStmt* body) {
   if (ident_->GetType()->IsComplete()) {
     Error(ident_->GetToken(), "redefinition of func {}", ident_->GetName());
   } else {
@@ -714,7 +798,7 @@ enum Linkage FuncDef::GetLinkage() const { return ident_->GetLinkage(); }
 
 QualType FuncDef::GetFuncType() const { return ident_->GetQualType(); }
 
-std::shared_ptr<Identifier> FuncDef::GetIdent() const { return ident_; }
+Identifier* FuncDef::GetIdent() const { return ident_; }
 
 void FuncDef::Check() {
   for (const auto& param : ident_->GetQualType()->FuncGetParams()) {
@@ -731,13 +815,13 @@ AstNodeType TranslationUnit::Kind() const {
   return AstNodeType::kTranslationUnit;
 }
 
-void TranslationUnit::AddExtDecl(std::shared_ptr<ExtDecl> ext_decl) {
+void TranslationUnit::AddExtDecl(ExtDecl* ext_decl) {
   // _Static_assert / e.g. int;
   if (ext_decl == nullptr) {
     return;
   }
   // 是声明而不是函数定义
-  if (auto p{std::dynamic_pointer_cast<CompoundStmt>(ext_decl)}; p) {
+  if (auto p{dynamic_cast<CompoundStmt*>(ext_decl)}; p) {
     for (const auto& decl : p->GetStmts()) {
       ext_decls_.push_back(decl);
     }
@@ -748,18 +832,21 @@ void TranslationUnit::AddExtDecl(std::shared_ptr<ExtDecl> ext_decl) {
 
 void TranslationUnit::Check() {}
 
+TranslationUnit* TranslationUnit::Get() {
+  return new (TranslationUnitPool.Allocate()) TranslationUnit{};
+}
+
 /*
  * LabelStmt
  */
-LabelStmt::LabelStmt(std::shared_ptr<Identifier> ident) : ident_{ident} {}
+LabelStmt::LabelStmt(Identifier* ident) : ident_{ident} {}
 
 AstNodeType LabelStmt::Kind() const { return AstNodeType::kLabelStmt; }
 
 /*
  * IfStmt
  */
-IfStmt::IfStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> then_block,
-               std::shared_ptr<Stmt> else_block)
+IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
     : cond_{cond}, then_block_{then_block}, else_block_{else_block} {}
 
 AstNodeType IfStmt::Kind() const { return AstNodeType::kIfStmt; }
@@ -767,16 +854,20 @@ AstNodeType IfStmt::Kind() const { return AstNodeType::kIfStmt; }
 /*
  * ReturnStmt
  */
-ReturnStmt::ReturnStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
+ReturnStmt::ReturnStmt(Expr* expr) : expr_{expr} {}
 
 AstNodeType ReturnStmt::Kind() const { return AstNodeType::kReturnStmt; }
 
 void ReturnStmt::Check() {}
 
+ReturnStmt* ReturnStmt::Get(Expr* expr) {
+  return new (ReturnStmtPool.Allocate()) ReturnStmt{expr};
+}
+
 /*
  * CompoundStmt
  */
-CompoundStmt::CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts,
+CompoundStmt::CompoundStmt(std::vector<Stmt*> stmts,
                            std::shared_ptr<Scope> scope)
     : stmts_{std::move(stmts)}, scope_{scope} {}
 
@@ -784,9 +875,9 @@ AstNodeType CompoundStmt::Kind() const { return AstNodeType::kCompoundStmt; }
 
 std::shared_ptr<Scope> CompoundStmt::GetScope() { return scope_; }
 
-std::vector<std::shared_ptr<Stmt>> CompoundStmt::GetStmts() { return stmts_; }
+std::vector<Stmt*> CompoundStmt::GetStmts() { return stmts_; }
 
-void CompoundStmt::AddStmt(std::shared_ptr<Stmt> stmt) {
+void CompoundStmt::AddStmt(Stmt* stmt) {
   // 非 typedef
   if (stmt) {
     stmts_.push_back(stmt);
@@ -803,6 +894,10 @@ void Declaration::AddInit(const Initializer& init) { inits_.insert(init); }
 bool Declaration::HasInit() const { return std::size(inits_); }
 
 void Declaration::Check() {}
+
+Declaration* Declaration::Get(Identifier* ident) {
+  return new (DeclarationPool.Allocate()) Declaration{ident};
+}
 
 bool operator<(const Initializer& lhs, const Initializer& rhs) {
   return lhs.offset_ < rhs.offset_;
@@ -825,56 +920,73 @@ AstNodeType GotoStmt::Kind() const { return AstNodeType::kGotoStmt; }
 
 void GotoStmt::Check() {}
 
+GotoStmt* GotoStmt::Get(Identifier* ident) {
+  return new (GotoStmtPool.Allocate()) GotoStmt{ident};
+}
+
 /*
  * ExprStmt
  */
-ExprStmt::ExprStmt(std::shared_ptr<Expr> expr) : expr_{expr} {}
+ExprStmt::ExprStmt(Expr* expr) : expr_{expr} {}
 
 AstNodeType ExprStmt::Kind() const { return AstNodeType::kExprStmt; }
 
 void ExprStmt::Check() {}
 
+ExprStmt* ExprStmt::Get(Expr* expr) {
+  return new (ExprStmtPool.Allocate()) ExprStmt{expr};
+}
+
 /*
  * WhileStmt
  */
-WhileStmt::WhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block)
-    : cond_{cond}, block_{block} {}
+WhileStmt::WhileStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
 
 AstNodeType WhileStmt::Kind() const { return AstNodeType::kWhileStmt; }
 
 void WhileStmt::Check() {}
 
+WhileStmt* WhileStmt::Get(Expr* cond, Stmt* block) {
+  return new (WhileStmtPool.Allocate()) WhileStmt{cond, block};
+}
+
 /*
  * DoWhileStmt
  */
-DoWhileStmt::DoWhileStmt(std::shared_ptr<Expr> cond,
-                         std::shared_ptr<Stmt> block)
+DoWhileStmt::DoWhileStmt(Expr* cond, Stmt* block)
     : cond_{cond}, block_{block} {}
 
 AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
 
 void DoWhileStmt::Check() {}
 
+DoWhileStmt* DoWhileStmt::Get(Expr* cond, Stmt* block) {
+  return new (DoWhileStmtPool.Allocate()) DoWhileStmt{cond, block};
+}
+
 /*
  * ForStmt
  */
-ForStmt::ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
-                 std::shared_ptr<Expr> inc, std::shared_ptr<Stmt> block,
-                 std::shared_ptr<Stmt> decl)
+ForStmt::ForStmt(Expr* init, Expr* cond, Expr* inc, Stmt* block, Stmt* decl)
     : init_{init}, cond_{cond}, inc_{inc}, block_{block}, decl_{decl} {}
 
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
 
 void ForStmt::Check() {}
 
+ForStmt* ForStmt::Get(Expr* init, Expr* cond, Expr* inc, Stmt* block,
+                      Stmt* decl) {
+  return new (ForStmtPool.Allocate()) ForStmt{init, cond, inc, block, decl};
+}
+
 /*
  * CaseStmt
  */
-CaseStmt::CaseStmt(std::int32_t case_value, std::shared_ptr<Stmt> block)
+CaseStmt::CaseStmt(std::int32_t case_value, Stmt* block)
     : case_value_{case_value}, block_{block} {}
 
 CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2,
-                   std::shared_ptr<Stmt> block)
+                   Stmt* block)
     : case_value_range_{case_value, case_value2},
       has_range_{true},
       block_{block} {}
@@ -883,33 +995,78 @@ AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
 void CaseStmt::Check() {}
 
+CaseStmt* CaseStmt::Get(std::int32_t case_value, Stmt* block) {
+  return new (CaseStmtPool.Allocate()) CaseStmt{case_value, block};
+}
+
+CaseStmt* CaseStmt::Get(std::int32_t case_value, std::int32_t case_value2,
+                        Stmt* block) {
+  return new (CaseStmtPool.Allocate()) CaseStmt{case_value, case_value2, block};
+}
+
 /*
  * DefaultStmt
  */
 AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
 
-DefaultStmt::DefaultStmt(std::shared_ptr<Stmt> block) : block_{block} {}
+DefaultStmt::DefaultStmt(Stmt* block) : block_{block} {}
 
 void DefaultStmt::Check() {}
+
+DefaultStmt* DefaultStmt::Get(Stmt* block) {
+  return new (DefaultStmtPool.Allocate()) DefaultStmt{block};
+}
 
 /*
  * SwitchStmt
  */
-SwitchStmt::SwitchStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block)
-    : cond_{cond}, block_{block} {}
+SwitchStmt::SwitchStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
 
 AstNodeType SwitchStmt::Kind() const { return AstNodeType::kSwitchStmt; }
 
 void ContinueStmt::Check() {}
 
+ContinueStmt* ContinueStmt::Get() {
+  return new (ContinueStmtPool.Allocate()) ContinueStmt{};
+}
+
 void BreakStmt::Check() {}
+
+BreakStmt* BreakStmt::Get() {
+  return new (BreakStmtPool.Allocate()) BreakStmt{};
+}
 
 void SwitchStmt::Check() {}
 
+SwitchStmt* SwitchStmt::Get(Expr* cond, Stmt* block) {
+  return new (SwitchStmtPool.Allocate()) SwitchStmt{cond, block};
+}
+
 void CompoundStmt::Check() {}
+
+CompoundStmt* CompoundStmt::Get(std::vector<Stmt*> stmts,
+                                std::shared_ptr<Scope> scope) {
+  return new (CompoundStmtPool.Allocate()) CompoundStmt{stmts, scope};
+}
+
+CompoundStmt* CompoundStmt::Get() {
+  return new (CompoundStmtPool.Allocate()) CompoundStmt{};
+}
 
 void IfStmt::Check() {}
 
+IfStmt* IfStmt::Get(Expr* cond, Stmt* then_block, Stmt* else_block) {
+  return new (IfStmtPool.Allocate()) IfStmt{cond, then_block, else_block};
+}
+
 void LabelStmt::Check() {}
+
+LabelStmt* LabelStmt::Get(Identifier* label) {
+  return new (LabelStmtPool.Allocate()) LabelStmt{label};
+}
+
+FuncDef* FuncDef::Get(Identifier* ident) {
+  return new (FuncDefPool.Allocate()) FuncDef{ident};
+}
 
 }  // namespace kcc

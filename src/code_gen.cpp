@@ -63,9 +63,7 @@ CodeGen::CodeGen(const std::string& file_name) {
   Module->setTargetTriple(target_triple);
 }
 
-void CodeGen::GenCode(const std::shared_ptr<TranslationUnit>& root) {
-  root->Accept(*this);
-}
+void CodeGen::GenCode(const TranslationUnit* root) { root->Accept(*this); }
 
 /*
  * ++ --
@@ -356,10 +354,13 @@ void CodeGen::Visit(const TranslationUnit& node) {
 
 void CodeGen::Visit(const Declaration& node) {
   if (node.IsObj()) {
-    auto obj{std::dynamic_pointer_cast<Object>(node.ident_)};
+    auto obj{dynamic_cast<Object*>(node.ident_)};
     auto type{node.ident_->GetType()};
 
     if (!obj->in_global_) {
+      if (Builder.GetInsertBlock() == nullptr) {
+        Error(node.ident_->GetToken(), "fuck");
+      }
       obj->local_ptr_ = CreateEntryBlockAlloca(
           Builder.GetInsertBlock()->getParent(), type->GetLLVMType(),
           obj->GetAlign(), obj->GetName());

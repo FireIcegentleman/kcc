@@ -19,17 +19,15 @@ void Scope::PrintCurrScope() const {
   }
 }
 
-void Scope::InsertTag(const std::string& name,
-                      std::shared_ptr<Identifier> ident) {
+void Scope::InsertTag(const std::string& name, Identifier* ident) {
   tags_[name] = ident;
 }
 
-void Scope::InsertNormal(const std::string& name,
-                         std::shared_ptr<Identifier> ident) {
+void Scope::InsertNormal(const std::string& name, Identifier* ident) {
   normal_[name] = ident;
 }
 
-std::shared_ptr<Identifier> Scope::FindTag(const std::string& name) {
+Identifier* Scope::FindTag(const std::string& name) {
   auto iter{tags_.find(name)};
   if (iter != std::end(tags_)) {
     return iter->second;
@@ -41,7 +39,7 @@ std::shared_ptr<Identifier> Scope::FindTag(const std::string& name) {
   return parent_->FindTag(name);
 }
 
-std::shared_ptr<Identifier> Scope::FindNormal(const std::string& name) {
+Identifier* Scope::FindNormal(const std::string& name) {
   auto iter{normal_.find(name)};
   if (iter != std::end(normal_)) {
     return iter->second;
@@ -53,35 +51,31 @@ std::shared_ptr<Identifier> Scope::FindNormal(const std::string& name) {
   return parent_->FindNormal(name);
 }
 
-std::shared_ptr<Identifier> Scope::FindTagInCurrScope(const std::string& name) {
+Identifier* Scope::FindTagInCurrScope(const std::string& name) {
   auto iter{tags_.find(name)};
   return iter == std::end(tags_) ? nullptr : iter->second;
 }
 
-std::shared_ptr<Identifier> Scope::FindNormalInCurrScope(
-    const std::string& name) {
+Identifier* Scope::FindNormalInCurrScope(const std::string& name) {
   auto iter{normal_.find(name)};
   return iter == std::end(normal_) ? nullptr : iter->second;
 }
 
-std::shared_ptr<Identifier> Scope::FindTag(const Token& tok) {
-  return FindTag(tok.GetStr());
-}
+Identifier* Scope::FindTag(const Token& tok) { return FindTag(tok.GetStr()); }
 
-std::shared_ptr<Identifier> Scope::FindNormal(const Token& tok) {
+Identifier* Scope::FindNormal(const Token& tok) {
   return FindNormal(tok.GetStr());
 }
 
-std::shared_ptr<Identifier> Scope::FindTagInCurrScope(const Token& tok) {
+Identifier* Scope::FindTagInCurrScope(const Token& tok) {
   return FindTagInCurrScope(tok.GetStr());
 }
 
-std::shared_ptr<Identifier> Scope::FindNormalInCurrScope(const Token& tok) {
+Identifier* Scope::FindNormalInCurrScope(const Token& tok) {
   return FindNormalInCurrScope(tok.GetStr());
 }
 
-std::map<std::string, std::shared_ptr<Identifier>> Scope::AllTagInCurrScope()
-    const {
+std::map<std::string, Identifier*> Scope::AllTagInCurrScope() const {
   return tags_;
 }
 

@@ -336,7 +336,7 @@ void RunDev() {
                  std::mem_fn(&Token::ToString));
 
   Parser parser{std::move(tokens)};
-  std::shared_ptr<TranslationUnit> unit;
+  TranslationUnit *unit;
   {
     std::cout << "parse ............................ ";
     const auto kT0{std::chrono::system_clock::now()};

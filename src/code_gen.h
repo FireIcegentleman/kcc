@@ -20,7 +20,7 @@ class CodeGen : public Visitor {
  public:
   CodeGen(const std::string &file_name);
 
-  void GenCode(const std::shared_ptr<TranslationUnit> &root);
+  void GenCode(const TranslationUnit *root);
 
  private:
   // 在栈上分配内存

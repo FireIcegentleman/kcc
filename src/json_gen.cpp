@@ -10,7 +10,7 @@
 
 namespace kcc {
 
-void JsonGen::GenJson(const std::shared_ptr<TranslationUnit>& root,
+void JsonGen::GenJson(const TranslationUnit* root,
                       const std::string& file_name) {
   Visit(*root);
 

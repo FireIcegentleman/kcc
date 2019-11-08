@@ -24,7 +24,7 @@ namespace kcc {
 template <typename T>
 class CalcExpr : public Visitor {
  public:
-  T Calc(std::shared_ptr<Expr> expr);
+  T Calc(Expr* expr);
 
  private:
   virtual void Visit(const UnaryOpExpr& node) override;
@@ -59,7 +59,7 @@ class CalcExpr : public Visitor {
 };
 
 template <typename T>
-T CalcExpr<T>::Calc(std::shared_ptr<Expr> expr) {
+T CalcExpr<T>::Calc(Expr* expr) {
   expr->Accept(*this);
   return val_;
 }

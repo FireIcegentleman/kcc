@@ -44,20 +44,20 @@ class Scope {
   auto begin() { return std::begin(normal_); }
   auto end() { return std::end(normal_); }
 
-  void InsertTag(const std::string &name, std::shared_ptr<Identifier> ident);
-  void InsertNormal(const std::string &name, std::shared_ptr<Identifier> ident);
+  void InsertTag(const std::string& name, Identifier* ident);
+  void InsertNormal(const std::string& name, Identifier* ident);
 
-  std::shared_ptr<Identifier> FindTag(const std::string &name);
-  std::shared_ptr<Identifier> FindNormal(const std::string &name);
-  std::shared_ptr<Identifier> FindTagInCurrScope(const std::string &name);
-  std::shared_ptr<Identifier> FindNormalInCurrScope(const std::string &name);
+  Identifier* FindTag(const std::string& name);
+  Identifier* FindNormal(const std::string& name);
+  Identifier* FindTagInCurrScope(const std::string& name);
+  Identifier* FindNormalInCurrScope(const std::string& name);
 
-  std::shared_ptr<Identifier> FindTag(const Token &tok);
-  std::shared_ptr<Identifier> FindNormal(const Token &tok);
-  std::shared_ptr<Identifier> FindTagInCurrScope(const Token &tok);
-  std::shared_ptr<Identifier> FindNormalInCurrScope(const Token &tok);
+  Identifier* FindTag(const Token& tok);
+  Identifier* FindNormal(const Token& tok);
+  Identifier* FindTagInCurrScope(const Token& tok);
+  Identifier* FindNormalInCurrScope(const Token& tok);
 
-  std::map<std::string, std::shared_ptr<Identifier>> AllTagInCurrScope() const;
+  std::map<std::string, Identifier*> AllTagInCurrScope() const;
   std::shared_ptr<Scope> GetParent();
 
   bool IsFileScope() const;
@@ -67,9 +67,9 @@ class Scope {
   enum ScopeType type_;
 
   // struct / union / enum 的名字
-  std::map<std::string, std::shared_ptr<Identifier>> tags_;
+  std::map<std::string, Identifier*> tags_;
   // 函数 / 对象 / typedef名 / 枚举常量
-  std::map<std::string, std::shared_ptr<Identifier>> normal_;
+  std::map<std::string, Identifier*> normal_;
 };
 
 }  // namespace kcc

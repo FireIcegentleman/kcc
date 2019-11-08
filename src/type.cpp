@@ -14,6 +14,7 @@
 #include <memory>
 
 #include "ast.h"
+#include "memory_pool.h"
 #include "scope.h"
 
 namespace kcc {
@@ -21,6 +22,14 @@ namespace kcc {
 extern llvm::IRBuilder<> Builder;
 extern llvm::LLVMContext Context;
 extern std::unique_ptr<llvm::Module> Module;
+
+MemoryPool<VoidType> VoidTypePool;
+MemoryPool<ArithmeticType> ArithmeticTypePool;
+MemoryPool<PointerType> PointerTypePool;
+MemoryPool<ArrayType> ArrayTypePool;
+MemoryPool<StructType> StructTypePool;
+MemoryPool<FunctionType> FunctionTypePool;
+
 /*
  * QualType
  */
@@ -28,13 +37,13 @@ Type& QualType::operator*() { return *type_; }
 
 const Type& QualType::operator*() const { return *type_; }
 
-std::shared_ptr<Type> QualType::operator->() { return type_; }
+Type* QualType::operator->() { return type_; }
 
-const std::shared_ptr<Type> QualType::operator->() const { return type_; }
+const Type* QualType::operator->() const { return type_; }
 
-std::shared_ptr<Type> QualType::GetType() { return type_; }
+Type* QualType::GetType() { return type_; }
 
-const std::shared_ptr<Type> QualType::GetType() const { return type_; }
+const Type* QualType::GetType() const { return type_; }
 
 std::uint32_t QualType::GetTypeQual() const { return type_qual_; }
 
@@ -195,9 +204,7 @@ bool Type::IsFloatPointTy() const {
   return IsRealFloatPointTy();
 }
 
-std::shared_ptr<PointerType> Type::GetPointerTo() {
-  return PointerType::Get(QualType{shared_from_this()});
-}
+PointerType* Type::GetPointerTo() { return PointerType::Get(this); }
 
 std::int32_t Type::ArithmeticRank() const {
   return dynamic_cast<const ArithmeticType*>(this)->Rank();
@@ -243,11 +250,11 @@ std::int32_t Type::StructGetNumMembers() const {
   return dynamic_cast<const StructType*>(this)->GetNumMembers();
 }
 
-std::vector<std::shared_ptr<Object>> Type::StructGetMembers() {
+std::vector<Object*> Type::StructGetMembers() {
   return dynamic_cast<StructType*>(this)->GetMembers();
 }
 
-std::shared_ptr<Object> Type::StructGetMember(const std::string& name) const {
+Object* Type::StructGetMember(const std::string& name) const {
   return dynamic_cast<const StructType*>(this)->GetMember(name);
 }
 
@@ -259,11 +266,11 @@ std::shared_ptr<Scope> Type::StructGetScope() {
   return dynamic_cast<StructType*>(this)->GetScope();
 }
 
-void Type::StructAddMember(std::shared_ptr<Object> member) {
+void Type::StructAddMember(Object* member) {
   dynamic_cast<StructType*>(this)->AddMember(member);
 }
 
-void Type::StructMergeAnonymous(std::shared_ptr<Object> anonymous) {
+void Type::StructMergeAnonymous(Object* anonymous) {
   dynamic_cast<StructType*>(this)->MergeAnonymous(anonymous);
 }
 
@@ -289,7 +296,7 @@ QualType Type::FuncGetParamType(std::int32_t i) const {
   return dynamic_cast<const FunctionType*>(this)->GetParamType(i);
 }
 
-std::vector<std::shared_ptr<Object>> Type::FuncGetParams() const {
+std::vector<Object*> Type::FuncGetParams() const {
   return dynamic_cast<const FunctionType*>(this)->GetParams();
 }
 
@@ -310,8 +317,9 @@ Type::Type(bool complete) : complete_{complete} {}
 /*
  * VoidType
  */
-std::shared_ptr<VoidType> VoidType::Get() {
-  return std::shared_ptr<VoidType>{new VoidType{}};
+VoidType* VoidType::Get() {
+  static auto type{new (VoidTypePool.Allocate()) VoidType{}};
+  return type;
 }
 
 std::int32_t VoidType::GetWidth() const {
@@ -321,25 +329,93 @@ std::int32_t VoidType::GetWidth() const {
 
 std::int32_t VoidType::GetAlign() const { return GetWidth(); }
 
-bool VoidType::Compatible(const std::shared_ptr<Type>& other) const {
-  return Equal(other);
-}
+bool VoidType::Compatible(const Type* other) const { return Equal(other); }
 
-bool VoidType::Equal(const std::shared_ptr<Type>& other) const {
-  return other->IsVoidTy();
-}
+bool VoidType::Equal(const Type* other) const { return other->IsVoidTy(); }
 
 VoidType::VoidType() : Type{false} { llvm_type_ = Builder.getVoidTy(); }
 
 /*
  * ArithmeticType
  */
-std::shared_ptr<ArithmeticType> ArithmeticType::Get(std::uint32_t type_spec) {
-  return std::shared_ptr<ArithmeticType>(new ArithmeticType{type_spec});
+ArithmeticType* ArithmeticType::Get(std::uint32_t type_spec) {
+  static auto bool_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kBool}};
+  static auto char_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kChar}};
+  static auto uchar_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kChar | kUnsigned}};
+  static auto short_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kShort}};
+  static auto ushort_type{new (ArithmeticTypePool.Allocate())
+                              ArithmeticType{kShort | kUnsigned}};
+  static auto int_type{new (ArithmeticTypePool.Allocate())
+                           ArithmeticType{kInt}};
+  static auto uint_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kInt | kUnsigned}};
+  static auto long_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kLong}};
+  static auto ulong_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kLong | kUnsigned}};
+  static auto long_long_type{new (ArithmeticTypePool.Allocate())
+                                 ArithmeticType{kLongLong}};
+  static auto ulong_long_type{new (ArithmeticTypePool.Allocate())
+                                  ArithmeticType{kLongLong | kUnsigned}};
+  static auto float_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kFloat}};
+  static auto double_type{new (ArithmeticTypePool.Allocate())
+                              ArithmeticType{kDouble}};
+  static auto long_double_type{new (ArithmeticTypePool.Allocate())
+                                   ArithmeticType{kDouble | kLong}};
+
+  if (type_spec == kSigned) {
+    type_spec = kInt;
+  } else if (type_spec == kUnsigned) {
+    type_spec |= kInt;
+  }
+
+  type_spec &= ~kSigned;
+
+  if ((type_spec & kShort) || (type_spec & kLong) || (type_spec & kLongLong)) {
+    type_spec &= ~kInt;
+  }
+
+  switch (type_spec) {
+    case kBool:
+      return bool_type;
+    case kChar:
+      return char_type;
+    case kChar | kUnsigned:
+      return uchar_type;
+    case kShort:
+      return short_type;
+    case kShort | kUnsigned:
+      return ushort_type;
+    case kInt:
+      return int_type;
+    case kInt | kUnsigned:
+      return uint_type;
+    case kLong:
+      return long_type;
+    case kLong | kUnsigned:
+      return ulong_type;
+    case kLongLong:
+      return long_long_type;
+    case kLongLong | kUnsigned:
+      return ulong_long_type;
+    case kFloat:
+      return float_type;
+    case kDouble:
+      return double_type;
+    case kDouble | kLong:
+      return long_double_type;
+    default:
+      assert(false);
+      return nullptr;
+  }
 }
 
-std::shared_ptr<Type> ArithmeticType::IntegerPromote(
-    std::shared_ptr<Type> type) {
+Type* ArithmeticType::IntegerPromote(Type* type) {
   assert(type->IsIntegerTy());
 
   auto int_type{ArithmeticType::Get(kInt)};
@@ -350,8 +426,7 @@ std::shared_ptr<Type> ArithmeticType::IntegerPromote(
   }
 }
 
-std::shared_ptr<Type> ArithmeticType::MaxType(std::shared_ptr<Type> lhs,
-                                              std::shared_ptr<Type> rhs) {
+Type* ArithmeticType::MaxType(Type* lhs, Type* rhs) {
   assert(lhs->IsArithmeticTy() && rhs->IsArithmeticTy());
 
   if (!lhs->IsIntegerTy() || !rhs->IsIntegerTy()) {
@@ -418,14 +493,13 @@ std::int32_t ArithmeticType::GetAlign() const { return GetWidth(); }
 
 // 它们是同一类型（同名或由 typedef 引入的别名）
 // 类型 char 不与 signed char 兼容，且不与 unsigned char 兼容
-bool ArithmeticType::Compatible(const std::shared_ptr<Type>& other) const {
+bool ArithmeticType::Compatible(const Type* other) const {
   return Equal(other);
 }
 
-bool ArithmeticType::Equal(const std::shared_ptr<Type>& type) const {
+bool ArithmeticType::Equal(const Type* type) const {
   if (type->IsArithmeticTy()) {
-    return type_spec_ ==
-           std::dynamic_pointer_cast<ArithmeticType>(type)->type_spec_;
+    return type_spec_ == dynamic_cast<const ArithmeticType*>(type)->type_spec_;
   } else {
     return false;
   }
@@ -529,8 +603,8 @@ std::int32_t ArithmeticType::Rank() const {
 /*
  * PointerType
  */
-std::shared_ptr<PointerType> PointerType::Get(QualType element_type) {
-  return std::shared_ptr<PointerType>{new PointerType{element_type}};
+PointerType* PointerType::Get(QualType element_type) {
+  return new (PointerTypePool.Allocate()) PointerType{element_type};
 }
 
 std::int32_t PointerType::GetWidth() const { return 8; }
@@ -538,19 +612,19 @@ std::int32_t PointerType::GetWidth() const { return 8; }
 std::int32_t PointerType::GetAlign() const { return GetWidth(); }
 
 // 它们是指针类型，并指向兼容类型
-bool PointerType::Compatible(const std::shared_ptr<Type>& other) const {
+bool PointerType::Compatible(const Type* other) const {
   if (other->IsPointerTy()) {
     return element_type_->Compatible(
-        std::dynamic_pointer_cast<PointerType>(other)->element_type_.GetType());
+        dynamic_cast<const PointerType*>(other)->element_type_.GetType());
   } else {
     return false;
   }
 }
 
-bool PointerType::Equal(const std::shared_ptr<Type>& other) const {
+bool PointerType::Equal(const Type* other) const {
   if (other->IsPointerTy()) {
     return element_type_->Equal(
-        std::dynamic_pointer_cast<PointerType>(other)->element_type_.GetType());
+        dynamic_cast<const PointerType*>(other)->element_type_.GetType());
   } else {
     return false;
   }
@@ -570,10 +644,8 @@ PointerType::PointerType(QualType element_type)
 /*
  * ArrayType
  */
-std::shared_ptr<ArrayType> ArrayType::Get(QualType contained_type,
-                                          std::size_t num_elements) {
-  return std::shared_ptr<ArrayType>(
-      new ArrayType{contained_type, num_elements});
+ArrayType* ArrayType::Get(QualType contained_type, std::size_t num_elements) {
+  return new (ArrayTypePool.Allocate()) ArrayType{contained_type, num_elements};
 }
 
 std::int32_t ArrayType::GetWidth() const {
@@ -587,9 +659,9 @@ std::int32_t ArrayType::GetAlign() const { return GetWidth(); }
 // 若都拥有常量大小，则大小相同。
 // 注意：未知边界数组与任何兼容元素类型的数组兼容。
 // VLA 与任何兼容元素类型的数组兼容。 (C99 起)
-bool ArrayType::Compatible(const std::shared_ptr<Type>& other) const {
+bool ArrayType::Compatible(const Type* other) const {
   if (other->IsArrayTy()) {
-    auto other_arr{std::dynamic_pointer_cast<ArrayType>(other)};
+    auto other_arr{dynamic_cast<const ArrayType*>(other)};
     if (!contained_type_->Compatible(other_arr->contained_type_.GetType())) {
       return false;
     }
@@ -603,9 +675,9 @@ bool ArrayType::Compatible(const std::shared_ptr<Type>& other) const {
   }
 }
 
-bool ArrayType::Equal(const std::shared_ptr<Type>& other) const {
+bool ArrayType::Equal(const Type* other) const {
   if (other->IsArrayTy()) {
-    auto other_arr{std::dynamic_pointer_cast<ArrayType>(other)};
+    auto other_arr{dynamic_cast<const ArrayType*>(other)};
     if (!contained_type_->Equal(other_arr->contained_type_.GetType())) {
       return false;
     }
@@ -641,10 +713,9 @@ ArrayType::ArrayType(QualType contained_type, std::size_t num_elements)
 /*
  * StructType
  */
-std::shared_ptr<StructType> StructType::Get(bool is_struct,
-                                            const std::string& name,
-                                            std::shared_ptr<Scope> parent) {
-  return std::shared_ptr<StructType>{new StructType{is_struct, name, parent}};
+StructType* StructType::Get(bool is_struct, const std::string& name,
+                            std::shared_ptr<Scope> parent) {
+  return new (StructTypePool.Allocate()) StructType{is_struct, name, parent};
 }
 
 std::int32_t StructType::GetWidth() const { return width_; }
@@ -657,9 +728,9 @@ std::int32_t StructType::GetAlign() const { return align_; }
 // 另外，若它们是结构体或联合体，则
 // 对应的元素必须以同一顺序声明（仅结构体）
 // 对应的位域必须有相同宽度。
-bool StructType::Compatible(const std::shared_ptr<Type>& other) const {
+bool StructType::Compatible(const Type* other) const {
   if (other->IsStructTy()) {
-    auto other_struct{std::dynamic_pointer_cast<StructType>(other)};
+    auto other_struct{dynamic_cast<const StructType*>(other)};
     if (HasName() && other_struct->HasName()) {
       if (name_ != other_struct->name_) {
         return false;
@@ -689,9 +760,9 @@ bool StructType::Compatible(const std::shared_ptr<Type>& other) const {
   }
 }
 
-bool StructType::Equal(const std::shared_ptr<Type>& other) const {
+bool StructType::Equal(const Type* other) const {
   if (other->IsStructTy()) {
-    auto other_struct{std::dynamic_pointer_cast<StructType>(other)};
+    auto other_struct{dynamic_cast<const StructType*>(other)};
     if (HasName() && other_struct->HasName()) {
       if (name_ != other_struct->name_) {
         return false;
@@ -730,16 +801,14 @@ std::string StructType::GetName() const { return name_; }
 
 std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 
-std::vector<std::shared_ptr<Object>> StructType::GetMembers() {
-  return members_;
-}
+std::vector<Object*> StructType::GetMembers() { return members_; }
 
-std::shared_ptr<Object> StructType::GetMember(const std::string& name) const {
+Object* StructType::GetMember(const std::string& name) const {
   auto iter{scope_->FindNormalInCurrScope(name)};
   if (iter == nullptr) {
     return nullptr;
   } else {
-    return std::dynamic_pointer_cast<Object>(iter);
+    return dynamic_cast<Object*>(iter);
   }
 }
 
@@ -751,7 +820,7 @@ std::shared_ptr<Scope> StructType::GetScope() { return scope_; }
 
 std::int32_t StructType::GetOffset() const { return offset_; }
 
-void StructType::AddMember(std::shared_ptr<Object> member) {
+void StructType::AddMember(Object* member) {
   auto offset{MakeAlign(offset_, member->GetAlign())};
   member->SetOffset(offset);
 
@@ -770,16 +839,16 @@ void StructType::AddMember(std::shared_ptr<Object> member) {
   }
 }
 
-void StructType::MergeAnonymous(std::shared_ptr<Object> anonymous) {
+void StructType::MergeAnonymous(Object* anonymous) {
   // 匿名 struct / union
-  auto annoy_type{std::dynamic_pointer_cast<StructType>(
-      anonymous->GetQualType().GetType())};
+  auto annoy_type{
+      dynamic_cast<const StructType*>(anonymous->GetQualType().GetType())};
   auto offset = MakeAlign(offset_, anonymous->GetAlign());
 
   for (auto& kv : *annoy_type->scope_) {
     auto name{kv.first};
 
-    if (auto member{std::dynamic_pointer_cast<Object>(kv.second)}; !member) {
+    if (auto member{dynamic_cast<Object*>(kv.second)}; !member) {
       continue;
     } else {
       member->SetOffset(offset + member->GetOffset());
@@ -845,11 +914,10 @@ std::int32_t StructType::MakeAlign(std::int32_t offset, std::int32_t align) {
 /*
  * FunctionType
  */
-std::shared_ptr<FunctionType> FunctionType::Get(
-    QualType return_type, std::vector<std::shared_ptr<Object>> params,
-    bool is_var_args) {
-  return std::shared_ptr<FunctionType>{
-      new FunctionType{return_type, params, is_var_args}};
+FunctionType* FunctionType::Get(QualType return_type,
+                                std::vector<Object*> params, bool is_var_args) {
+  return new (FunctionTypePool.Allocate())
+      FunctionType{return_type, params, is_var_args};
 }
 
 std::int32_t FunctionType::GetWidth() const {
@@ -869,9 +937,9 @@ std::int32_t FunctionType::GetAlign() const {
 // 都与默认参数提升后的对应旧式参数兼容
 // 一个是旧式（无参数）声明，另一个拥有参数列表，参数列表不使用省略号，而所有参数（在函数参数类型调整后）
 // 不受默认参数提升影响
-bool FunctionType::Compatible(const std::shared_ptr<Type>& other) const {
+bool FunctionType::Compatible(const Type* other) const {
   if (other->IsFunctionTy()) {
-    auto other_func{std::dynamic_pointer_cast<FunctionType>(other)};
+    auto other_func{dynamic_cast<const FunctionType*>(other)};
     if (!return_type_->Compatible(other_func->return_type_.GetType())) {
       return false;
     }
@@ -893,9 +961,9 @@ bool FunctionType::Compatible(const std::shared_ptr<Type>& other) const {
   }
 }
 
-bool FunctionType::Equal(const std::shared_ptr<Type>& other) const {
+bool FunctionType::Equal(const Type* other) const {
   if (other->IsFunctionTy()) {
-    auto other_func{std::dynamic_pointer_cast<FunctionType>(other)};
+    auto other_func{dynamic_cast<const FunctionType*>(other)};
     if (!return_type_->Equal(other_func->return_type_.GetType())) {
       return false;
     }
@@ -927,9 +995,7 @@ QualType FunctionType::GetParamType(std::int32_t i) const {
   return params_[i]->GetQualType();
 }
 
-std::vector<std::shared_ptr<Object>> FunctionType::GetParams() const {
-  return params_;
-}
+std::vector<Object*> FunctionType::GetParams() const { return params_; }
 
 void FunctionType::SetFuncSpec(std::uint32_t func_spec) {
   func_spec_ = func_spec;
@@ -939,8 +1005,7 @@ bool FunctionType::IsInline() const { return func_spec_ & kInline; }
 
 bool FunctionType::IsNoreturn() const { return func_spec_ & kNoreturn; }
 
-FunctionType::FunctionType(QualType return_type,
-                           std::vector<std::shared_ptr<Object>> param,
+FunctionType::FunctionType(QualType return_type, std::vector<Object*> param,
                            bool is_var_args)
     : Type{false},
       is_var_args_{is_var_args},

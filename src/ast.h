@@ -72,27 +72,28 @@ using AstNodeType = AstNodeTypes::Type;
 
 class AstNode {
  public:
-  AstNode() = default;
   virtual ~AstNode() = default;
 
   virtual AstNodeType Kind() const = 0;
   virtual void Accept(Visitor& visitor) const = 0;
   virtual void Check() = 0;
+
+ protected:
+  AstNode() = default;
 };
 
 using ExtDecl = AstNode;
 
 class Expr : public AstNode {
  public:
-  explicit Expr(const Token& tok, QualType type = {});
-
   virtual bool IsLValue() const = 0;
 
   Token GetToken() const;
   void SetToken(const Token& tok);
 
   QualType GetQualType() const;
-  std::shared_ptr<Type> GetType() const;
+  const Type* GetType() const;
+  Type* GetType();
 
   bool IsConst() const;
   bool IsRestrict() const;
@@ -100,11 +101,12 @@ class Expr : public AstNode {
   void EnsureCompatible(QualType lhs, QualType rhs) const;
   void EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const;
   // 数组函数隐式转换
-  static std::shared_ptr<Expr> MayCast(const std::shared_ptr<Expr>& expr);
-  static std::shared_ptr<Expr> MayCastTo(std::shared_ptr<Expr> expr,
-                                         QualType to);
+  static Expr* MayCast(Expr* expr);
+  static Expr* MayCastTo(Expr* expr, QualType to);
 
  protected:
+  explicit Expr(const Token& tok, QualType type = {});
+
   Token tok_;
   QualType type_;
 };
@@ -124,8 +126,7 @@ class BinaryOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  BinaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> lhs,
-               std::shared_ptr<Expr> rhs);
+  static BinaryOpExpr* Get(const Token& tok, Tag tag, Expr* lhs, Expr* rhs);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -134,8 +135,10 @@ class BinaryOpExpr : public Expr {
   virtual void Check() override;
 
  private:
+  BinaryOpExpr(const Token& tok, Tag tag, Expr* lhs, Expr* rhs);
+
   // 通常算术转换
-  std::shared_ptr<Type> Convert();
+  Type* Convert();
 
   void AssignOpCheck();
   void AddOpCheck();
@@ -151,8 +154,8 @@ class BinaryOpExpr : public Expr {
   void CommaOpCheck();
 
   Tag op_;
-  std::shared_ptr<Expr> lhs_;
-  std::shared_ptr<Expr> rhs_;
+  Expr* lhs_;
+  Expr* rhs_;
 };
 
 /*
@@ -168,7 +171,7 @@ class UnaryOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  UnaryOpExpr(const Token& tok, Tag tag, std::shared_ptr<Expr> expr);
+  static UnaryOpExpr* Get(const Token& tok, Tag tag, Expr* expr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -177,6 +180,8 @@ class UnaryOpExpr : public Expr {
   virtual void Check() override;
 
  private:
+  UnaryOpExpr(const Token& tok, Tag tag, Expr* expr);
+
   void IncDecOpCheck();
   void UnaryAddSubOpCheck();
   void NotOpCheck();
@@ -185,7 +190,7 @@ class UnaryOpExpr : public Expr {
   void AddrOpCheck();
 
   Tag op_;
-  std::shared_ptr<Expr> expr_;
+  Expr* expr_;
 };
 
 class TypeCastExpr : public Expr {
@@ -195,7 +200,7 @@ class TypeCastExpr : public Expr {
   friend class CodeGen;
 
  public:
-  TypeCastExpr(std::shared_ptr<Expr> expr, QualType to);
+  static TypeCastExpr* Get(Expr* expr, QualType to);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -203,7 +208,9 @@ class TypeCastExpr : public Expr {
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> expr_;
+  TypeCastExpr(Expr* expr, QualType to);
+
+  Expr* expr_;
   QualType to_;
 };
 
@@ -214,25 +221,27 @@ class ConditionOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  ConditionOpExpr(const Token& tok, std::shared_ptr<Expr> cond,
-                  std::shared_ptr<Expr> lhs, std::shared_ptr<Expr> rhs)
-      : Expr{tok},
-        cond_(Expr::MayCast(cond)),
-        lhs_(Expr::MayCast(lhs)),
-        rhs_(Expr::MayCast(rhs)) {}
+  static ConditionOpExpr* Get(const Token& tok, Expr* cond, Expr* lhs,
+                              Expr* rhs);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
   virtual void Check() override;
 
-  // 通常算术转换
-  std::shared_ptr<Type> Convert();
-
  private:
-  std::shared_ptr<Expr> cond_;
-  std::shared_ptr<Expr> lhs_;
-  std::shared_ptr<Expr> rhs_;
+  ConditionOpExpr(const Token& tok, Expr* cond, Expr* lhs, Expr* rhs)
+      : Expr{tok},
+        cond_(Expr::MayCast(cond)),
+        lhs_(Expr::MayCast(lhs)),
+        rhs_(Expr::MayCast(rhs)) {}
+
+  // 通常算术转换
+  Type* Convert();
+
+  Expr* cond_;
+  Expr* lhs_;
+  Expr* rhs_;
 };
 
 class FuncCallExpr : public Expr {
@@ -240,19 +249,20 @@ class FuncCallExpr : public Expr {
   friend class CodeGen;
 
  public:
-  explicit FuncCallExpr(std::shared_ptr<Expr> callee,
-                        std::vector<std::shared_ptr<Expr>> args = {});
+  static FuncCallExpr* Get(Expr* callee, std::vector<Expr*> args = {});
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual bool IsLValue() const override;
   virtual void Check() override;
 
-  std::shared_ptr<Type> GetFuncType() const;
+  Type* GetFuncType() const;
 
  private:
-  std::shared_ptr<Expr> callee_;
-  std::vector<std::shared_ptr<Expr>> args_;
+  explicit FuncCallExpr(Expr* callee, std::vector<Expr*> args = {});
+
+  Expr* callee_;
+  std::vector<Expr*> args_;
 };
 
 class Constant : public Expr {
@@ -262,14 +272,10 @@ class Constant : public Expr {
   friend class CodeGen;
 
  public:
-  Constant(const Token& tok, std::int32_t val)
-      : Expr(tok, QualType{ArithmeticType::Get(32)}), integer_val_(val) {}
-  Constant(const Token& tok, std::shared_ptr<Type> type, std::uint64_t val)
-      : Expr(tok, type), integer_val_(val) {}
-  Constant(const Token& tok, std::shared_ptr<Type> type, double val)
-      : Expr(tok, type), float_point_val_(val) {}
-  Constant(const Token& tok, std::shared_ptr<Type> type, const std::string& val)
-      : Expr(tok, type), str_val_(val) {}
+  static Constant* Get(const Token& tok, std::int32_t val);
+  static Constant* Get(const Token& tok, Type* type, std::uint64_t val);
+  static Constant* Get(const Token& tok, Type* type, double val);
+  static Constant* Get(const Token& tok, Type* type, const std::string& val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -281,6 +287,15 @@ class Constant : public Expr {
   std::string GetStrVal() const;
 
  private:
+  Constant(const Token& tok, std::int32_t val)
+      : Expr(tok, QualType{ArithmeticType::Get(32)}), integer_val_(val) {}
+  Constant(const Token& tok, Type* type, std::uint64_t val)
+      : Expr(tok, type), integer_val_(val) {}
+  Constant(const Token& tok, Type* type, double val)
+      : Expr(tok, type), float_point_val_(val) {}
+  Constant(const Token& tok, Type* type, const std::string& val)
+      : Expr(tok, type), str_val_(val) {}
+
   std::uint64_t integer_val_{};
   double float_point_val_{};
   std::string str_val_;
@@ -304,8 +319,8 @@ class Identifier : public Expr {
   friend class CodeGen;
 
  public:
-  Identifier(const Token& tok, QualType type, enum Linkage linkage,
-             bool is_type_name);
+  static Identifier* Get(const Token& tok, QualType type, enum Linkage linkage,
+                         bool is_type_name);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -319,7 +334,10 @@ class Identifier : public Expr {
   bool IsObject() const;
   bool IsEnumerator() const;
 
- private:
+ protected:
+  Identifier(const Token& tok, QualType type, enum Linkage linkage,
+             bool is_type_name);
+
   enum Linkage linkage_;
   bool is_type_name_;
 };
@@ -331,7 +349,7 @@ class Enumerator : public Identifier {
   friend class CodeGen;
 
  public:
-  Enumerator(const Token& tok, std::int32_t val);
+  static Enumerator* Get(const Token& tok, std::int32_t val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -341,6 +359,8 @@ class Enumerator : public Identifier {
   std::int32_t GetVal() const;
 
  private:
+  Enumerator(const Token& tok, std::int32_t val);
+
   std::int32_t val_;
 };
 
@@ -358,9 +378,10 @@ class Object : public Identifier {
   friend class CodeGen;
 
  public:
-  Object(const Token& tok, QualType type, std::uint32_t storage_class_spec = 0,
-         enum Linkage linkage = kNone, bool anonymous = false,
-         bool in_global = false);
+  static Object* Get(const Token& tok, QualType type,
+                     std::uint32_t storage_class_spec = 0,
+                     enum Linkage linkage = kNone, bool anonymous = false,
+                     bool in_global = false);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -373,17 +394,21 @@ class Object : public Identifier {
   void SetAlign(std::int32_t align);
   std::int32_t GetOffset() const;
   void SetOffset(std::int32_t offset);
-  std::shared_ptr<Declaration> GetDecl();
-  void SetDecl(std::shared_ptr<Declaration> decl);
+  Declaration* GetDecl();
+  void SetDecl(Declaration* decl);
   bool HasInit() const;
   bool Anonymous() const;
 
  private:
+  Object(const Token& tok, QualType type, std::uint32_t storage_class_spec = 0,
+         enum Linkage linkage = kNone, bool anonymous = false,
+         bool in_global = false);
+
   bool anonymous_;
   std::uint32_t storage_class_spec_;
   std::int32_t align_{};
   std::int32_t offset_{};
-  std::shared_ptr<Declaration> decl_;
+  Declaration* decl_;
 
   bool in_global_{};
   llvm::AllocaInst* local_ptr_{};
@@ -397,14 +422,16 @@ class LabelStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit LabelStmt(std::shared_ptr<Identifier> label);
+  static LabelStmt* Get(Identifier* label);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Identifier> ident_;
+  explicit LabelStmt(Identifier* label);
+
+  Identifier* ident_;
 };
 
 class IfStmt : public Stmt {
@@ -412,17 +439,18 @@ class IfStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  IfStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> then_block,
-         std::shared_ptr<Stmt> else_block = nullptr);
+  static IfStmt* Get(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> cond_;
-  std::shared_ptr<Stmt> then_block_;
-  std::shared_ptr<Stmt> else_block_;
+  IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
+
+  Expr* cond_;
+  Stmt* then_block_;
+  Stmt* else_block_;
 };
 
 class ReturnStmt : public Stmt {
@@ -430,14 +458,16 @@ class ReturnStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit ReturnStmt(std::shared_ptr<Expr> expr = nullptr);
+  static ReturnStmt* Get(Expr* expr = nullptr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> expr_;
+  explicit ReturnStmt(Expr* expr = nullptr);
+
+  Expr* expr_;
 };
 
 class CompoundStmt : public Stmt {
@@ -445,20 +475,23 @@ class CompoundStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  CompoundStmt() = default;
-  explicit CompoundStmt(std::vector<std::shared_ptr<Stmt>> stmts,
-                        std::shared_ptr<Scope> scope);
+  static CompoundStmt* Get();
+  static CompoundStmt* Get(std::vector<Stmt*> stmts,
+                           std::shared_ptr<Scope> scope);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
   std::shared_ptr<Scope> GetScope();
-  std::vector<std::shared_ptr<Stmt>> GetStmts();
-  void AddStmt(std::shared_ptr<Stmt> stmt);
+  std::vector<Stmt*> GetStmts();
+  void AddStmt(Stmt* stmt);
 
  private:
-  std::vector<std::shared_ptr<Stmt>> stmts_;
+  CompoundStmt() = default;
+  explicit CompoundStmt(std::vector<Stmt*> stmts, std::shared_ptr<Scope> scope);
+
+  std::vector<Stmt*> stmts_;
   std::shared_ptr<Scope> scope_;
 };
 
@@ -467,14 +500,16 @@ class ExprStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit ExprStmt(std::shared_ptr<Expr> expr = nullptr);
+  static ExprStmt* Get(Expr* expr = nullptr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> expr_;
+  explicit ExprStmt(Expr* expr = nullptr);
+
+  Expr* expr_;
 };
 
 class WhileStmt : public Stmt {
@@ -482,15 +517,17 @@ class WhileStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  WhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block);
+  static WhileStmt* Get(Expr* cond, Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> cond_;
-  std::shared_ptr<Stmt> block_;
+  WhileStmt(Expr* cond, Stmt* block);
+
+  Expr* cond_;
+  Stmt* block_;
 };
 
 class DoWhileStmt : public Stmt {
@@ -498,15 +535,17 @@ class DoWhileStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  DoWhileStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block);
+  static DoWhileStmt* Get(Expr* cond, Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> cond_;
-  std::shared_ptr<Stmt> block_;
+  DoWhileStmt(Expr* cond, Stmt* block);
+
+  Expr* cond_;
+  Stmt* block_;
 };
 
 class ForStmt : public Stmt {
@@ -514,18 +553,19 @@ class ForStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  ForStmt(std::shared_ptr<Expr> init, std::shared_ptr<Expr> cond,
-          std::shared_ptr<Expr> inc, std::shared_ptr<Stmt> block,
-          std::shared_ptr<Stmt> decl);
+  static ForStmt* Get(Expr* init, Expr* cond, Expr* inc, Stmt* block,
+                      Stmt* decl);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> init_, cond_, inc_;
-  std::shared_ptr<Stmt> block_;
-  std::shared_ptr<Stmt> decl_;
+  ForStmt(Expr* init, Expr* cond, Expr* inc, Stmt* block, Stmt* decl);
+
+  Expr *init_, *cond_, *inc_;
+  Stmt* block_;
+  Stmt* decl_;
 };
 
 class CaseStmt : public Stmt {
@@ -533,20 +573,23 @@ class CaseStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit CaseStmt(std::int32_t case_value, std::shared_ptr<Stmt> block);
-  CaseStmt(std::int32_t case_value, std::int32_t case_value2,
-           std::shared_ptr<Stmt> block);
+  static CaseStmt* Get(std::int32_t case_value, Stmt* block);
+  static CaseStmt* Get(std::int32_t case_value, std::int32_t case_value2,
+                       Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
+  CaseStmt(std::int32_t case_value, Stmt* block);
+  CaseStmt(std::int32_t case_value, std::int32_t case_value2, Stmt* block);
+
   std::int32_t case_value_{};
   std::pair<std::int32_t, std::int32_t> case_value_range_;
   bool has_range_{false};
 
-  std::shared_ptr<Stmt> block_;
+  Stmt* block_;
 };
 
 class DefaultStmt : public Stmt {
@@ -554,14 +597,16 @@ class DefaultStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  DefaultStmt(std::shared_ptr<Stmt> block);
+  static DefaultStmt* Get(Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Stmt> block_;
+  DefaultStmt(Stmt* block);
+
+  Stmt* block_;
 };
 
 class SwitchStmt : public Stmt {
@@ -569,15 +614,17 @@ class SwitchStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit SwitchStmt(std::shared_ptr<Expr> cond, std::shared_ptr<Stmt> block);
+  static SwitchStmt* Get(Expr* cond, Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Expr> cond_;
-  std::shared_ptr<Stmt> block_;
+  SwitchStmt(Expr* cond, Stmt* block);
+
+  Expr* cond_;
+  Stmt* block_;
 };
 
 class BreakStmt : public Stmt {
@@ -585,6 +632,8 @@ class BreakStmt : public Stmt {
   friend class CodeGen;
 
  public:
+  static BreakStmt* Get();
+
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
@@ -595,6 +644,8 @@ class ContinueStmt : public Stmt {
   friend class CodeGen;
 
  public:
+  static ContinueStmt* Get();
+
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
@@ -605,14 +656,16 @@ class GotoStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit GotoStmt(std::shared_ptr<Identifier> ident) : ident_{ident} {}
+  static GotoStmt* Get(Identifier* ident);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  std::shared_ptr<Identifier> ident_;
+  explicit GotoStmt(Identifier* ident) : ident_{ident} {}
+
+  Identifier* ident_;
 };
 
 class Initializer {
@@ -621,14 +674,13 @@ class Initializer {
   friend bool operator<(const Initializer& lhs, const Initializer& rhs);
 
  public:
-  Initializer(std::shared_ptr<Type> type, std::int32_t offset,
-              std::shared_ptr<Expr> expr)
+  Initializer(Type* type, std::int32_t offset, Expr* expr)
       : type_(type), offset_(offset), expr_(expr) {}
 
  private:
-  std::shared_ptr<Type> type_;
+  Type* type_;
   std::int32_t offset_;
-  std::shared_ptr<Expr> expr_;
+  Expr* expr_;
 };
 
 bool operator<(const Initializer& lhs, const Initializer& rhs);
@@ -638,7 +690,7 @@ class Declaration : public Stmt {
   friend class CodeGen;
 
  public:
-  explicit Declaration(std::shared_ptr<Identifier> ident) : ident_{ident} {}
+  static Declaration* Get(Identifier* ident);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -646,12 +698,14 @@ class Declaration : public Stmt {
 
   void AddInit(const Initializer& init);
   void AddInits(const std::set<Initializer>& inits) { inits_ = inits; }
-  std::shared_ptr<Identifier> GetIdent() const { return ident_; }
+  Identifier* GetIdent() const { return ident_; }
   bool HasInit() const;
   bool IsObj() const { return ident_->IsObject(); }
 
  private:
-  std::shared_ptr<Identifier> ident_;
+  explicit Declaration(Identifier* ident) : ident_{ident} {}
+
+  Identifier* ident_;
   std::set<Initializer> inits_;
 };
 
@@ -660,14 +714,16 @@ class TranslationUnit : public AstNode {
   friend class CodeGen;
 
  public:
+  static TranslationUnit* Get();
+
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  void AddExtDecl(std::shared_ptr<ExtDecl> ext_decl);
+  void AddExtDecl(ExtDecl* ext_decl);
 
  private:
-  std::vector<std::shared_ptr<ExtDecl>> ext_decls_;
+  std::vector<ExtDecl*> ext_decls_;
 };
 
 class FuncDef : public ExtDecl {
@@ -675,26 +731,28 @@ class FuncDef : public ExtDecl {
   friend class CodeGen;
 
  public:
-  explicit FuncDef(std::shared_ptr<Identifier> ident) : ident_(ident) {}
+  static FuncDef* Get(Identifier* ident);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  void SetBody(std::shared_ptr<CompoundStmt> body);
+  void SetBody(CompoundStmt* body);
   std::string GetName() const;
   enum Linkage GetLinkage() const;
   QualType GetFuncType() const;
-  std::shared_ptr<Identifier> GetIdent() const;
+  Identifier* GetIdent() const;
 
  private:
-  std::shared_ptr<Identifier> ident_;
-  std::shared_ptr<CompoundStmt> body_;
+  explicit FuncDef(Identifier* ident) : ident_(ident) {}
+
+  Identifier* ident_;
+  CompoundStmt* body_;
 };
 
 template <typename T, typename... Args>
-std::shared_ptr<T> MakeAstNode(Args&&... args) {
-  auto t{std::make_shared<T>(std::forward<Args>(args)...)};
+T* MakeAstNode(Args&&... args) {
+  auto t{T::Get(std::forward<Args>(args)...)};
   t->Check();
   return t;
 }

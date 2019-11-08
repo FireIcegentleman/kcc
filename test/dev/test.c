@@ -25,9 +25,4 @@
 #include <wchar.h>
 #include <wctype.h>
 
-int main(void) {
-  int a;
-  a = 10;
-
-  printf("%d\n", a ? 4 : 8);
-}
+int main(void) { printf("Hello World"); }

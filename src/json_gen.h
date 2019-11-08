@@ -16,8 +16,7 @@ namespace kcc {
 
 class JsonGen : public Visitor {
  public:
-  void GenJson(const std::shared_ptr<TranslationUnit>& root,
-               const std::string& file_name);
+  void GenJson(const TranslationUnit* root, const std::string& file_name);
 
  private:
   virtual void Visit(const UnaryOpExpr& node) override;
