@@ -5,31 +5,16 @@
 #include "code_gen.h"
 
 #include <llvm/ADT/Optional.h>
-#include <llvm/IR/DataLayout.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
 #include "error.h"
+#include "util.h"
 
 namespace kcc {
-
-// 拥有许多 LLVM 核心数据结构, 如类型和常量值表
-llvm::LLVMContext Context;
-// 一个辅助对象, 跟踪当前位置并且可以插入 LLVM 指令
-llvm::IRBuilder<> Builder{Context};
-// 包含函数和全局变量, 它拥有生成的所有 IR 的内存
-auto Module{std::make_unique<llvm::Module>("main", Context)};
-
-llvm::DataLayout DataLayout{Module.get()};
-
-std::unique_ptr<llvm::TargetMachine> TargetMachine;
 
 CodeGen::CodeGen(const std::string& file_name) {
   Module = std::make_unique<llvm::Module>(file_name, Context);

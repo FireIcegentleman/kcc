@@ -4,24 +4,20 @@
 
 #include "opt.h"
 
+#include <memory>
+
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/InitializePasses.h>
 #include <llvm/PassRegistry.h>
-#include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
-#include <memory>
+#include "util.h"
 
 namespace kcc {
-
-extern std::unique_ptr<llvm::Module> Module;
-
-extern std::unique_ptr<llvm::TargetMachine> TargetMachine;
 
 void Optimization(OptLevel opt_level) {
   std::uint32_t level{};

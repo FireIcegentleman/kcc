@@ -5,11 +5,10 @@
 #ifndef KCC_SRC_TOKEN_H_
 #define KCC_SRC_TOKEN_H_
 
+#include <string>
+
 #include <QMetaEnum>
 #include <QObject>
-#include <cstdint>
-#include <string>
-#include <unordered_set>
 
 #include "location.h"
 
@@ -131,7 +130,9 @@ class TokenTag : public QObject {
 
     kComma,  // ,
 
+    kFunc,
     kExtension,  // __extension__
+    kTypeof,     // typeof
 
     kNone,
     kEof,
@@ -140,17 +141,13 @@ class TokenTag : public QObject {
 
   Q_ENUM(Values)
 
-  static std::string ToString(TokenTag::Values value) {
-    return QMetaEnum::fromType<TokenTag::Values>().valueToKey(value) + 1;
-  }
+  static std::string ToString(TokenTag::Values value);
 };
 
 using Tag = TokenTag::Values;
 
 class Token {
  public:
-  static Token Get(Tag tag);
-
   bool TagIs(Tag tag) const;
   void SetTag(Tag tag);
   Tag GetTag() const;
@@ -158,23 +155,25 @@ class Token {
   std::string GetStr() const;
   void SetStr(const std::string &str);
 
-  SourceLocation GetLoc() const;
-  void SetSourceLocation(const SourceLocation &location);
+  Location GetLoc() const;
+  void SetLoc(const Location &loc);
 
   std::string ToString() const;
-  bool IsTypeSpecQual() const;
+
   bool IsIdentifier() const;
   bool IsStringLiteral() const;
   bool IsConstant() const;
   bool IsIntegerConstant() const;
   bool IsFloatConstant() const;
   bool IsCharacterConstant() const;
+
+  bool IsTypeSpecQual() const;
   bool IsDecl() const;
 
  private:
   Tag tag_{Tag::kNone};
   std::string str_;
-  SourceLocation location_;
+  Location location_;
 };
 
 }  // namespace kcc

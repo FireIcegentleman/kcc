@@ -1,26 +1,10 @@
-# 1 "include/builtin.h"
-# 1 "<built-in>" 1
-# 1 "<built-in>" 3
-# 345 "<built-in>" 3
-# 1 "<command line>" 1
-# 1 "<built-in>" 2
-# 1 "include/builtin.h" 2
-
-
-
-
-
-
-
 typedef struct {
   unsigned int gp_offset;
   unsigned int fp_offset;
   void *overflow_arg_area;
   void *reg_save_area;
 } __va_elem;
-
 typedef __va_elem __builtin_va_list[1];
-# 29 "include/builtin.h"
 void __builtin_va_start(__builtin_va_list, int);
 void __builtin_va_end(__builtin_va_list);
 # 1 "test/dev/test.c"
@@ -2793,5 +2777,7 @@ extern wctrans_t wctrans (const char *__property) __attribute__ ((__nothrow__ ))
 
 extern wint_t towctrans (wint_t __wc, wctrans_t __desc) __attribute__ ((__nothrow__ ));
 # 27 "test/dev/test.c" 2
+
+int a
 
 int main(void) { printf("Hello World"); }

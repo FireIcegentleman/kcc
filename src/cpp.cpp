@@ -6,17 +6,10 @@
 
 #include <cstddef>
 #include <cstdio>
-#include <filesystem>
 
 #include "error.h"
 
 namespace kcc {
-
-void EnsureFileExists(const std::string &input_file) {
-  if (!std::filesystem::exists(input_file)) {
-    Error("no such file: '{}'", input_file);
-  }
-}
 
 void Preprocessor::SetIncludePaths(
     const std::vector<std::string> &include_paths) {
@@ -32,14 +25,13 @@ void Preprocessor::SetMacroDefinitions(
   }
 }
 
-std::string Preprocessor::Run(const std::string &input_file) {
-  EnsureFileExists(input_file);
-
-  std::string preprocessed_code;
+std::string Preprocessor::Cpp(const std::string &input_file) {
+  constexpr std::size_t kSize{4096};
 
   FILE *fp;
-  constexpr std::size_t kSize{4096};
   char buff[kSize];
+  std::string preprocessed_code;
+  preprocessed_code.reserve(kSize);
 
   if ((fp = popen((cmd_ + input_file).c_str(), "r")) == nullptr) {
     Error("Unable to create pipeline");
@@ -51,15 +43,7 @@ std::string Preprocessor::Run(const std::string &input_file) {
 
   pclose(fp);
 
-  return preprocessed_code;
-}
-
-std::string Preprocessor::Cpp(const std::string &input_file) {
-  if (std::empty(builtin_)) {
-    builtin_ = Run("include/builtin.h");
-  }
-
-  return builtin_ + Run(input_file);
+  return Preprocessor::Builtin + preprocessed_code;
 }
 
 }  // namespace kcc

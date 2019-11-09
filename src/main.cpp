@@ -1,8 +1,6 @@
-#include <llvm/IR/Module.h>
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/raw_ostream.h>
-#include <unistd.h>
-#include <wait.h>
+//
+// Created by kaiser on 2019/10/30.
+//
 
 #include <chrono>
 #include <filesystem>
@@ -10,6 +8,10 @@
 #include <functional>
 #include <iterator>
 #include <random>
+
+#include <llvm/IR/Module.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include "code_gen.h"
 #include "cpp.h"
@@ -19,12 +21,7 @@
 #include "obj_gen.h"
 #include "opt.h"
 #include "parse.h"
-
-namespace kcc {
-
-extern std::unique_ptr<llvm::Module> Module;
-
-}  // namespace kcc
+#include "util.h"
 
 using namespace kcc;
 
@@ -81,25 +78,6 @@ llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
                             llvm::cl::cat{Category}};
 
 void RunDev();
-
-bool CommandSuccess(std::int32_t status) {
-  return status != -1 && WIFEXITED(status) && !WEXITSTATUS(status);
-}
-
-std::string GetPath() {
-  constexpr std::size_t kBufSize{256};
-  char buf[kBufSize];
-  // 将符号链接的内容读入buf,不超过kBufSize字节.
-  // 内容不以空字符终止,返回读取的字符数,返回-1表示错误
-  // /proc/self/exe代表当前程序
-  auto count{readlink("/proc/self/exe", buf, kBufSize)};
-  if (count == -1) {
-    Error("readlink error");
-  }
-
-  auto end{std::strrchr(buf, '/')};
-  return std::string(buf, end - buf);
-}
 
 int main(int argc, char *argv[]) /*try*/ {
   llvm::cl::HideUnrelatedOptions(Category);
@@ -334,42 +312,44 @@ void RunDev() {
   std::transform(std::begin(tokens), std::end(tokens),
                  std::ostream_iterator<std::string>{tokens_file, "\n"},
                  std::mem_fn(&Token::ToString));
+  tokens_file << std::flush;
 
-  Parser parser{std::move(tokens)};
-  TranslationUnit *unit;
-  {
-    std::cout << "parse ............................ ";
-    const auto kT0{std::chrono::system_clock::now()};
-    unit = parser.ParseTranslationUnit();
-    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
-                     std::chrono::system_clock::now() - kT0)
-                     .count()
-              << " us\n";
-  }
-  JsonGen{}.GenJson(unit, "test/dev/test.html");
-  {
-    std::cout << "code gen ............................ ";
-    const auto kT0{std::chrono::system_clock::now()};
-    CodeGen{"test/dev/test.c"}.GenCode(unit);
-    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
-                     std::chrono::system_clock::now() - kT0)
-                     .count()
-              << " us\n";
-  }
-  Optimization(OptLevel::kO0);
-
-  std::error_code error_code;
-  llvm::raw_fd_ostream ir_file{"test/dev/test.ll", error_code};
-  ir_file << *Module;
-
-  std::system("llc test/dev/test.ll");
-  std::system(
-      "clang test/dev/test.c -o test/dev/standard.ll -std=c17 -S -emit-llvm");
-  std::system("lli test/dev/test.ll");
-
-  ObjGen("test/dev/test.o");
-
-  std::system("clang test/dev/test.o -o test/dev/test");
+  //  Parser parser{std::move(tokens)};
+  //  TranslationUnit *unit;
+  //  {
+  //    std::cout << "parse ............................ ";
+  //    const auto kT0{std::chrono::system_clock::now()};
+  //    unit = parser.ParseTranslationUnit();
+  //    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+  //                     std::chrono::system_clock::now() - kT0)
+  //                     .count()
+  //              << " us\n";
+  //  }
+  //  JsonGen{}.GenJson(unit, "test/dev/test.html");
+  //  {
+  //    std::cout << "code gen ............................ ";
+  //    const auto kT0{std::chrono::system_clock::now()};
+  //    CodeGen{"test/dev/test.c"}.GenCode(unit);
+  //    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+  //                     std::chrono::system_clock::now() - kT0)
+  //                     .count()
+  //              << " us\n";
+  //  }
+  //  Optimization(OptLevel::kO0);
+  //
+  //  std::error_code error_code;
+  //  llvm::raw_fd_ostream ir_file{"test/dev/test.ll", error_code};
+  //  ir_file << *Module;
+  //
+  //  std::system("llc test/dev/test.ll");
+  //  std::system(
+  //      "clang test/dev/test.c -o test/dev/standard.ll -std=c17 -S
+  //      -emit-llvm");
+  //  std::system("lli test/dev/test.ll");
+  //
+  //  ObjGen("test/dev/test.o");
+  //
+  //  std::system("clang test/dev/test.o -o test/dev/test");
 
   // std::system("./test/dev/test");
 

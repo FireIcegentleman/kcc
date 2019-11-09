@@ -8,10 +8,8 @@
 
 namespace kcc {
 
-Token Token::Get(Tag tag) {
-  Token tok;
-  tok.SetTag(tag);
-  return tok;
+std::string TokenTag::ToString(TokenTag::Values value) {
+  return QMetaEnum::fromType<TokenTag::Values>().valueToKey(value) + 1;
 }
 
 bool Token::TagIs(Tag tag) const { return tag_ == tag; }
@@ -24,30 +22,13 @@ std::string Token::GetStr() const { return str_; }
 
 void Token::SetStr(const std::string& str) { str_ = str; }
 
-SourceLocation Token::GetLoc() const { return location_; }
+Location Token::GetLoc() const { return location_; }
 
-void Token::SetSourceLocation(const SourceLocation& location) {
-  location_ = location;
-}
+void Token::SetLoc(const Location& loc) { location_ = loc; }
 
 std::string Token::ToString() const {
-  std::string loc("<" + location_.file_name + ":" +
-                  std::to_string(location_.row) + ":" +
-                  std::to_string(location_.column) + ">");
-
-  return fmt::format("{:<25}str: {:<25}loc: {:<25}", TokenTag::ToString(tag_),
-                     str_, loc);
-}
-
-bool Token::IsTypeSpecQual() const {
-  return tag_ == Tag::kVoid || tag_ == Tag::kChar || tag_ == Tag::kShort ||
-         tag_ == Tag::kInt || tag_ == Tag::kLong || tag_ == Tag::kFloat ||
-         tag_ == Tag::kDouble || tag_ == Tag::kSigned ||
-         tag_ == Tag::kUnsigned || tag_ == Tag::kBool ||
-         tag_ == Tag::kComplex || tag_ == Tag::kAtomic ||
-         tag_ == Tag::kStruct || tag_ == Tag::kUnion || tag_ == Tag::kEnum ||
-         tag_ == Tag::kConst || tag_ == Tag::kRestrict ||
-         tag_ == Tag::kVolatile || tag_ == Tag::kAtomic;
+  return fmt::format("{:<25}str: {:<25}loc: <{:<25}>", TokenTag::ToString(tag_),
+                     str_, location_.ToLocStr());
 }
 
 bool Token::IsIdentifier() const { return tag_ == Tag::kIdentifier; }
@@ -64,6 +45,17 @@ bool Token::IsFloatConstant() const { return tag_ == Tag::kFloatingConstant; }
 
 bool Token::IsCharacterConstant() const {
   return tag_ == Tag::kCharacterConstant;
+}
+
+bool Token::IsTypeSpecQual() const {
+  return tag_ == Tag::kVoid || tag_ == Tag::kChar || tag_ == Tag::kShort ||
+         tag_ == Tag::kInt || tag_ == Tag::kLong || tag_ == Tag::kFloat ||
+         tag_ == Tag::kDouble || tag_ == Tag::kSigned ||
+         tag_ == Tag::kUnsigned || tag_ == Tag::kBool ||
+         tag_ == Tag::kComplex || tag_ == Tag::kAtomic ||
+         tag_ == Tag::kStruct || tag_ == Tag::kUnion || tag_ == Tag::kEnum ||
+         tag_ == Tag::kConst || tag_ == Tag::kRestrict ||
+         tag_ == Tag::kVolatile || tag_ == Tag::kAtomic;
 }
 
 bool Token::IsDecl() const {

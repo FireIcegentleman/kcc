@@ -5,22 +5,16 @@
 #include "obj_gen.h"
 
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/Module.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Target/TargetMachine.h>
 
-#include <memory>
 #include <system_error>
 
 #include "error.h"
+#include "util.h"
 
 namespace kcc {
-
-extern std::unique_ptr<llvm::Module> Module;
-
-extern std::unique_ptr<llvm::TargetMachine> TargetMachine;
 
 void ObjGen(const std::string& obj_file,
             llvm::TargetMachine::CodeGenFileType file_type) {

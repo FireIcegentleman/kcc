@@ -47,7 +47,7 @@ class Scanner {
 
   std::string source_;
 
-  SourceLocation location_;
+  Location location_;
   std::int32_t pre_column_{1};
   Token curr_token_;
 

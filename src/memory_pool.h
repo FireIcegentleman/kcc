@@ -11,7 +11,7 @@
 
 namespace kcc {
 
-template <typename T, std::size_t BlockSize = 8192>
+template <typename T, std::size_t BlockSize = 4096>
 class MemoryPool {
  public:
   using ValueType = T;

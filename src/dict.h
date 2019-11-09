@@ -5,8 +5,9 @@
 #ifndef KCC_SRC_DICT_H_
 #define KCC_SRC_DICT_H_
 
-#include <map>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 
 #include "token.h"
 
@@ -18,7 +19,7 @@ class KeywordsDictionary {
   Tag Find(const std::string& name) const;
 
  private:
-  std::map<std::string, Tag> keywords_;
+  std::unordered_map<std::string_view, Tag> keywords_;
 };
 
 }  // namespace kcc

@@ -7,19 +7,21 @@
 
 #include <fmt/color.h>
 #include <fmt/core.h>
+#include <fmt/format.h>
 
 #include <cstdlib>
-#include <cstring>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "location.h"
 #include "token.h"
 
 namespace kcc {
 
-extern std::vector<std::string> WarningStrs;
+inline std::vector<std::string> WarningStrings;
+
+[[noreturn]] void Error(Tag expect, const Token &actual);
 void PrintWarnings();
 
 template <typename... Args>
@@ -33,64 +35,47 @@ template <typename... Args>
 }
 
 template <typename... Args>
-[[noreturn]] void Error(const SourceLocation &location,
-                        std::string_view format_str, const Args &... args) {
-  fmt::print(fmt::fg(fmt::terminal_color::red), fmt("{}:{}:{}: error: "),
-             location.file_name, location.row, location.column);
+[[noreturn]] void Error(const Location &loc, std::string_view format_str,
+                        const Args &... args) {
+  fmt::print(fmt::fg(fmt::terminal_color::red), fmt("{}: error: "),
+             loc.ToLocStr());
   fmt::print(fmt::fg(fmt::terminal_color::red), format_str, args...);
   fmt::print("\n");
 
-  std::string str;
-  for (auto index{location.line_begin};
-       index < std::strlen(location.line_content) &&
-       location.line_content[index] != '\n';
-       ++index) {
-    str.push_back(location.line_content[index]);
-  }
-
-  fmt::print(fmt::fg(fmt::terminal_color::red), fmt("{}\n"), str);
-  fmt::print(fmt::fg(fmt::terminal_color::green), fmt("{}{}\n"),
-             std::string(location.column - 1, ' '), "^");
+  fmt::print(fmt::fg(fmt::terminal_color::red), fmt("{}"),
+             loc.GetLineContent());
 
   PrintWarnings();
   std::exit(EXIT_FAILURE);
 }
 
 template <typename... Args>
-void Warning(std::string_view format_str, const Args &... args) {
-  std::ostringstream os;
-
-  os << "warning: " << fmt::format(format_str, args...) << '\n';
-  WarningStrs.push_back(os.str());
-}
-
-template <typename... Args>
-void Warning(const SourceLocation &location, std::string_view format_str,
-             const Args &... args) {
-  std::ostringstream os;
-
-  os << fmt::format(fmt("{}:{}:{}: warning: "), location.file_name,
-                    location.row, location.column)
-     << fmt::format(format_str, args...) << '\n';
-
-  std::string str;
-  for (auto index{location.line_begin};
-       index < std::strlen(location.line_content) &&
-       location.line_content[index] != '\n';
-       ++index) {
-    str.push_back(location.line_content[index]);
-  }
-
-  os << str << '\n' << std::string(location.column - 1, ' ') << "^\n";
-  WarningStrs.push_back(os.str());
-}
-
-[[noreturn]] void Error(Tag tag, const Token &actual);
-
-template <typename... Args>
 [[noreturn]] void Error(const Token &tok, std::string_view format_str,
                         const Args &... args) {
   Error(tok.GetLoc(), format_str, args...);
+}
+
+template <typename... Args>
+void Warning(std::string_view format_str, const Args &... args) {
+  std::string str{"warning: "};
+
+  str += fmt::format(format_str, args...);
+  str += '\n';
+
+  WarningStrings.push_back(str);
+}
+
+template <typename... Args>
+void Warning(const Location &loc, std::string_view format_str,
+             const Args &... args) {
+  std::string str;
+
+  str += fmt::format(fmt("{}: warning: "), loc.ToLocStr());
+  str += fmt::format(format_str, args...);
+  str += '\n';
+  str += loc.GetLineContent();
+
+  WarningStrings.push_back(str);
 }
 
 template <typename... Args>

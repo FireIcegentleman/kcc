@@ -36,7 +36,7 @@ Scanner::Scanner(const std::string& preprocessed_code)
     Error("ISO C forbids an empty translation unit");
   }
 
-  location_.line_content = source_.data();
+  location_.content = source_.data();
 }
 
 std::vector<Token> Scanner::Tokenize() {
@@ -300,7 +300,7 @@ bool Scanner::Try(char c) {
   }
 }
 
-void Scanner::MarkLocation() { curr_token_.SetSourceLocation(location_); }
+void Scanner::MarkLocation() { curr_token_.SetLoc(location_); }
 
 void Scanner::SkipSpace() {
   while (std::isspace(Peek())) {
