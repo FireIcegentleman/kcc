@@ -4,7 +4,15 @@
 
 #include "scope.h"
 
+#include <iostream>
+
+#include "util.h"
+
 namespace kcc {
+
+Scope* Scope::Get(Scope* parent, enum ScopeType type) {
+  return new (ScopePool.Allocate()) Scope{parent, type};
+}
 
 void Scope::PrintCurrScope() const {
   for (const auto& item : normal_) {
@@ -75,11 +83,11 @@ Identifier* Scope::FindNormalInCurrScope(const Token& tok) {
   return FindNormalInCurrScope(tok.GetStr());
 }
 
-std::map<std::string, Identifier*> Scope::AllTagInCurrScope() const {
+std::unordered_map<std::string, Identifier*> Scope::AllTagInCurrScope() const {
   return tags_;
 }
 
-std::shared_ptr<Scope> Scope::GetParent() { return parent_; }
+Scope* Scope::GetParent() { return parent_; }
 
 bool Scope::IsFileScope() const { return type_ == kFile; }
 

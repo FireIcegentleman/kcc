@@ -5,9 +5,7 @@
 #ifndef KCC_SRC_SCOPE_H_
 #define KCC_SRC_SCOPE_H_
 
-#include <iostream>
-#include <map>
-#include <memory>
+#include <unordered_map>
 
 #include "ast.h"
 
@@ -36,8 +34,7 @@ enum ScopeType { kBlock, kFile, kFunc, kFuncProto };
 // 4) 所有其他标识符，会在通常命名空间中查找。
 class Scope {
  public:
-  Scope(std::shared_ptr<Scope> parent, enum ScopeType type)
-      : parent_{parent}, type_{type} {}
+  static Scope* Get(Scope* parent, enum ScopeType type);
 
   void PrintCurrScope() const;
 
@@ -57,19 +54,21 @@ class Scope {
   Identifier* FindTagInCurrScope(const Token& tok);
   Identifier* FindNormalInCurrScope(const Token& tok);
 
-  std::map<std::string, Identifier*> AllTagInCurrScope() const;
-  std::shared_ptr<Scope> GetParent();
+  std::unordered_map<std::string, Identifier*> AllTagInCurrScope() const;
+  Scope* GetParent();
 
   bool IsFileScope() const;
 
  private:
-  std::shared_ptr<Scope> parent_;
+  Scope(Scope* parent, enum ScopeType type) : parent_{parent}, type_{type} {}
+
+  Scope* parent_;
   enum ScopeType type_;
 
   // struct / union / enum 的名字
-  std::map<std::string, Identifier*> tags_;
+  std::unordered_map<std::string, Identifier*> tags_;
   // 函数 / 对象 / typedef名 / 枚举常量
-  std::map<std::string, Identifier*> normal_;
+  std::unordered_map<std::string, Identifier*> normal_;
 };
 
 }  // namespace kcc

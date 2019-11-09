@@ -4,6 +4,7 @@
 
 #include "opt.h"
 
+#include <cstdint>
 #include <memory>
 
 #include <llvm/Analysis/TargetTransformInfo.h>
@@ -20,26 +21,11 @@
 namespace kcc {
 
 void Optimization(OptLevel opt_level) {
-  std::uint32_t level{};
-
-  switch (opt_level) {
-    case OptLevel::kO0:
-      level = 0;
-      break;
-    case OptLevel::kO1:
-      level = 1;
-      break;
-    case OptLevel::kO2:
-      level = 2;
-      break;
-    case OptLevel::kO3:
-      level = 3;
-      break;
-  }
+  std::uint32_t level{static_cast<std::uint32_t>(opt_level)};
 
   if (level != 0) {
     // 初始化
-    llvm::PassRegistry &registry = *llvm::PassRegistry::getPassRegistry();
+    llvm::PassRegistry &registry{*llvm::PassRegistry::getPassRegistry()};
 
     llvm::initializeCore(registry);
     llvm::initializeCoroutines(registry);
@@ -74,13 +60,13 @@ void Optimization(OptLevel opt_level) {
 
     auto fp_pass{
         std::make_unique<llvm::legacy::FunctionPassManager>(Module.get())};
-    llvm::legacy::PassManager passes;
 
     fp_pass->add(llvm::createTargetTransformInfoWrapperPass(
         TargetMachine->getTargetIRAnalysis()));
-
     // 验证输入是否正确
     fp_pass->add(llvm::createVerifierPass());
+
+    llvm::legacy::PassManager passes;
     passes.add(llvm::createVerifierPass());
 
     llvm::PassManagerBuilder builder;

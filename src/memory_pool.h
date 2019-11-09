@@ -27,6 +27,8 @@ class MemoryPool {
   MemoryPool& operator=(const MemoryPool&) = delete;
   MemoryPool& operator=(MemoryPool&&) = delete;
 
+  template <class... Args>
+  Pointer New(Args&&... args);
   Pointer Allocate(SizeType n = 1, ConstPointer hint = 0);
 
  private:
@@ -49,6 +51,15 @@ class MemoryPool {
 
   static_assert(BlockSize >= 2 * sizeof(SlotType), "BlockSize too small.");
 };
+
+template <typename T, size_t BlockSize>
+template <class... Args>
+inline typename MemoryPool<T, BlockSize>::Pointer MemoryPool<T, BlockSize>::New(
+    Args&&... args) {
+  auto result{Allocate()};
+  new (result) ValueType(std::forward<Args>(args)...);
+  return result;
+}
 
 template <typename T, size_t BlockSize>
 MemoryPool<T, BlockSize>::~MemoryPool() noexcept {

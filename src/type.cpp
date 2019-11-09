@@ -4,31 +4,17 @@
 
 #include "type.h"
 
-#include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/Support/raw_os_ostream.h>
-
 #include <cassert>
-#include <memory>
+
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/Support/raw_os_ostream.h>
 
 #include "ast.h"
 #include "memory_pool.h"
 #include "scope.h"
+#include "util.h"
 
 namespace kcc {
-
-extern llvm::IRBuilder<> Builder;
-extern llvm::LLVMContext Context;
-extern std::unique_ptr<llvm::Module> Module;
-
-MemoryPool<VoidType> VoidTypePool;
-MemoryPool<ArithmeticType> ArithmeticTypePool;
-MemoryPool<PointerType> PointerTypePool;
-MemoryPool<ArrayType> ArrayTypePool;
-MemoryPool<StructType> StructTypePool;
-MemoryPool<FunctionType> FunctionTypePool;
 
 /*
  * QualType
@@ -262,7 +248,7 @@ QualType Type::StructGetMemberType(std::int32_t i) const {
   return dynamic_cast<const StructType*>(this)->GetMemberType(i);
 }
 
-std::shared_ptr<Scope> Type::StructGetScope() {
+Scope* Type::StructGetScope() {
   return dynamic_cast<StructType*>(this)->GetScope();
 }
 
@@ -714,7 +700,7 @@ ArrayType::ArrayType(QualType contained_type, std::size_t num_elements)
  * StructType
  */
 StructType* StructType::Get(bool is_struct, const std::string& name,
-                            std::shared_ptr<Scope> parent) {
+                            Scope* parent) {
   return new (StructTypePool.Allocate()) StructType{is_struct, name, parent};
 }
 
@@ -816,7 +802,7 @@ QualType StructType::GetMemberType(std::int32_t i) const {
   return members_[i]->GetQualType();
 }
 
-std::shared_ptr<Scope> StructType::GetScope() { return scope_; }
+Scope* StructType::GetScope() { return scope_; }
 
 std::int32_t StructType::GetOffset() const { return offset_; }
 
@@ -886,8 +872,7 @@ void StructType::Finish() {
   p->setBody(members);
 }
 
-StructType::StructType(bool is_struct, const std::string& name,
-                       std::shared_ptr<Scope> parent)
+StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
     : Type{false}, is_struct_{is_struct}, name_{name}, scope_{parent} {
   if (HasName()) {
     for (const auto& item : Module->getIdentifiedStructTypes()) {

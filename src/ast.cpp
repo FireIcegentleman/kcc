@@ -5,36 +5,10 @@
 #include "ast.h"
 
 #include "memory_pool.h"
+#include "util.h"
 #include "visitor.h"
 
 namespace kcc {
-
-MemoryPool<BinaryOpExpr> BinaryOpExprPool;
-MemoryPool<Enumerator> EnumeratorPool;
-MemoryPool<Identifier> IdentifierPool;
-MemoryPool<Constant> ConstantPool;
-MemoryPool<FuncCallExpr> FuncCallExprPool;
-MemoryPool<TypeCastExpr> TypeCastExprPool;
-MemoryPool<ConditionOpExpr> ConditionOpExprPool;
-MemoryPool<UnaryOpExpr> UnaryOpExprPool;
-MemoryPool<LabelStmt> LabelStmtPool;
-MemoryPool<ReturnStmt> ReturnStmtPool;
-MemoryPool<IfStmt> IfStmtPool;
-MemoryPool<CompoundStmt> CompoundStmtPool;
-MemoryPool<Object> ObjectPool;
-MemoryPool<TranslationUnit> TranslationUnitPool;
-MemoryPool<Declaration> DeclarationPool;
-MemoryPool<FuncDef> FuncDefPool;
-MemoryPool<ExprStmt> ExprStmtPool;
-MemoryPool<WhileStmt> WhileStmtPool;
-MemoryPool<DoWhileStmt> DoWhileStmtPool;
-MemoryPool<ForStmt> ForStmtPool;
-MemoryPool<CaseStmt> CaseStmtPool;
-MemoryPool<DefaultStmt> DefaultStmtPool;
-MemoryPool<SwitchStmt> SwitchStmtPool;
-MemoryPool<GotoStmt> GotoStmtPool;
-MemoryPool<ContinueStmt> ContinueStmtPool;
-MemoryPool<BreakStmt> BreakStmtPool;
 
 #define ACCEPT(ClassName) \
   void ClassName::Accept(Visitor& visitor) const { visitor.Visit(*this); }
@@ -867,13 +841,12 @@ ReturnStmt* ReturnStmt::Get(Expr* expr) {
 /*
  * CompoundStmt
  */
-CompoundStmt::CompoundStmt(std::vector<Stmt*> stmts,
-                           std::shared_ptr<Scope> scope)
+CompoundStmt::CompoundStmt(std::vector<Stmt*> stmts, Scope* scope)
     : stmts_{std::move(stmts)}, scope_{scope} {}
 
 AstNodeType CompoundStmt::Kind() const { return AstNodeType::kCompoundStmt; }
 
-std::shared_ptr<Scope> CompoundStmt::GetScope() { return scope_; }
+Scope* CompoundStmt::GetScope() { return scope_; }
 
 std::vector<Stmt*> CompoundStmt::GetStmts() { return stmts_; }
 
@@ -1044,8 +1017,7 @@ SwitchStmt* SwitchStmt::Get(Expr* cond, Stmt* block) {
 
 void CompoundStmt::Check() {}
 
-CompoundStmt* CompoundStmt::Get(std::vector<Stmt*> stmts,
-                                std::shared_ptr<Scope> scope) {
+CompoundStmt* CompoundStmt::Get(std::vector<Stmt*> stmts, Scope* scope) {
   return new (CompoundStmtPool.Allocate()) CompoundStmt{stmts, scope};
 }
 

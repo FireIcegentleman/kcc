@@ -15,6 +15,11 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Target/TargetMachine.h>
 
+#include "ast.h"
+#include "memory_pool.h"
+#include "scope.h"
+#include "type.h"
+
 namespace kcc {
 
 // 拥有许多 LLVM 核心数据结构, 如类型和常量值表
@@ -27,6 +32,40 @@ inline auto Module{std::make_unique<llvm::Module>("main", Context)};
 inline llvm::DataLayout DataLayout{Module.get()};
 
 inline std::unique_ptr<llvm::TargetMachine> TargetMachine;
+
+inline MemoryPool<BinaryOpExpr> BinaryOpExprPool;
+inline MemoryPool<Enumerator> EnumeratorPool;
+inline MemoryPool<Identifier> IdentifierPool;
+inline MemoryPool<Constant> ConstantPool;
+inline MemoryPool<FuncCallExpr> FuncCallExprPool;
+inline MemoryPool<TypeCastExpr> TypeCastExprPool;
+inline MemoryPool<ConditionOpExpr> ConditionOpExprPool;
+inline MemoryPool<UnaryOpExpr> UnaryOpExprPool;
+inline MemoryPool<LabelStmt> LabelStmtPool;
+inline MemoryPool<ReturnStmt> ReturnStmtPool;
+inline MemoryPool<IfStmt> IfStmtPool;
+inline MemoryPool<CompoundStmt> CompoundStmtPool;
+inline MemoryPool<Object> ObjectPool;
+inline MemoryPool<TranslationUnit> TranslationUnitPool;
+inline MemoryPool<Declaration> DeclarationPool;
+inline MemoryPool<FuncDef> FuncDefPool;
+inline MemoryPool<ExprStmt> ExprStmtPool;
+inline MemoryPool<WhileStmt> WhileStmtPool;
+inline MemoryPool<DoWhileStmt> DoWhileStmtPool;
+inline MemoryPool<ForStmt> ForStmtPool;
+inline MemoryPool<CaseStmt> CaseStmtPool;
+inline MemoryPool<DefaultStmt> DefaultStmtPool;
+inline MemoryPool<SwitchStmt> SwitchStmtPool;
+inline MemoryPool<GotoStmt> GotoStmtPool;
+inline MemoryPool<ContinueStmt> ContinueStmtPool;
+inline MemoryPool<BreakStmt> BreakStmtPool;
+inline MemoryPool<VoidType> VoidTypePool;
+inline MemoryPool<ArithmeticType> ArithmeticTypePool;
+inline MemoryPool<PointerType> PointerTypePool;
+inline MemoryPool<ArrayType> ArrayTypePool;
+inline MemoryPool<StructType> StructTypePool;
+inline MemoryPool<FunctionType> FunctionTypePool;
+inline MemoryPool<Scope> ScopePool;
 
 bool CommandSuccess(std::int32_t status);
 

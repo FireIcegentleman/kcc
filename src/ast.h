@@ -476,23 +476,22 @@ class CompoundStmt : public Stmt {
 
  public:
   static CompoundStmt* Get();
-  static CompoundStmt* Get(std::vector<Stmt*> stmts,
-                           std::shared_ptr<Scope> scope);
+  static CompoundStmt* Get(std::vector<Stmt*> stmts, Scope* scope);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  std::shared_ptr<Scope> GetScope();
+  Scope* GetScope();
   std::vector<Stmt*> GetStmts();
   void AddStmt(Stmt* stmt);
 
  private:
   CompoundStmt() = default;
-  explicit CompoundStmt(std::vector<Stmt*> stmts, std::shared_ptr<Scope> scope);
+  explicit CompoundStmt(std::vector<Stmt*> stmts, Scope* scope);
 
   std::vector<Stmt*> stmts_;
-  std::shared_ptr<Scope> scope_;
+  Scope* scope_;
 };
 
 class ExprStmt : public Stmt {

@@ -1004,9 +1004,7 @@ std::size_t Parser::ParseArrayLength() {
   return len;
 }
 
-void Parser::EnterProto() {
-  curr_scope_ = std::make_shared<Scope>(curr_scope_, kFuncProto);
-}
+void Parser::EnterProto() { curr_scope_ = Scope::Get(curr_scope_, kFuncProto); }
 
 void Parser::ExitProto() { curr_scope_ = curr_scope_->GetParent(); }
 
@@ -1874,7 +1872,7 @@ BreakStmt* Parser::ParseBreakStmt() {
 }
 
 void Parser::EnterBlock(Type* func_type) {
-  curr_scope_ = std::make_shared<Scope>(curr_scope_, kBlock);
+  curr_scope_ = Scope::Get(curr_scope_, kBlock);
 
   if (func_type) {
     for (const auto& param : func_type->FuncGetParams()) {

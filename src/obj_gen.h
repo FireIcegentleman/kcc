@@ -5,9 +5,9 @@
 #ifndef KCC_SRC_OBJ_GEN_H_
 #define KCC_SRC_OBJ_GEN_H_
 
-#include <llvm/Target/TargetMachine.h>
-
 #include <string>
+
+#include <llvm/Target/TargetMachine.h>
 
 namespace kcc {
 

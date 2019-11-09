@@ -4,12 +4,12 @@
 
 #include "obj_gen.h"
 
+#include <system_error>
+
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-
-#include <system_error>
 
 #include "error.h"
 #include "util.h"

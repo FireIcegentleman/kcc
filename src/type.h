@@ -175,7 +175,7 @@ class Type {
   std::vector<Object*> StructGetMembers();
   Object* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
-  std::shared_ptr<Scope> StructGetScope();
+  Scope* StructGetScope();
   void StructAddMember(Object* member);
   void StructMergeAnonymous(Object* anonymous);
   std::int32_t StructGetOffset() const;
@@ -277,7 +277,7 @@ class StructType : public Type {
 
  public:
   static StructType* Get(bool is_struct, const std::string& name,
-                         std::shared_ptr<Scope> parent);
+                         Scope* parent);
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
@@ -293,7 +293,7 @@ class StructType : public Type {
   std::vector<Object*> GetMembers();
   Object* GetMember(const std::string& name) const;
   QualType GetMemberType(std::int32_t i) const;
-  std::shared_ptr<Scope> GetScope();
+  Scope* GetScope();
   std::int32_t GetOffset() const;
 
   void AddMember(Object* member);
@@ -301,8 +301,7 @@ class StructType : public Type {
   void Finish();
 
  private:
-  StructType(bool is_struct, const std::string& name,
-             std::shared_ptr<Scope> parent);
+  StructType(bool is_struct, const std::string& name, Scope* parent);
 
   // 计算新成员的开始位置
   static std::int32_t MakeAlign(std::int32_t offset, std::int32_t align);
@@ -310,7 +309,7 @@ class StructType : public Type {
   bool is_struct_{};
   std::string name_;
   std::vector<Object*> members_;
-  std::shared_ptr<Scope> scope_;
+  Scope* scope_;
 
   std::int32_t offset_{};
   std::int32_t width_{};

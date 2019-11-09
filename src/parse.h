@@ -6,7 +6,6 @@
 #define KCC_SRC_PARSE_H_
 
 #include <map>
-#include <memory>
 #include <vector>
 
 #include "ast.h"
@@ -133,7 +132,7 @@ class Parser {
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
-  std::shared_ptr<Scope> curr_scope_{std::make_shared<Scope>(nullptr, kFile)};
+  Scope* curr_scope_{Scope::Get(nullptr, kFile)};
   std::map<std::string, LabelStmt*> curr_labels_;
   FuncDef* curr_func_def_{};
 };
