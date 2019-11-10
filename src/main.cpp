@@ -80,7 +80,7 @@ llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
 
 void RunDev();
 
-int main(int argc, char *argv[]) /*try*/ {
+int main(int argc, char *argv[]) try {
   llvm::cl::HideUnrelatedOptions(Category);
 
   llvm::cl::SetVersionPrinter([](llvm::raw_ostream &os) {
@@ -278,10 +278,9 @@ int main(int argc, char *argv[]) /*try*/ {
       std::filesystem::remove(file);
     }
   }
+} catch (const std::exception &err) {
+  Error(err.what());
 }
-// catch (const std::exception &err) {
-//  Error(err.what());
-//}
 
 void RunDev() {
   Preprocessor preprocessor;
@@ -293,7 +292,7 @@ void RunDev() {
     std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
                      std::chrono::system_clock::now() - kT0)
                      .count()
-              << " us\n";
+              << " μs\n";
   }
   std::ofstream preprocess_file{"test/dev/test.i"};
   preprocess_file << preprocessed_code << std::flush;
@@ -307,7 +306,7 @@ void RunDev() {
     std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
                      std::chrono::system_clock::now() - kT0)
                      .count()
-              << " us\n";
+              << " μs\n";
   }
   std::ofstream tokens_file{"test/dev/test.txt"};
   std::transform(std::begin(tokens), std::end(tokens),
@@ -315,18 +314,19 @@ void RunDev() {
                  std::mem_fn(&Token::ToString));
   tokens_file << std::flush;
 
-  //  Parser parser{std::move(tokens)};
-  //  TranslationUnit *unit;
-  //  {
-  //    std::cout << "parse ............................ ";
-  //    const auto kT0{std::chrono::system_clock::now()};
-  //    unit = parser.ParseTranslationUnit();
-  //    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
-  //                     std::chrono::system_clock::now() - kT0)
-  //                     .count()
-  //              << " us\n";
-  //  }
-  //  JsonGen{}.GenJson(unit, "test/dev/test.html");
+  Parser parser{std::move(tokens)};
+  TranslationUnit *unit;
+  {
+    std::cout << "parse ............................ ";
+    const auto kT0{std::chrono::system_clock::now()};
+    unit = parser.ParseTranslationUnit();
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::system_clock::now() - kT0)
+                     .count()
+              << " μs\n";
+  }
+  JsonGen{}.GenJson(unit, "test/dev/test.html");
+
   //  {
   //    std::cout << "code gen ............................ ";
   //    const auto kT0{std::chrono::system_clock::now()};
@@ -334,7 +334,7 @@ void RunDev() {
   //    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
   //                     std::chrono::system_clock::now() - kT0)
   //                     .count()
-  //              << " us\n";
+  //              << " μs\n";
   //  }
   //  Optimization(OptLevel::kO0);
   //

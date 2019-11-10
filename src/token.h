@@ -129,6 +129,8 @@ class TokenTag : public QObject {
     kPipeEqual,            // |=
 
     kComma,  // ,
+    kSharp,
+    kSharpSharp,
 
     kFunc,
     kExtension,  // __extension__
@@ -160,6 +162,7 @@ class Token {
 
   std::string ToString() const;
 
+  bool IsEof() const;
   bool IsIdentifier() const;
   bool IsStringLiteral() const;
   bool IsConstant() const;

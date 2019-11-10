@@ -25,6 +25,7 @@ set(CMAKE_AUTOMOC ON)
 find_package(fmt REQUIRED)
 find_package(LLVM REQUIRED CONFIG)
 find_package(Qt5 REQUIRED COMPONENTS Core)
+find_package(Boost REQUIRED COMPONENTS locale)
 
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(-DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
@@ -34,4 +35,5 @@ add_executable(${PROJECT_NAME} ${cppsrc})
 
 include(format)
 
-target_link_libraries(${PROJECT_NAME} Qt5::Core fmt::fmt LLVM)
+target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES} Qt5::Core fmt::fmt
+                      LLVM)

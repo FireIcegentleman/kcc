@@ -5,14 +5,14 @@
 #ifndef KCC_SRC_ERROR_H_
 #define KCC_SRC_ERROR_H_
 
-#include <fmt/color.h>
-#include <fmt/core.h>
-#include <fmt/format.h>
-
 #include <cstdlib>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <fmt/color.h>
+#include <fmt/core.h>
+#include <fmt/format.h>
 
 #include "location.h"
 #include "token.h"

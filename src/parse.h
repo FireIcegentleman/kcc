@@ -11,6 +11,7 @@
 #include "ast.h"
 #include "scope.h"
 #include "token.h"
+#include "type.h"
 
 namespace kcc {
 
@@ -62,7 +63,7 @@ class Parser {
                               std::uint32_t storage_class_spec,
                               std::uint32_t func_spec, std::int32_t align);
   Expr* ParseConstantExpr();
-  Constant* ParseStringLiteral(bool handle_escape);
+  Constant* ParseStringLiteral();
   std::set<Initializer> ParseInitDeclaratorSub(Identifier* ident);
   void ParseInitializer(std::set<Initializer>& inits, QualType type,
                         std::int32_t offset, bool designated, bool force_brace);

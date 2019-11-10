@@ -2,12 +2,18 @@
 // Created by kaiser on 2019/10/30.
 //
 
+// 替用记号(C95)
+// {	<%
+// }	%>
+// [	<:
+// ]	:>
+// #	%:
+// ##	%:%:
+
 #include "lex.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cctype>
-#include <iostream>
 
 #include "error.h"
 
@@ -28,15 +34,9 @@ std::int32_t CharToDigit(char ch) {
   }
 }
 
-Scanner::Scanner(const std::string& preprocessed_code)
-    : source_{preprocessed_code} {
-  if (std::empty(preprocessed_code) ||
-      std::all_of(std::begin(preprocessed_code), std::end(preprocessed_code),
-                  [](char ch) { return ch == '\n'; })) {
-    Error("ISO C forbids an empty translation unit");
-  }
-
-  location_.content = source_.data();
+Scanner::Scanner(std::string preprocessed_code)
+    : source_{std::move(preprocessed_code)} {
+  loc_.content = source_.data();
 }
 
 std::vector<Token> Scanner::Tokenize() {
@@ -46,12 +46,80 @@ std::vector<Token> Scanner::Tokenize() {
     auto token{Scan()};
     token_sequence.push_back(token);
 
-    if (token.TagIs(Tag::kEof)) {
+    if (token.IsEof()) {
       break;
     }
   }
 
   return token_sequence;
+}
+
+std::string Scanner::HandleIdentifier() {
+  std::string s;
+
+  while (HasNext()) {
+    std::int32_t ch{Next(false)};
+    if (IsUCN(ch)) {
+      AppendUCN(s, HandleEscape());
+    } else {
+      s.push_back(ch);
+    }
+  }
+
+  return s;
+}
+
+std::pair<std::int32_t, Encoding> Scanner::HandleCharacter() {
+  auto encoding{HandleEncoding()};
+
+  std::int32_t val{};
+  std::int32_t count{};
+  // eat '
+  Next(false);
+
+  while (!Test('\'')) {
+    std::int32_t ch{Next(false)};
+    if (ch == '\\') {
+      ch = HandleEscape();
+    }
+
+    if (encoding == Encoding::kNone) {
+      val = (val << 8) + ch;
+    } else {
+      val = ch;
+    }
+    ++count;
+  }
+
+  if (count > 1) {
+    Warning(loc_, "multi-character character constant");
+  }
+
+  return {val, encoding};
+}
+
+std::pair<std::string, Encoding> Scanner::HandleStringLiteral() {
+  auto encoding{HandleEncoding()};
+  std::string s;
+  // eat "
+  Next(false);
+
+  while (!Test('"')) {
+    std::int32_t ch{Next(false)};
+    bool is_ucn{IsUCN(ch)};
+
+    if (ch == '\\') {
+      ch = HandleEscape();
+    }
+
+    if (is_ucn) {
+      AppendUCN(s, ch);
+    } else {
+      s.push_back(ch);
+    }
+  }
+
+  return {s, encoding};
 }
 
 Token Scanner::Scan() {
@@ -124,6 +192,19 @@ Token Scanner::Scan() {
     case '%':
       if (Try('=')) {
         return MakeToken(Tag::kPercentEqual);
+      } else if (Try('>')) {
+        return MakeToken(Tag::kRightBrace);
+      } else if (Try(':')) {
+        if (Try('%')) {
+          if (Try(':')) {
+            return MakeToken(Tag::kSharpSharp);
+          } else {
+            PutBack();
+            return MakeToken(Tag::kSharp);
+          }
+        } else {
+          return MakeToken(Tag::kSharp);
+        }
       } else {
         return MakeToken(Tag::kPercent);
       }
@@ -132,6 +213,10 @@ Token Scanner::Scan() {
         return MakeToken(Try('=') ? Tag::kLessLessEqual : Tag::kLessLess);
       } else if (Try('=')) {
         return MakeToken(Tag::kLessEqual);
+      } else if (Try(':')) {
+        return MakeToken(Tag::kLeftSquare);
+      } else if (Try('%')) {
+        return MakeToken(Tag::kLeftBrace);
       } else {
         return MakeToken(Tag::kLess);
       }
@@ -162,6 +247,9 @@ Token Scanner::Scan() {
       return MakeToken(Tag::kSemicolon);
     case ',':
       return MakeToken(Tag::kComma);
+    case '#':
+      SkipComment();
+      return Scan();
     case '0':
     case '1':
     case '2':
@@ -177,6 +265,24 @@ Token Scanner::Scan() {
       return SkipCharacter();
     case '"':
       return SkipStringLiteral();
+    case 'u':
+    case 'U':
+    case 'L':
+      HandleEncoding();
+
+      if (Try('\'')) {
+        return SkipCharacter();
+      } else if (Try('"')) {
+        return SkipStringLiteral();
+      } else {
+        return SkipIdentifier();
+      }
+    case '\\':
+      if (Test('u') || Test('U')) {
+        return SkipIdentifier();
+      } else {
+        Error(loc_, "Invalid input: {}", ch);
+      }
     case 'a':
     case 'b':
     case 'c':
@@ -197,7 +303,6 @@ Token Scanner::Scan() {
     case 'r':
     case 's':
     case 't':
-    case 'u':
     case 'v':
     case 'w':
     case 'x':
@@ -214,7 +319,6 @@ Token Scanner::Scan() {
     case 'I':
     case 'J':
     case 'K':
-    case 'L':
     case 'M':
     case 'N':
     case 'O':
@@ -223,7 +327,6 @@ Token Scanner::Scan() {
     case 'R':
     case 'S':
     case 'T':
-    case 'U':
     case 'V':
     case 'W':
     case 'X':
@@ -231,23 +334,13 @@ Token Scanner::Scan() {
     case 'Z':
     case '_':
       return SkipIdentifier();
-    case '#':
-      SkipComment();
-      return Scan();
     case '\0':
       buffer_.clear();
       return MakeToken(Tag::kEof);
     default: {
-      return MakeToken(Tag::kInvalid);
+      Error(loc_, "Invalid input: {}", ch);
     }
   }
-}
-
-Token Scanner::MakeToken(Tag tag) {
-  curr_token_.SetTag(tag);
-  curr_token_.SetStr(buffer_);
-  buffer_.clear();
-  return curr_token_;
 }
 
 bool Scanner::HasNext() { return curr_index_ + 1 < std::size(source_); }
@@ -266,12 +359,12 @@ char Scanner::Next(bool push) {
   }
 
   if (ch == '\n') {
-    ++location_.row;
-    pre_column_ = location_.column;
-    location_.column = 1;
-    location_.line_begin = curr_index_;
+    ++loc_.row;
+    pre_column_ = loc_.column;
+    loc_.column = 1;
+    loc_.line_begin = curr_index_;
   } else {
-    ++location_.column;
+    ++loc_.column;
   }
 
   return ch;
@@ -279,13 +372,15 @@ char Scanner::Next(bool push) {
 
 void Scanner::PutBack() {
   auto ch{source_[--curr_index_]};
+
+  assert(!std::empty(buffer_));
   buffer_.pop_back();
 
   if (ch == '\n') {
-    --location_.row;
-    location_.column = pre_column_;
+    --loc_.row;
+    loc_.column = pre_column_;
   } else {
-    --location_.column;
+    --loc_.column;
   }
 }
 
@@ -300,7 +395,16 @@ bool Scanner::Try(char c) {
   }
 }
 
-void Scanner::MarkLocation() { curr_token_.SetLoc(location_); }
+bool Scanner::IsUCN(char ch) { return ch == '\\' && (Test('u') || Test('U')); }
+
+Token Scanner::MakeToken(Tag tag) {
+  curr_token_.SetTag(tag);
+  curr_token_.SetStr(buffer_);
+  buffer_.clear();
+  return curr_token_;
+}
+
+void Scanner::MarkLocation() { curr_token_.SetLoc(loc_); }
 
 void Scanner::SkipSpace() {
   while (std::isspace(Peek())) {
@@ -317,14 +421,15 @@ void Scanner::SkipComment() {
   // eat first number
   Next();
   // # 后的数字指示的是下一行的行号
-  location_.row = std::stoi(SkipNumber().GetStr()) - 1;
+  loc_.row = std::stoi(SkipNumber().GetStr()) - 1;
   // eat space
   Next(false);
 
   // eat "
   Next();
   auto file_name{SkipStringLiteral().GetStr()};
-  location_.file_name = file_name.substr(1, std::size(file_name) - 2);
+  // 去掉前后的 "
+  loc_.file_name = file_name.substr(1, std::size(file_name) - 2);
 
   while (HasNext() && Next(false) != '\n') {
   }
@@ -332,12 +437,22 @@ void Scanner::SkipComment() {
   buffer_.clear();
 }
 
+// pp-number:
+//  digit
+//  . digit
+//  pp-number digit
+//  pp-number identifier-nondigit
+//  pp-number e sign
+//  pp-number E sign
+//  pp-number p sign
+//  pp-number P sign
+//  pp-number .
 Token Scanner::SkipNumber() {
   bool saw_hex_prefix{false};
   auto tag{Tag::kIntegerConstant};
 
   auto ch{buffer_.front()};
-  while (ch == '.' || std::isalnum(ch)) {
+  while (ch == '.' || std::isalnum(ch) || ch == '_' || IsUCN(ch)) {
     if (ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') {
       if (!Try('-')) {
         Try('+');
@@ -346,6 +461,8 @@ Token Scanner::SkipNumber() {
       if ((ch == 'p' || ch == 'P') && saw_hex_prefix) {
         tag = Tag::kFloatingConstant;
       }
+    } else if (IsUCN(ch)) {
+      HandleEscape();
     } else if (ch == '.') {
       tag = Tag::kFloatingConstant;
     } else if (ch == 'x' || ch == 'X') {
@@ -361,12 +478,48 @@ Token Scanner::SkipNumber() {
   return MakeToken(tag);
 }
 
+// identifier:
+//  identifier-nondigit
+//  identifier identifier-nondigit
+//  identifier digit
+// identifier-nondigit:
+//  nondigit
+//  universal-character-name
+//  other implementation-defined characters
+// nondigit: one of
+//  _abcdefghijklm
+//  nopqrstuvwxyz
+//  ABCDEFGHIJKLM
+//  NOPQRSTUVWXYZ
+// digit: one of
+//  0123456789
+Token Scanner::SkipIdentifier() {
+  PutBack();
+  char ch{Next()};
+
+  while (std::isalnum(ch) || ch == '_' || IsUCN(ch)) {
+    if (IsUCN(ch)) {
+      HandleEscape();
+    }
+    ch = Next();
+  }
+  PutBack();
+
+  return MakeToken(Scanner::Keywords.Find(buffer_));
+}
+
+// character-constant:
+//  ' c-char-sequence '
+//  L' c-char-sequence '
+//  u' c-char-sequence '
+//  U' c-char-sequence '
+// c-char:
+//  any member of the source character set except
+//  the single-quote ', backslash \, or new-line character
+//  escape-sequence
 Token Scanner::SkipCharacter() {
-  // 此时 buffer 中已经有了字符 '
   auto ch{Next()};
-  // ch=='\0' 时已经没有剩余字符了
   while (ch != '\'' && ch != '\n' && ch != '\0') {
-    // 这里不处理转义序列
     if (ch == '\\') {
       Next();
     }
@@ -374,12 +527,23 @@ Token Scanner::SkipCharacter() {
   }
 
   if (ch != '\'') {
-    Error(location_, "missing terminating ' character");
+    Error(loc_, "missing terminating ' character");
   }
 
   return MakeToken(Tag::kCharacterConstant);
 }
 
+// string-literal:
+//  encoding-prefixopt " s-char-sequenceopt "
+// encoding-prefix:
+//  u8 u U L
+// s-char-sequence:
+//  s-char
+//  s-char-sequence s-char
+// s-char:
+//  any member of the source character set except
+//  the double-quote ", backslash \, or new-line character
+//  escape-sequence
 Token Scanner::SkipStringLiteral() {
   auto ch{Next()};
   while (ch != '\"' && ch != '\n' && ch != '\0') {
@@ -390,30 +554,43 @@ Token Scanner::SkipStringLiteral() {
   }
 
   if (ch != '\"') {
-    Error(location_, "missing terminating \" character");
+    Error(loc_, "missing terminating \" character");
   }
 
   return MakeToken(Tag::kStringLiteral);
 }
 
-Token Scanner::SkipIdentifier() {
-  char ch;
-
-  do {
-    ch = Next();
-  } while (std::isalnum(ch) || ch == '_');
-  PutBack();
-
-  return MakeToken(keywords_.Find(buffer_));
+Encoding Scanner::HandleEncoding() {
+  if (Try('u')) {
+    if (Try('8')) {
+      return Encoding ::kUtf8;
+    } else {
+      return Encoding ::kChar16;
+    }
+  } else if (Try('U')) {
+    return Encoding ::kChar32;
+  } else if (Try('L')) {
+    return Encoding ::kWchar;
+  } else {
+    return Encoding::kNone;
+  }
 }
 
+// escape-sequence:
+//  simple-escape-sequence
+//  octal-escape-sequence
+//  hexadecimal-escape-sequence
+//  universal-character-name
+// simple-escape-sequence: one of
+//  \' \" \? \\
+//  \a \b \f \n \r \t \v
 std::int32_t Scanner::HandleEscape() {
   auto ch{Next()};
   switch (ch) {
-    case '\\':
     case '\'':
     case '\"':
     case '\?':
+    case '\\':
       return ch;
     case 'a':
       return '\a';
@@ -429,6 +606,9 @@ std::int32_t Scanner::HandleEscape() {
       return '\t';
     case 'v':
       return '\v';
+      // GNU 扩展
+    case 'e':
+      return '\033';
     case 'X':
     case 'x':
       return HandleHexEscape();
@@ -441,36 +621,46 @@ std::int32_t Scanner::HandleEscape() {
     case '6':
     case '7':
       return HandleOctEscape(ch);
+    case 'u':
+      return HandleUCN(4);
+    case 'U':
+      return HandleUCN(8);
     default: {
-      Error(location_, "unknown escape sequence '\\{}'", ch);
+      Error(loc_, "unknown escape sequence '\\{}'", ch);
     }
   }
 }
 
+// hexadecimal-escape-sequence:
+//  \x hexadecimal-digit
+//  hexadecimal-escape-sequence hexadecimal-digit
 std::int32_t Scanner::HandleHexEscape() {
   std::int32_t value{};
+  auto ch{Peek()};
 
-  if (auto peek{Peek()}; !std::isxdigit(peek)) {
-    Error(location_, "\\x used with no following hex digits: '{}'", peek);
+  if (!std::isxdigit(ch)) {
+    Error(loc_, "\\x used with no following hex digits: '{}'", ch);
   }
 
-  for (std::int32_t i{0}; i < 2; ++i) {
-    if (char next{Next()}; std::isxdigit(next)) {
-      value = (static_cast<std::uint32_t>(value) << 4U) + CharToDigit(next);
-    } else {
-      PutBack();
-      break;
-    }
+  ch = Next();
+  while (std::isxdigit(ch)) {
+    value = (static_cast<std::uint32_t>(value) << 4U) + CharToDigit(ch);
+    ch = Next();
   }
+  PutBack();
 
   return value;
 }
 
+// octal-escape-sequence:
+//  \ octal-digit
+//  \ octal-digit octal-digit
+//  \ octal-digit octal-digit octal-digit
 std::int32_t Scanner::HandleOctEscape(char ch) {
   std::int32_t value{CharToDigit(ch)};
 
   if (!IsOctDigit(ch)) {
-    Error(location_, "expect oct digit, but got {}", ch);
+    Error(loc_, "\\nnn used with no following oct digits: '{}'", ch);
   }
 
   for (std::int32_t i{0}; i < 3; ++i) {
@@ -485,40 +675,22 @@ std::int32_t Scanner::HandleOctEscape(char ch) {
   return value;
 }
 
-std::string Scanner::ScanStringLiteral(bool handle_escape) {
-  std::string s;
-  // eat "
-  Next();
+// universal-character-name:
+//  \u hex-quad
+//  \U hex-quad hex-quad
+// hex-quad:
+//  hexadecimal-digit hexadecimal-digit
+//  hexadecimal-digit hexadecimal-digit
+std::int32_t Scanner::HandleUCN(std::int32_t length) {
+  assert(length == 4 || length == 8);
 
-  while (!Test('"')) {
-    auto ch{Next()};
-    if (handle_escape && ch == '\\') {
-      ch = HandleEscape();
-    }
-    s.push_back(ch);
-  }
-
-  return s;
-}
-
-std::int32_t Scanner::ScanCharacter() {
   std::int32_t val{};
-  std::int32_t count{};
-  // eat '
-  Next();
-
-  while (!Test('\'')) {
+  for (std::int32_t i{0}; i < length; ++i) {
     auto ch{Next()};
-    if (ch == '\\') {
-      ch = HandleEscape();
+    if (!std::isxdigit(ch)) {
+      Error(loc_, "\\u / \\U used with no following hex digits: '{}'", ch);
     }
-
-    val = (val << 8) + ch;
-    ++count;
-  }
-
-  if (count > 1) {
-    Warning(location_, "multi-character character constant");
+    val = (val << 4) + CharToDigit(ch);
   }
 
   return val;

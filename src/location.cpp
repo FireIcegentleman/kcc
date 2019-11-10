@@ -4,15 +4,15 @@
 
 #include "location.h"
 
+#include <cstring>
+
 #include <fmt/core.h>
 #include <fmt/format.h>
-
-#include <cstring>
 
 namespace kcc {
 
 std::string Location::ToLocStr() const {
-  return fmt::format(fmt("{}:{}:{}:"), file_name, row, column);
+  return fmt::format(fmt("{}:{}:{}"), file_name, row, column);
 }
 
 std::string Location::GetLineContent() const {

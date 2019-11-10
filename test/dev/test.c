@@ -25,4 +25,4 @@
 #include <wchar.h>
 #include <wctype.h>
 
-int main(void) { printf("Hello World"); }
+int main(void) {}

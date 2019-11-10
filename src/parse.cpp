@@ -216,7 +216,7 @@ void Parser::ParseStaticAssertDecl() {
   auto expr{ParseConstantExpr()};
   Expect(Tag::kComma);
 
-  auto msg{ParseStringLiteral(false)->GetStrVal()};
+  auto msg{ParseStringLiteral()->GetStrVal()};
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
@@ -1011,7 +1011,7 @@ void Parser::ExitProto() { curr_scope_ = curr_scope_->GetParent(); }
 std::pair<std::vector<Object*>, bool> Parser::ParseParamTypeList() {
   if (Test(Tag::kRightParen)) {
     Warning(
-        Next(),
+        Peek(),
         "The parameter list is not allowed to be empty, you should use void");
     return {{}, false};
   }
@@ -1079,13 +1079,13 @@ QualType Parser::ParseTypeName() {
 
 Expr* Parser::ParseConstantExpr() { return ParseConditionExpr(); }
 
-Constant* Parser::ParseStringLiteral(bool handle_escape) {
+Constant* Parser::ParseStringLiteral() {
   auto tok{Expect(Tag::kStringLiteral)};
 
-  auto str{Scanner{tok.GetStr()}.ScanStringLiteral(handle_escape)};
+  auto str{Scanner{tok.GetStr()}.HandleStringLiteral().first};
   while (Test(Tag::kStringLiteral)) {
     tok = Next();
-    str += Scanner{tok.GetStr()}.ScanStringLiteral(handle_escape);
+    str += Scanner{tok.GetStr()}.HandleStringLiteral().first;
   }
 
   return MakeAstNode<Constant>(
@@ -1220,7 +1220,7 @@ Expr* Parser::ParsePrimaryExpr() {
     Expect(Tag::kRightParen);
     return expr;
   } else if (Peek().IsStringLiteral()) {
-    return ParseStringLiteral(true);
+    return ParseStringLiteral();
   } else if (Peek().IsIdentifier()) {
     Next();
     auto ident{curr_scope_->FindNormal(tok)};
@@ -1540,7 +1540,7 @@ Expr* Parser::ParseInteger() {
 
 Expr* Parser::ParseCharacter() {
   auto tok{Next()};
-  auto val{Scanner{tok.GetStr()}.ScanCharacter()};
+  auto val{Scanner{tok.GetStr()}.HandleCharacter().first};
   return MakeAstNode<Constant>(tok, val);
 }
 
@@ -1622,7 +1622,7 @@ void Parser::ParseAttributeExprList() {
 void Parser::TryAsm() {
   if (Try(Tag::kAsm)) {
     Expect(Tag::kLeftParen);
-    ParseStringLiteral(false);
+    ParseStringLiteral();
     Expect(Tag::kRightParen);
   }
 }

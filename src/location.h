@@ -16,7 +16,7 @@ class Location {
   std::string ToLocStr() const;
   std::string GetLineContent() const;
 
-  std::string file_name;
+  std::string file_name{"builtin"};
   const char *content;
 
   std::size_t line_begin{};

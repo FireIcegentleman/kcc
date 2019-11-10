@@ -10,6 +10,7 @@
 
 namespace kcc {
 
+// clang 处理了三标符
 class Preprocessor {
  public:
   void SetIncludePaths(const std::vector<std::string> &include_paths);

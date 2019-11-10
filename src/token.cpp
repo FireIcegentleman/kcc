@@ -27,9 +27,11 @@ Location Token::GetLoc() const { return location_; }
 void Token::SetLoc(const Location& loc) { location_ = loc; }
 
 std::string Token::ToString() const {
-  return fmt::format("{:<25}str: {:<25}loc: <{:<25}>", TokenTag::ToString(tag_),
+  return fmt::format("{:<25}str: {:<25}loc: <{}>", TokenTag::ToString(tag_),
                      str_, location_.ToLocStr());
 }
+
+bool Token::IsEof() const { return tag_ == Tag::kEof; }
 
 bool Token::IsIdentifier() const { return tag_ == Tag::kIdentifier; }
 
