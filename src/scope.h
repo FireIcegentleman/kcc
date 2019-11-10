@@ -5,9 +5,11 @@
 #ifndef KCC_SRC_SCOPE_H_
 #define KCC_SRC_SCOPE_H_
 
+#include <string>
 #include <unordered_map>
 
 #include "ast.h"
+#include "token.h"
 
 namespace kcc {
 
@@ -41,20 +43,20 @@ class Scope {
   auto begin() { return std::begin(normal_); }
   auto end() { return std::end(normal_); }
 
-  void InsertTag(const std::string& name, Identifier* ident);
-  void InsertNormal(const std::string& name, Identifier* ident);
+  void InsertTag(const std::string& name, IdentifierExpr* ident);
+  void InsertNormal(const std::string& name, IdentifierExpr* ident);
 
-  Identifier* FindTag(const std::string& name);
-  Identifier* FindNormal(const std::string& name);
-  Identifier* FindTagInCurrScope(const std::string& name);
-  Identifier* FindNormalInCurrScope(const std::string& name);
+  IdentifierExpr* FindTag(const std::string& name);
+  IdentifierExpr* FindNormal(const std::string& name);
+  IdentifierExpr* FindTagInCurrScope(const std::string& name);
+  IdentifierExpr* FindNormalInCurrScope(const std::string& name);
 
-  Identifier* FindTag(const Token& tok);
-  Identifier* FindNormal(const Token& tok);
-  Identifier* FindTagInCurrScope(const Token& tok);
-  Identifier* FindNormalInCurrScope(const Token& tok);
+  IdentifierExpr* FindTag(const Token& tok);
+  IdentifierExpr* FindNormal(const Token& tok);
+  IdentifierExpr* FindTagInCurrScope(const Token& tok);
+  IdentifierExpr* FindNormalInCurrScope(const Token& tok);
 
-  std::unordered_map<std::string, Identifier*> AllTagInCurrScope() const;
+  std::unordered_map<std::string, IdentifierExpr*> AllTagInCurrScope() const;
   Scope* GetParent();
 
   bool IsFileScope() const;
@@ -66,9 +68,9 @@ class Scope {
   enum ScopeType type_;
 
   // struct / union / enum 的名字
-  std::unordered_map<std::string, Identifier*> tags_;
+  std::unordered_map<std::string, IdentifierExpr*> tags_;
   // 函数 / 对象 / typedef名 / 枚举常量
-  std::unordered_map<std::string, Identifier*> normal_;
+  std::unordered_map<std::string, IdentifierExpr*> normal_;
 };
 
 }  // namespace kcc

@@ -10,6 +10,7 @@
 #include <llvm/Support/raw_os_ostream.h>
 
 #include "ast.h"
+#include "error.h"
 #include "memory_pool.h"
 #include "scope.h"
 #include "util.h"
@@ -236,11 +237,11 @@ std::int32_t Type::StructGetNumMembers() const {
   return dynamic_cast<const StructType*>(this)->GetNumMembers();
 }
 
-std::vector<Object*> Type::StructGetMembers() {
+std::vector<ObjectExpr*> Type::StructGetMembers() {
   return dynamic_cast<StructType*>(this)->GetMembers();
 }
 
-Object* Type::StructGetMember(const std::string& name) const {
+ObjectExpr* Type::StructGetMember(const std::string& name) const {
   return dynamic_cast<const StructType*>(this)->GetMember(name);
 }
 
@@ -252,11 +253,11 @@ Scope* Type::StructGetScope() {
   return dynamic_cast<StructType*>(this)->GetScope();
 }
 
-void Type::StructAddMember(Object* member) {
+void Type::StructAddMember(ObjectExpr* member) {
   dynamic_cast<StructType*>(this)->AddMember(member);
 }
 
-void Type::StructMergeAnonymous(Object* anonymous) {
+void Type::StructMergeAnonymous(ObjectExpr* anonymous) {
   dynamic_cast<StructType*>(this)->MergeAnonymous(anonymous);
 }
 
@@ -282,7 +283,7 @@ QualType Type::FuncGetParamType(std::int32_t i) const {
   return dynamic_cast<const FunctionType*>(this)->GetParamType(i);
 }
 
-std::vector<Object*> Type::FuncGetParams() const {
+std::vector<ObjectExpr*> Type::FuncGetParams() const {
   return dynamic_cast<const FunctionType*>(this)->GetParams();
 }
 
@@ -787,14 +788,14 @@ std::string StructType::GetName() const { return name_; }
 
 std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 
-std::vector<Object*> StructType::GetMembers() { return members_; }
+std::vector<ObjectExpr*> StructType::GetMembers() { return members_; }
 
-Object* StructType::GetMember(const std::string& name) const {
+ObjectExpr* StructType::GetMember(const std::string& name) const {
   auto iter{scope_->FindNormalInCurrScope(name)};
   if (iter == nullptr) {
     return nullptr;
   } else {
-    return dynamic_cast<Object*>(iter);
+    return dynamic_cast<ObjectExpr*>(iter);
   }
 }
 
@@ -806,7 +807,7 @@ Scope* StructType::GetScope() { return scope_; }
 
 std::int32_t StructType::GetOffset() const { return offset_; }
 
-void StructType::AddMember(Object* member) {
+void StructType::AddMember(ObjectExpr* member) {
   auto offset{MakeAlign(offset_, member->GetAlign())};
   member->SetOffset(offset);
 
@@ -825,7 +826,7 @@ void StructType::AddMember(Object* member) {
   }
 }
 
-void StructType::MergeAnonymous(Object* anonymous) {
+void StructType::MergeAnonymous(ObjectExpr* anonymous) {
   // 匿名 struct / union
   auto annoy_type{
       dynamic_cast<const StructType*>(anonymous->GetQualType().GetType())};
@@ -834,13 +835,13 @@ void StructType::MergeAnonymous(Object* anonymous) {
   for (auto& kv : *annoy_type->scope_) {
     auto name{kv.first};
 
-    if (auto member{dynamic_cast<Object*>(kv.second)}; !member) {
+    if (auto member{dynamic_cast<ObjectExpr*>(kv.second)}; !member) {
       continue;
     } else {
       member->SetOffset(offset + member->GetOffset());
 
       if (GetMember(name)) {
-        Error(member->GetToken(), "duplicated member: {}", name);
+        Error(member->GetLoc(), "duplicated member: {}", name);
       }
 
       scope_->InsertNormal(name, member);
@@ -900,7 +901,8 @@ std::int32_t StructType::MakeAlign(std::int32_t offset, std::int32_t align) {
  * FunctionType
  */
 FunctionType* FunctionType::Get(QualType return_type,
-                                std::vector<Object*> params, bool is_var_args) {
+                                std::vector<ObjectExpr*> params,
+                                bool is_var_args) {
   return new (FunctionTypePool.Allocate())
       FunctionType{return_type, params, is_var_args};
 }
@@ -980,7 +982,7 @@ QualType FunctionType::GetParamType(std::int32_t i) const {
   return params_[i]->GetQualType();
 }
 
-std::vector<Object*> FunctionType::GetParams() const { return params_; }
+std::vector<ObjectExpr*> FunctionType::GetParams() const { return params_; }
 
 void FunctionType::SetFuncSpec(std::uint32_t func_spec) {
   func_spec_ = func_spec;
@@ -990,7 +992,7 @@ bool FunctionType::IsInline() const { return func_spec_ & kInline; }
 
 bool FunctionType::IsNoreturn() const { return func_spec_ & kNoreturn; }
 
-FunctionType::FunctionType(QualType return_type, std::vector<Object*> param,
+FunctionType::FunctionType(QualType return_type, std::vector<ObjectExpr*> param,
                            bool is_var_args)
     : Type{false},
       is_var_args_{is_var_args},

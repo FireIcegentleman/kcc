@@ -323,7 +323,7 @@ void JsonGen::Visit(const TypeCastExpr& node) {
   result_ = root;
 }
 
-void JsonGen::Visit(const Constant& node) {
+void JsonGen::Visit(const ConstantExpr& node) {
   auto str{AstNodeTypes::ToString(node.Kind()).append(' ')};
   if (node.GetQualType()->IsIntegerTy()) {
     str.append(QString::fromStdString(std::to_string(node.integer_val_)));
@@ -339,7 +339,7 @@ void JsonGen::Visit(const Constant& node) {
   result_ = root;
 }
 
-void JsonGen::Visit(const Enumerator& node) {
+void JsonGen::Visit(const EnumeratorExpr& node) {
   QJsonObject root;
   root["name"] = AstNodeTypes::ToString(node.Kind())
                      .append(' ')
@@ -428,7 +428,7 @@ void JsonGen::Visit(const FuncCallExpr& node) {
   result_ = root;
 }
 
-void JsonGen::Visit(const Identifier& node) {
+void JsonGen::Visit(const IdentifierExpr& node) {
   QJsonObject root;
   root["name"] = AstNodeTypes::ToString(node.Kind());
 
@@ -448,7 +448,7 @@ void JsonGen::Visit(const Identifier& node) {
   result_ = root;
 }
 
-void JsonGen::Visit(const Object& node) {
+void JsonGen::Visit(const ObjectExpr& node) {
   QJsonObject root;
   root["name"] = AstNodeTypes::ToString(node.Kind());
 

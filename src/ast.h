@@ -5,57 +5,59 @@
 #ifndef KCC_SRC_AST_H_
 #define KCC_SRC_AST_H_
 
-#include <llvm/IR/GlobalValue.h>
-#include <llvm/IR/Instructions.h>
-
-#include <QMetaEnum>
-#include <QObject>
-#include <QString>
-#include <cassert>
-#include <memory>
+#include <cstdint>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
-#include "error.h"
+#include <llvm/IR/GlobalValue.h>
+#include <llvm/IR/Instructions.h>
+#include <QMetaEnum>
+#include <QObject>
+#include <QString>
+
+#include "location.h"
 #include "token.h"
 #include "type.h"
 
 namespace kcc {
 
 class Declaration;
-class Object;
-class Enumerator;
+class ObjectExpr;
+class EnumeratorExpr;
 class Visitor;
 
 class AstNodeTypes : public QObject {
   Q_OBJECT
  public:
   enum Type {
+    kUnaryOpExpr,
+    kTypeCastExpr,
+    kBinaryOpExpr,
+    kConditionOpExpr,
+    kFuncCallExpr,
+    kConstantExpr,
+    kStringLiteralExpr,
+    kIdentifierExpr,
+    kEnumeratorExpr,
+    kObjectExpr,
+
+    kLabelStmt,
+    kCaseStmt,
+    kDefaultStmt,
     kCompoundStmt,
     kExprStmt,
     kIfStmt,
+    kSwitchStmt,
     kWhileStmt,
     kDoWhileStmt,
     kForStmt,
-    kBreakStmt,
-    kContinueStmt,
     kGotoStmt,
+    kContinueStmt,
+    kBreakStmt,
     kReturnStmt,
-    kCaseStmt,
-    kDefaultStmt,
-    kSwitchStmt,
-    kLabelStmt,
 
-    kUnaryOpExpr,
-    kBinaryOpExpr,
-    kConditionOpExpr,
-    kTypeCastExpr,
-    kFunctionCallExpr,
-    kConstantExpr,
-    kIdentifier,
-    kEnumerator,
-    kObject,
     kTranslationUnit,
     kDeclaration,
     kFuncDef,
@@ -82,18 +84,15 @@ class AstNode {
   AstNode() = default;
 };
 
-using ExtDecl = AstNode;
-
 class Expr : public AstNode {
  public:
   virtual bool IsLValue() const = 0;
 
-  Token GetToken() const;
-  void SetToken(const Token& tok);
+  Location GetLoc() const;
 
   QualType GetQualType() const;
-  const Type* GetType() const;
   Type* GetType();
+  const Type* GetType() const;
 
   bool IsConst() const;
   bool IsRestrict() const;
@@ -103,59 +102,13 @@ class Expr : public AstNode {
   // 数组函数隐式转换
   static Expr* MayCast(Expr* expr);
   static Expr* MayCastTo(Expr* expr, QualType to);
+  static Type* Convert(Expr*& lhs, Expr*& rhs);
 
  protected:
-  explicit Expr(const Token& tok, QualType type = {});
+  explicit Expr(const Location& loc, QualType type = {});
 
-  Token tok_;
+  Location loc_;
   QualType type_;
-};
-
-/*
- * =
- * + - * / % & | ^ << >>
- * && ||
- * == != < > <= >=
- * [] . ->
- * ,
- */
-class BinaryOpExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
- public:
-  static BinaryOpExpr* Get(const Token& tok, Tag tag, Expr* lhs, Expr* rhs);
-
-  virtual AstNodeType Kind() const override;
-  virtual void Accept(Visitor& visitor) const override;
-  virtual bool IsLValue() const override;
-
-  virtual void Check() override;
-
- private:
-  BinaryOpExpr(const Token& tok, Tag tag, Expr* lhs, Expr* rhs);
-
-  // 通常算术转换
-  Type* Convert();
-
-  void AssignOpCheck();
-  void AddOpCheck();
-  void SubOpCheck();
-  void MultiOpCheck();
-  void BitwiseOpCheck();
-  void ShiftOpCheck();
-  void LogicalOpCheck();
-  void EqualityOpCheck();
-  void RelationalOpCheck();
-  void IndexOpCheck();
-  void MemberRefOpCheck();
-  void CommaOpCheck();
-
-  Tag op_;
-  Expr* lhs_;
-  Expr* rhs_;
 };
 
 /*
@@ -171,16 +124,15 @@ class UnaryOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static UnaryOpExpr* Get(const Token& tok, Tag tag, Expr* expr);
+  static UnaryOpExpr* Get(const Location& loc, Tag tag, Expr* expr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
   virtual bool IsLValue() const override;
 
-  virtual void Check() override;
-
  private:
-  UnaryOpExpr(const Token& tok, Tag tag, Expr* expr);
+  UnaryOpExpr(const Location& loc, Tag tag, Expr* expr);
 
   void IncDecOpCheck();
   void UnaryAddSubOpCheck();
@@ -200,18 +152,61 @@ class TypeCastExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static TypeCastExpr* Get(Expr* expr, QualType to);
+  static TypeCastExpr* Get(const Location& loc, Expr* expr, QualType to);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
-  virtual bool IsLValue() const override;
   virtual void Check() override;
+  virtual bool IsLValue() const override;
 
  private:
-  TypeCastExpr(Expr* expr, QualType to);
+  TypeCastExpr(const Location& loc, Expr* expr, QualType to);
 
   Expr* expr_;
   QualType to_;
+};
+
+/*
+ * =
+ * + - * / % & | ^ << >>
+ * && ||
+ * == != < > <= >=
+ * .
+ * ,
+ */
+// 复合赋值运算符, [] , -> 均做了转换
+class BinaryOpExpr : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  static BinaryOpExpr* Get(const Location& loc, Tag tag, Expr* lhs, Expr* rhs);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
+  virtual bool IsLValue() const override;
+
+ private:
+  BinaryOpExpr(const Location& loc, Tag tag, Expr* lhs, Expr* rhs);
+
+  void AssignOpCheck();
+  void AddOpCheck();
+  void SubOpCheck();
+  void MultiOpCheck();
+  void BitwiseOpCheck();
+  void ShiftOpCheck();
+  void LogicalOpCheck();
+  void EqualityOpCheck();
+  void RelationalOpCheck();
+  void MemberRefOpCheck();
+  void CommaOpCheck();
+
+  Tag op_;
+  Expr* lhs_;
+  Expr* rhs_;
 };
 
 class ConditionOpExpr : public Expr {
@@ -221,23 +216,16 @@ class ConditionOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static ConditionOpExpr* Get(const Token& tok, Expr* cond, Expr* lhs,
+  static ConditionOpExpr* Get(const Location& loc, Expr* cond, Expr* lhs,
                               Expr* rhs);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
-  virtual bool IsLValue() const override;
   virtual void Check() override;
+  virtual bool IsLValue() const override;
 
  private:
-  ConditionOpExpr(const Token& tok, Expr* cond, Expr* lhs, Expr* rhs)
-      : Expr{tok},
-        cond_(Expr::MayCast(cond)),
-        lhs_(Expr::MayCast(lhs)),
-        rhs_(Expr::MayCast(rhs)) {}
-
-  // 通常算术转换
-  Type* Convert();
+  ConditionOpExpr(const Location& loc, Expr* cond, Expr* lhs, Expr* rhs);
 
   Expr* cond_;
   Expr* lhs_;
@@ -253,8 +241,8 @@ class FuncCallExpr : public Expr {
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
-  virtual bool IsLValue() const override;
   virtual void Check() override;
+  virtual bool IsLValue() const override;
 
   Type* GetFuncType() const;
 
@@ -265,40 +253,54 @@ class FuncCallExpr : public Expr {
   std::vector<Expr*> args_;
 };
 
-class Constant : public Expr {
+class ConstantExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static Constant* Get(const Token& tok, std::int32_t val);
-  static Constant* Get(const Token& tok, Type* type, std::uint64_t val);
-  static Constant* Get(const Token& tok, Type* type, double val);
-  static Constant* Get(const Token& tok, Type* type, const std::string& val);
+  static ConstantExpr* Get(const Location& loc, std::int32_t val);
+  static ConstantExpr* Get(const Location& loc, Type* type, std::uint64_t val);
+  static ConstantExpr* Get(const Location& loc, Type* type, double val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
-  virtual bool IsLValue() const override;
   virtual void Check() override;
+  virtual bool IsLValue() const override;
 
   long GetIntegerVal() const;
   double GetFloatPointVal() const;
-  std::string GetStrVal() const;
 
  private:
-  Constant(const Token& tok, std::int32_t val)
-      : Expr(tok, QualType{ArithmeticType::Get(32)}), integer_val_(val) {}
-  Constant(const Token& tok, Type* type, std::uint64_t val)
-      : Expr(tok, type), integer_val_(val) {}
-  Constant(const Token& tok, Type* type, double val)
-      : Expr(tok, type), float_point_val_(val) {}
-  Constant(const Token& tok, Type* type, const std::string& val)
-      : Expr(tok, type), str_val_(val) {}
+  ConstantExpr(const Location& loc, std::int32_t val);
+  ConstantExpr(const Location& loc, Type* type, std::uint64_t val);
+  ConstantExpr(const Location& loc, Type* type, double val);
 
   std::uint64_t integer_val_{};
   double float_point_val_{};
-  std::string str_val_;
+};
+
+class StringLiteral : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  static StringLiteral* Get(const Location& loc, const std::string& val);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
+  virtual bool IsLValue() const override;
+
+  std::string GetVal() const;
+
+ private:
+  StringLiteral(const Location& loc, const std::string& val);
+
+  std::string val_;
 };
 
 enum Linkage { kNone, kInternal, kExternal };
@@ -314,52 +316,55 @@ enum Linkage { kNone, kInternal, kExternal };
 // 宏名
 // 宏形参名
 // 宏名或宏形参名以外的每个标识符都拥有作用域，并且可以拥有链接
-class Identifier : public Expr {
+class IdentifierExpr : public Expr {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static Identifier* Get(const Token& tok, QualType type, enum Linkage linkage,
-                         bool is_type_name);
+  static IdentifierExpr* Get(const Location& loc, const std::string& name,
+                             QualType type, enum Linkage linkage,
+                             bool is_type_name);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
-  virtual bool IsLValue() const override;
   virtual void Check() override;
+  virtual bool IsLValue() const override;
 
   enum Linkage GetLinkage() const;
-  void SetLinkage(enum Linkage linkage);
   std::string GetName() const;
   bool IsTypeName() const;
   bool IsObject() const;
   bool IsEnumerator() const;
 
  protected:
-  Identifier(const Token& tok, QualType type, enum Linkage linkage,
-             bool is_type_name);
+  IdentifierExpr(const Location& loc, const std::string& name, QualType type,
+                 enum Linkage linkage, bool is_type_name);
 
+  std::string name_;
   enum Linkage linkage_;
   bool is_type_name_;
 };
 
-class Enumerator : public Identifier {
+class EnumeratorExpr : public IdentifierExpr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static Enumerator* Get(const Token& tok, std::int32_t val);
+  static EnumeratorExpr* Get(const Location& loc, const std::string& name,
+                             std::int32_t val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
-  virtual bool IsLValue() const override;
   virtual void Check() override;
+  virtual bool IsLValue() const override;
 
   std::int32_t GetVal() const;
 
  private:
-  Enumerator(const Token& tok, std::int32_t val);
+  EnumeratorExpr(const Location& loc, const std::string& name,
+                 std::int32_t val);
 
   std::int32_t val_;
 };
@@ -373,15 +378,15 @@ class Enumerator : public Identifier {
 // 有效类型（见下）
 // 值（可以是不确定的）
 // 可选项，表示该对象的标识符
-class Object : public Identifier {
+class ObjectExpr : public IdentifierExpr {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static Object* Get(const Token& tok, QualType type,
-                     std::uint32_t storage_class_spec = 0,
-                     enum Linkage linkage = kNone, bool anonymous = false,
-                     bool in_global = false);
+  static ObjectExpr* Get(const Location& loc, const std::string& name,
+                         QualType type, std::uint32_t storage_class_spec = 0,
+                         enum Linkage linkage = kNone, bool anonymous = false,
+                         bool in_global = false);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -400,9 +405,9 @@ class Object : public Identifier {
   bool Anonymous() const;
 
  private:
-  Object(const Token& tok, QualType type, std::uint32_t storage_class_spec = 0,
-         enum Linkage linkage = kNone, bool anonymous = false,
-         bool in_global = false);
+  ObjectExpr(const Location& loc, const std::string& name, QualType type,
+             std::uint32_t storage_class_spec = 0, enum Linkage linkage = kNone,
+             bool anonymous = false, bool in_global = false);
 
   bool anonymous_;
   std::uint32_t storage_class_spec_;
@@ -422,52 +427,57 @@ class LabelStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  static LabelStmt* Get(Identifier* label);
+  static LabelStmt* Get(IdentifierExpr* label);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  explicit LabelStmt(Identifier* label);
+  explicit LabelStmt(IdentifierExpr* label);
 
-  Identifier* ident_;
+  IdentifierExpr* ident_;
 };
 
-class IfStmt : public Stmt {
+class CaseStmt : public Stmt {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static IfStmt* Get(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
+  static CaseStmt* Get(std::int32_t case_value, Stmt* block);
+  static CaseStmt* Get(std::int32_t case_value, std::int32_t case_value2,
+                       Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
+  CaseStmt(std::int32_t case_value, Stmt* block);
+  CaseStmt(std::int32_t case_value, std::int32_t case_value2, Stmt* block);
 
-  Expr* cond_;
-  Stmt* then_block_;
-  Stmt* else_block_;
+  std::int32_t case_value_{};
+  std::pair<std::int32_t, std::int32_t> case_value_range_;
+  bool has_range_{false};
+
+  Stmt* block_;
 };
 
-class ReturnStmt : public Stmt {
+class DefaultStmt : public Stmt {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static ReturnStmt* Get(Expr* expr = nullptr);
+  static DefaultStmt* Get(Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  explicit ReturnStmt(Expr* expr = nullptr);
+  DefaultStmt(Stmt* block);
 
-  Expr* expr_;
+  Stmt* block_;
 };
 
 class CompoundStmt : public Stmt {
@@ -509,6 +519,43 @@ class ExprStmt : public Stmt {
   explicit ExprStmt(Expr* expr = nullptr);
 
   Expr* expr_;
+};
+
+class IfStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  static IfStmt* Get(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
+
+ private:
+  IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
+
+  Expr* cond_;
+  Stmt* then_block_;
+  Stmt* else_block_;
+};
+
+class SwitchStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  static SwitchStmt* Get(Expr* cond, Stmt* block);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
+
+ private:
+  SwitchStmt(Expr* cond, Stmt* block);
+
+  Expr* cond_;
+  Stmt* block_;
 };
 
 class WhileStmt : public Stmt {
@@ -567,75 +614,21 @@ class ForStmt : public Stmt {
   Stmt* decl_;
 };
 
-class CaseStmt : public Stmt {
+class GotoStmt : public Stmt {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static CaseStmt* Get(std::int32_t case_value, Stmt* block);
-  static CaseStmt* Get(std::int32_t case_value, std::int32_t case_value2,
-                       Stmt* block);
+  static GotoStmt* Get(IdentifierExpr* ident);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  CaseStmt(std::int32_t case_value, Stmt* block);
-  CaseStmt(std::int32_t case_value, std::int32_t case_value2, Stmt* block);
+  explicit GotoStmt(IdentifierExpr* ident);
 
-  std::int32_t case_value_{};
-  std::pair<std::int32_t, std::int32_t> case_value_range_;
-  bool has_range_{false};
-
-  Stmt* block_;
-};
-
-class DefaultStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
- public:
-  static DefaultStmt* Get(Stmt* block);
-
-  virtual AstNodeType Kind() const override;
-  virtual void Accept(Visitor& visitor) const override;
-  virtual void Check() override;
-
- private:
-  DefaultStmt(Stmt* block);
-
-  Stmt* block_;
-};
-
-class SwitchStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
- public:
-  static SwitchStmt* Get(Expr* cond, Stmt* block);
-
-  virtual AstNodeType Kind() const override;
-  virtual void Accept(Visitor& visitor) const override;
-  virtual void Check() override;
-
- private:
-  SwitchStmt(Expr* cond, Stmt* block);
-
-  Expr* cond_;
-  Stmt* block_;
-};
-
-class BreakStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
- public:
-  static BreakStmt* Get();
-
-  virtual AstNodeType Kind() const override;
-  virtual void Accept(Visitor& visitor) const override;
-  virtual void Check() override;
+  IdentifierExpr* ident_;
 };
 
 class ContinueStmt : public Stmt {
@@ -650,63 +643,36 @@ class ContinueStmt : public Stmt {
   virtual void Check() override;
 };
 
-class GotoStmt : public Stmt {
+class BreakStmt : public Stmt {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static GotoStmt* Get(Identifier* ident);
+  static BreakStmt* Get();
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
+};
+
+class ReturnStmt : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  static ReturnStmt* Get(Expr* expr = nullptr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  explicit GotoStmt(Identifier* ident) : ident_{ident} {}
+  explicit ReturnStmt(Expr* expr = nullptr);
 
-  Identifier* ident_;
-};
-
-class Initializer {
-  friend class JsonGen;
-  friend class CodeGen;
-  friend bool operator<(const Initializer& lhs, const Initializer& rhs);
-
- public:
-  Initializer(Type* type, std::int32_t offset, Expr* expr)
-      : type_(type), offset_(offset), expr_(expr) {}
-
- private:
-  Type* type_;
-  std::int32_t offset_;
   Expr* expr_;
 };
 
-bool operator<(const Initializer& lhs, const Initializer& rhs);
-
-class Declaration : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
- public:
-  static Declaration* Get(Identifier* ident);
-
-  virtual AstNodeType Kind() const override;
-  virtual void Accept(Visitor& visitor) const override;
-  virtual void Check() override;
-
-  void AddInit(const Initializer& init);
-  void AddInits(const std::set<Initializer>& inits) { inits_ = inits; }
-  Identifier* GetIdent() const { return ident_; }
-  bool HasInit() const;
-  bool IsObj() const { return ident_->IsObject(); }
-
- private:
-  explicit Declaration(Identifier* ident) : ident_{ident} {}
-
-  Identifier* ident_;
-  std::set<Initializer> inits_;
-};
+using ExtDecl = AstNode;
 
 class TranslationUnit : public AstNode {
   friend class JsonGen;
@@ -725,12 +691,52 @@ class TranslationUnit : public AstNode {
   std::vector<ExtDecl*> ext_decls_;
 };
 
+class Initializer {
+  friend class JsonGen;
+  friend class CodeGen;
+  friend bool operator<(const Initializer& lhs, const Initializer& rhs);
+
+ public:
+  Initializer(Type* type, std::int32_t offset, Expr* expr);
+
+ private:
+  Type* type_;
+  std::int32_t offset_;
+  Expr* expr_;
+};
+
+bool operator<(const Initializer& lhs, const Initializer& rhs);
+
+class Declaration : public Stmt {
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  static Declaration* Get(IdentifierExpr* ident);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
+
+  bool HasInit() const;
+  void AddInit(const Initializer& init);
+  void AddInits(const std::set<Initializer>& inits);
+  IdentifierExpr* GetIdent() const;
+  bool IsObj() const;
+
+ private:
+  explicit Declaration(IdentifierExpr* ident);
+
+  IdentifierExpr* ident_;
+  std::set<Initializer> inits_;
+};
+
 class FuncDef : public ExtDecl {
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static FuncDef* Get(Identifier* ident);
+  static FuncDef* Get(IdentifierExpr* ident);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -740,12 +746,12 @@ class FuncDef : public ExtDecl {
   std::string GetName() const;
   enum Linkage GetLinkage() const;
   QualType GetFuncType() const;
-  Identifier* GetIdent() const;
+  IdentifierExpr* GetIdent() const;
 
  private:
-  explicit FuncDef(Identifier* ident) : ident_(ident) {}
+  explicit FuncDef(IdentifierExpr* ident);
 
-  Identifier* ident_;
+  IdentifierExpr* ident_;
   CompoundStmt* body_;
 };
 

@@ -5,8 +5,6 @@
 #ifndef KCC_SRC_CALC_H_
 #define KCC_SRC_CALC_H_
 
-#include <memory>
-
 #include "ast.h"
 #include "error.h"
 #include "visitor.h"
@@ -28,33 +26,35 @@ class CalcExpr : public Visitor {
 
  private:
   virtual void Visit(const UnaryOpExpr& node) override;
+  virtual void Visit(const TypeCastExpr& node) override;
   virtual void Visit(const BinaryOpExpr& node) override;
   virtual void Visit(const ConditionOpExpr& node) override;
-  virtual void Visit(const TypeCastExpr& node) override;
-  virtual void Visit(const Constant& node) override;
-  virtual void Visit(const Enumerator& node) override;
+  virtual void Visit(const ConstantExpr& node) override;
+  virtual void Visit(const StringLiteral& node) override;
+  virtual void Visit(const EnumeratorExpr& node) override;
 
-  virtual void Visit(const CompoundStmt& node) override;
-  virtual void Visit(const IfStmt& node) override;
-  virtual void Visit(const ReturnStmt& node) override;
-  virtual void Visit(const LabelStmt& node) override;
   virtual void Visit(const FuncCallExpr& node) override;
-  virtual void Visit(const Identifier& node) override;
-  virtual void Visit(const Object& node) override;
-  virtual void Visit(const TranslationUnit& node) override;
-  virtual void Visit(const Declaration& node) override;
-  virtual void Visit(const FuncDef& node) override;
+  virtual void Visit(const IdentifierExpr& node) override;
+  virtual void Visit(const ObjectExpr& node) override;
+  virtual void Visit(const LabelStmt& node) override;
+  virtual void Visit(const CaseStmt& node) override;
+  virtual void Visit(const DefaultStmt& node) override;
+  virtual void Visit(const CompoundStmt& node) override;
   virtual void Visit(const ExprStmt& node) override;
+  virtual void Visit(const IfStmt& node) override;
+  virtual void Visit(const SwitchStmt& node) override;
   virtual void Visit(const WhileStmt& node) override;
   virtual void Visit(const DoWhileStmt& node) override;
   virtual void Visit(const ForStmt& node) override;
-  virtual void Visit(const CaseStmt& node) override;
-  virtual void Visit(const DefaultStmt& node) override;
-  virtual void Visit(const SwitchStmt& node) override;
-  virtual void Visit(const BreakStmt& node) override;
-  virtual void Visit(const ContinueStmt& node) override;
   virtual void Visit(const GotoStmt& node) override;
+  virtual void Visit(const ContinueStmt& node) override;
+  virtual void Visit(const BreakStmt& node) override;
+  virtual void Visit(const ReturnStmt& node) override;
+  virtual void Visit(const TranslationUnit& node) override;
+  virtual void Visit(const Declaration& node) override;
+  virtual void Visit(const FuncDef& node) override;
 
+ private:
   T val_;
 };
 
@@ -81,15 +81,10 @@ void CalcExpr<T>::Visit(const UnaryOpExpr& node) {
       break;
       // TODO 地址常量表达式
     default:
-      Error(node.expr_->GetToken(), "expect constant expression");
+      Error(node.expr_->GetLoc(), "expect constant expression");
   }
 }
 
-/*
- * + - * / % & | ^ << >>
- * && ||
- * == != < > <= >= .
- */
 template <typename T>
 void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
 #define L CalcExpr<T>{}.Calc(node.lhs_)
@@ -111,7 +106,7 @@ void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
       auto lhs{L};
       auto rhs{R};
       if (rhs == 0) {
-        Error(node.rhs_->GetToken(), "division by zero");
+        Error(node.rhs_, "division by zero");
       }
       val_ = lhs / rhs;
       break;
@@ -119,12 +114,12 @@ void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
     case Tag::kPercent: {
       if (!node.lhs_->GetQualType()->IsIntegerTy() ||
           !node.rhs_->GetQualType()->IsIntegerTy()) {
-        Error(node.lhs_->GetToken(), "Need integer type");
+        Error(node.lhs_, "Need integer type");
       }
       auto lhs{I_L};
       auto rhs{I_R};
       if (rhs == 0) {
-        Error(node.rhs_->GetToken(), "division by zero");
+        Error(node.rhs_, "division by zero");
       }
       val_ = lhs / rhs;
       break;
@@ -168,11 +163,17 @@ void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
     case Tag::kGreaterEqual:
       val_ = L >= R;
       break;
-    case Tag::kPeriod:
-      assert(false);
-      break;
     default:
-      Error(node.lhs_->GetToken(), "expect constant expression");
+      Error(node.lhs_, "expect constant expression");
+  }
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const TypeCastExpr& node) {
+  if (node.expr_->GetType()->IsArithmeticTy() && node.to_->IsIntegerTy()) {
+    val_ = CalcExpr<T>{}.Calc(node.expr_);
+  } else {
+    Error(node.expr_->GetLoc(), "expect constant expression");
   }
 }
 
@@ -186,7 +187,6 @@ void CalcExpr<T>::Visit(const ConditionOpExpr& node) {
   } else if (cond_type->IsFloatPointTy()) {
     flag = CalcExpr<double>{}.Calc(node.cond_);
   } else if (cond_type->IsPointerTy()) {
-    // TODO
     assert(false);
   } else {
     assert(false);
@@ -200,16 +200,7 @@ void CalcExpr<T>::Visit(const ConditionOpExpr& node) {
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const TypeCastExpr& node) {
-  if (node.expr_->GetQualType()->IsArithmeticTy() && node.to_->IsIntegerTy()) {
-    val_ = CalcExpr<T>{}.Calc(node.expr_);
-  } else {
-    Error(node.expr_->GetToken(), "expect constant expression");
-  }
-}
-
-template <typename T>
-void CalcExpr<T>::Visit(const Constant& node) {
+void CalcExpr<T>::Visit(const ConstantExpr& node) {
   if (node.GetQualType()->IsIntegerTy()) {
     val_ = static_cast<T>(node.GetIntegerVal());
   } else if (node.GetQualType()->IsFloatTy()) {
@@ -220,22 +211,27 @@ void CalcExpr<T>::Visit(const Constant& node) {
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const Enumerator& node) {
+void CalcExpr<T>::Visit(const StringLiteral&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const EnumeratorExpr& node) {
   val_ = static_cast<T>(node.GetVal());
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const CompoundStmt&) {
+void CalcExpr<T>::Visit(const FuncCallExpr&) {
   assert(false);
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const IfStmt&) {
+void CalcExpr<T>::Visit(const IdentifierExpr&) {
   assert(false);
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const ReturnStmt&) {
+void CalcExpr<T>::Visit(const ObjectExpr&) {
   assert(false);
 }
 
@@ -245,52 +241,32 @@ void CalcExpr<T>::Visit(const LabelStmt&) {
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const FuncCallExpr&) {
+void CalcExpr<T>::Visit(const CaseStmt&) {
   assert(false);
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const Identifier&) {
+void CalcExpr<T>::Visit(const DefaultStmt&) {
   assert(false);
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const Object&) {
-  assert(false);
-}
-
-template <typename T>
-void CalcExpr<T>::Visit(const TranslationUnit&) {
-  assert(false);
-}
-
-template <typename T>
-void CalcExpr<T>::Visit(const BreakStmt&) {
-  assert(false);
-}
-
-template <typename T>
-void CalcExpr<T>::Visit(const ContinueStmt&) {
-  assert(false);
-}
-
-template <typename T>
-void CalcExpr<T>::Visit(const GotoStmt&) {
-  assert(false);
-}
-
-template <typename T>
-void CalcExpr<T>::Visit(const Declaration&) {
-  assert(false);
-}
-
-template <typename T>
-void CalcExpr<T>::Visit(const FuncDef&) {
+void CalcExpr<T>::Visit(const CompoundStmt&) {
   assert(false);
 }
 
 template <typename T>
 void CalcExpr<T>::Visit(const ExprStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const IfStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const SwitchStmt&) {
   assert(false);
 }
 
@@ -310,17 +286,37 @@ void CalcExpr<T>::Visit(const ForStmt&) {
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const CaseStmt&) {
+void CalcExpr<T>::Visit(const GotoStmt&) {
   assert(false);
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const DefaultStmt&) {
+void CalcExpr<T>::Visit(const ContinueStmt&) {
   assert(false);
 }
 
 template <typename T>
-void CalcExpr<T>::Visit(const SwitchStmt&) {
+void CalcExpr<T>::Visit(const BreakStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const ReturnStmt&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const TranslationUnit&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const Declaration&) {
+  assert(false);
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const FuncDef&) {
   assert(false);
 }
 

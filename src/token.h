@@ -156,6 +156,7 @@ class Token {
 
   std::string GetStr() const;
   void SetStr(const std::string &str);
+  std::string GetIdentifier() const;
 
   Location GetLoc() const;
   void SetLoc(const Location &loc);

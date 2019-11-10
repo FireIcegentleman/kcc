@@ -4,7 +4,11 @@
 
 #include "token.h"
 
+#include <cassert>
+
 #include <fmt/core.h>
+
+#include "lex.h"
 
 namespace kcc {
 
@@ -21,6 +25,11 @@ Tag Token::GetTag() const { return tag_; }
 std::string Token::GetStr() const { return str_; }
 
 void Token::SetStr(const std::string& str) { str_ = str; }
+
+std::string Token::GetIdentifier() const {
+  assert(tag_ == Tag::kIdentifier);
+  return Scanner{str_}.HandleIdentifier();
+}
 
 Location Token::GetLoc() const { return location_; }
 

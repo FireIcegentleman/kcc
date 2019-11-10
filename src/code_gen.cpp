@@ -221,7 +221,7 @@ void CodeGen::Visit(const TypeCastExpr& node) {
 
 // 常量用 ConstantFP / ConstantInt 类表示
 // 在 LLVM IR 中, 常量都是唯一且共享的
-void CodeGen::Visit(const Constant& node) {
+void CodeGen::Visit(const ConstantExpr& node) {
   auto type{node.GetType()->GetLLVMType()};
 
   if (type->isIntegerTy()) {
@@ -236,7 +236,7 @@ void CodeGen::Visit(const Constant& node) {
   }
 }
 
-void CodeGen::Visit(const Enumerator& node) {
+void CodeGen::Visit(const EnumeratorExpr& node) {
   result_ = llvm::ConstantInt::get(Context, llvm::APInt(32, node.val_, true));
 }
 
@@ -307,7 +307,7 @@ void CodeGen::Visit(const FuncCallExpr& node) {
   Builder.CreateCall(callee, values);
 }
 
-void CodeGen::Visit(const Identifier& node) {
+void CodeGen::Visit(const IdentifierExpr& node) {
   auto type{node.GetType()};
   assert(type->IsFunctionTy());
 
@@ -323,7 +323,7 @@ void CodeGen::Visit(const Identifier& node) {
   result_ = func;
 }
 
-void CodeGen::Visit(const Object& node) {
+void CodeGen::Visit(const ObjectExpr& node) {
   if (!node.in_global_) {
     result_ = Builder.CreateAlignedLoad(node.local_ptr_, node.GetAlign());
   } else {
@@ -339,12 +339,12 @@ void CodeGen::Visit(const TranslationUnit& node) {
 
 void CodeGen::Visit(const Declaration& node) {
   if (node.IsObj()) {
-    auto obj{dynamic_cast<Object*>(node.ident_)};
+    auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
     auto type{node.ident_->GetType()};
 
     if (!obj->in_global_) {
       if (Builder.GetInsertBlock() == nullptr) {
-        Error(node.ident_->GetToken(), "fuck");
+        Error(node.ident_->GetLoc(), "fuck");
       }
       obj->local_ptr_ = CreateEntryBlockAlloca(
           Builder.GetInsertBlock()->getParent(), type->GetLLVMType(),
@@ -924,7 +924,7 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
 }
 
 llvm::Value* CodeGen::GetPtr(const AstNode& node) {
-  auto p{dynamic_cast<const Object&>(node)};
+  auto p{dynamic_cast<const ObjectExpr&>(node)};
   return p.local_ptr_;
 }
 

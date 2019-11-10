@@ -355,6 +355,7 @@ void RunDev() {
   // std::system("./test/dev/test");
 
   PrintWarnings();
+  unit->~TranslationUnit();
 
   std::exit(EXIT_SUCCESS);
 }

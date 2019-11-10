@@ -5,14 +5,12 @@
 #ifndef KCC_SRC_TYPE_H_
 #define KCC_SRC_TYPE_H_
 
-#include <llvm/IR/Type.h>
-
 #include <cstddef>
 #include <cstdint>
-#include <map>
-#include <memory>
 #include <string>
 #include <vector>
+
+#include <llvm/IR/Type.h>
 
 namespace kcc {
 
@@ -71,7 +69,7 @@ enum TypeSpecCompatibility {
 
 class Type;
 class PointerType;
-class Object;
+class ObjectExpr;
 class Scope;
 
 class QualType {
@@ -82,6 +80,12 @@ class QualType {
   QualType() = default;
   QualType(Type* type, std::uint32_t type_qual = 0)
       : type_{type}, type_qual_{type_qual} {}
+
+  QualType& operator=(const QualType& item) {
+    type_ = item.type_;
+    type_qual_ = 0;
+    return *this;
+  }
 
   Type& operator*();
   const Type& operator*() const;
@@ -172,12 +176,12 @@ class Type {
   void StructSetName(const std::string& name);
   std::string StructGetName() const;
   std::int32_t StructGetNumMembers() const;
-  std::vector<Object*> StructGetMembers();
-  Object* StructGetMember(const std::string& name) const;
+  std::vector<ObjectExpr*> StructGetMembers();
+  ObjectExpr* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
   Scope* StructGetScope();
-  void StructAddMember(Object* member);
-  void StructMergeAnonymous(Object* anonymous);
+  void StructAddMember(ObjectExpr* member);
+  void StructMergeAnonymous(ObjectExpr* anonymous);
   std::int32_t StructGetOffset() const;
   void StructFinish();
 
@@ -185,7 +189,7 @@ class Type {
   QualType FuncGetReturnType() const;
   std::int32_t FuncGetNumParams() const;
   QualType FuncGetParamType(std::int32_t i) const;
-  std::vector<Object*> FuncGetParams() const;
+  std::vector<ObjectExpr*> FuncGetParams() const;
   void FuncSetFuncSpec(std::uint32_t func_spec);
   bool FuncIsInline() const;
   bool FuncIsNoreturn() const;
@@ -290,14 +294,14 @@ class StructType : public Type {
   std::string GetName() const;
 
   std::int32_t GetNumMembers() const;
-  std::vector<Object*> GetMembers();
-  Object* GetMember(const std::string& name) const;
+  std::vector<ObjectExpr*> GetMembers();
+  ObjectExpr* GetMember(const std::string& name) const;
   QualType GetMemberType(std::int32_t i) const;
   Scope* GetScope();
   std::int32_t GetOffset() const;
 
-  void AddMember(Object* member);
-  void MergeAnonymous(Object* anonymous);
+  void AddMember(ObjectExpr* member);
+  void MergeAnonymous(ObjectExpr* anonymous);
   void Finish();
 
  private:
@@ -308,7 +312,7 @@ class StructType : public Type {
 
   bool is_struct_{};
   std::string name_;
-  std::vector<Object*> members_;
+  std::vector<ObjectExpr*> members_;
   Scope* scope_;
 
   std::int32_t offset_{};
@@ -318,7 +322,8 @@ class StructType : public Type {
 
 class FunctionType : public Type {
  public:
-  static FunctionType* Get(QualType return_type, std::vector<Object*> params,
+  static FunctionType* Get(QualType return_type,
+                           std::vector<ObjectExpr*> params,
                            bool is_var_args = false);
 
   virtual std::int32_t GetWidth() const override;
@@ -330,19 +335,19 @@ class FunctionType : public Type {
   QualType GetReturnType() const;
   std::int32_t GetNumParams() const;
   QualType GetParamType(std::int32_t i) const;
-  std::vector<Object*> GetParams() const;
+  std::vector<ObjectExpr*> GetParams() const;
   void SetFuncSpec(std::uint32_t func_spec);
   bool IsInline() const;
   bool IsNoreturn() const;
 
  private:
-  FunctionType(QualType return_type, std::vector<Object*> param,
+  FunctionType(QualType return_type, std::vector<ObjectExpr*> param,
                bool is_var_args);
 
   bool is_var_args_;
   std::uint32_t func_spec_{};
   QualType return_type_;
-  std::vector<Object*> params_;
+  std::vector<ObjectExpr*> params_;
 };
 
 }  // namespace kcc

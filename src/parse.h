@@ -46,12 +46,12 @@ class Parser {
   std::size_t ParseArrayLength();
   void EnterProto();
   void ExitProto();
-  std::pair<std::vector<Object*>, bool> ParseParamTypeList();
+  std::pair<std::vector<ObjectExpr*>, bool> ParseParamTypeList();
   bool IsTypeName(const Token& tok);
   bool IsDecl(const Token& tok);
   QualType ParseTypeName();
   void ParseStructDeclList(StructType* base_type);
-  Object* ParseParamDecl();
+  ObjectExpr* ParseParamDecl();
   void ParseAbstractDeclarator(QualType& type);
 
   std::uint32_t ParseTypeQualList();
@@ -63,8 +63,8 @@ class Parser {
                               std::uint32_t storage_class_spec,
                               std::uint32_t func_spec, std::int32_t align);
   Expr* ParseConstantExpr();
-  Constant* ParseStringLiteral();
-  std::set<Initializer> ParseInitDeclaratorSub(Identifier* ident);
+  ConstantExpr* ParseStringLiteral();
+  std::set<Initializer> ParseInitDeclaratorSub(IdentifierExpr* ident);
   void ParseInitializer(std::set<Initializer>& inits, QualType type,
                         std::int32_t offset, bool designated, bool force_brace);
 
@@ -105,7 +105,7 @@ class Parser {
 
   void EnterBlock(Type* func_type = nullptr);
   void ExitBlock();
-  void EnterFunc(Identifier* ident);
+  void EnterFunc(IdentifierExpr* ident);
   void ExitFunc();
   Stmt* ParseStmt();
   LabelStmt* ParseLabelStmt();

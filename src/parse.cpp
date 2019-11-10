@@ -221,7 +221,7 @@ void Parser::ParseStaticAssertDecl() {
   Expect(Tag::kSemicolon);
 
   if (!CalcExpr<std::int32_t>{}.Calc(expr)) {
-    Error(expr->GetToken(), "static_assert failed \"{}\"", msg);
+    Error(expr->GetLoc(), "static_assert failed \"{}\"", msg);
   }
 }
 
@@ -727,7 +727,7 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
       // 无前向声明
       if (!tag) {
         auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
-        auto ident{MakeAstNode<Identifier>(tok, QualType{type}, kNone, true)};
+        auto ident{MakeAstNode<IdentifierExpr>(tok, QualType{type}, kNone, true)};
         curr_scope_->InsertTag(tag_name, ident);
 
         ParseStructDeclList(type);
@@ -752,7 +752,7 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
       }
 
       auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
-      auto ident{MakeAstNode<Identifier>(tok, QualType{type}, kNone, true)};
+      auto ident{MakeAstNode<IdentifierExpr>(tok, QualType{type}, kNone, true)};
       curr_scope_->InsertTag(tag_name, ident);
       return type;
     }
@@ -795,7 +795,7 @@ void Parser::ParseStructDeclList(StructType* type) {
         // 可能是匿名 struct / union
         if (std::empty(tok.GetStr())) {
           if (base_type->IsStructTy() && !base_type->StructHasName()) {
-            auto anony{MakeAstNode<Object>(Peek(), base_type, 0, kNone, true)};
+            auto anony{MakeAstNode<ObjectExpr>(Peek(), base_type, 0, kNone, true)};
             type->MergeAnonymous(anony);
             continue;
           } else {
@@ -809,7 +809,7 @@ void Parser::ParseStructDeclList(StructType* type) {
           } else if (base_type->IsArrayTy() && !base_type->IsComplete()) {
             // 可能是柔性数组
             if (type->IsStruct() && std::size(type->GetMembers()) > 0) {
-              auto member{MakeAstNode<Object>(Peek(), base_type)};
+              auto member{MakeAstNode<ObjectExpr>(Peek(), base_type)};
               type->AddMember(member);
               // 必须是最后一个成员
               Expect(Tag::kSemicolon);
@@ -822,7 +822,7 @@ void Parser::ParseStructDeclList(StructType* type) {
           } else if (base_type->IsFunctionTy()) {
             Error(Peek(), "field '{}' declared as a function", name);
           } else {
-            auto member{MakeAstNode<Object>(tok, base_type)};
+            auto member{MakeAstNode<ObjectExpr>(tok, base_type)};
             if (align > 0) {
               member->SetAlign(align);
             }
@@ -868,7 +868,7 @@ Type* Parser::ParseEnumSpec() {
 
       if (!tag) {
         auto type{ArithmeticType::Get(32)};
-        auto ident{MakeAstNode<Identifier>(tok, QualType{type}, kNone, true)};
+        auto ident{MakeAstNode<IdentifierExpr>(tok, QualType{type}, kNone, true)};
         curr_scope_->InsertTag(tag_name, ident);
         ParseEnumerator(type);
 
@@ -914,7 +914,7 @@ void Parser::ParseEnumerator(Type* type) {
       val = CalcExpr<std::int32_t>{}.Calc(expr);
     }
 
-    auto enumer{MakeAstNode<Enumerator>(tok, val)};
+    auto enumer{MakeAstNode<EnumeratorExpr>(tok, val)};
     ++val;
     curr_scope_->InsertNormal(name, enumer);
 
@@ -990,7 +990,7 @@ std::size_t Parser::ParseArrayLength() {
   auto expr{ParseAssignExpr()};
 
   if (!expr->GetQualType()->IsIntegerTy()) {
-    Error(expr->GetToken(), "The array size must be an integer: '{}'",
+    Error(expr->GetLoc(), "The array size must be an integer: '{}'",
           expr->GetType()->ToString());
   }
 
@@ -998,7 +998,7 @@ std::size_t Parser::ParseArrayLength() {
   auto len{CalcExpr<std::int32_t>{}.Calc(expr)};
 
   if (len <= 0) {
-    Error(expr->GetToken(), "Array size must be greater than 0: {}", len);
+    Error(expr->GetLoc(), "Array size must be greater than 0: {}", len);
   }
 
   return len;
@@ -1008,7 +1008,7 @@ void Parser::EnterProto() { curr_scope_ = Scope::Get(curr_scope_, kFuncProto); }
 
 void Parser::ExitProto() { curr_scope_ = curr_scope_->GetParent(); }
 
-std::pair<std::vector<Object*>, bool> Parser::ParseParamTypeList() {
+std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
   if (Test(Tag::kRightParen)) {
     Warning(
         Peek(),
@@ -1021,7 +1021,7 @@ std::pair<std::vector<Object*>, bool> Parser::ParseParamTypeList() {
     return {{}, false};
   }
 
-  std::vector<Object*> params;
+  std::vector<ObjectExpr*> params;
   params.push_back(param);
 
   while (Try(Tag::kComma)) {
@@ -1041,7 +1041,7 @@ std::pair<std::vector<Object*>, bool> Parser::ParseParamTypeList() {
 
 // declaration-specifiers declarator
 // declaration-specifiers abstract-declarator（此时不能是函数定义）
-Object* Parser::ParseParamDecl() {
+ObjectExpr* Parser::ParseParamDecl() {
   std::uint32_t storage_class_spec{}, func_spec{};
   auto base_type{ParseDeclSpec(&storage_class_spec, &func_spec, nullptr)};
 
@@ -1050,12 +1050,12 @@ Object* Parser::ParseParamDecl() {
   base_type = Type::MayCast(base_type, true);
 
   if (std::empty(tok.GetStr())) {
-    return MakeAstNode<Object>(Peek(), base_type, 0, kNone, true);
+    return MakeAstNode<ObjectExpr>(Peek(), base_type, 0, kNone, true);
   }
 
   auto ident{MakeDeclarator(tok, base_type, storage_class_spec, func_spec, -1)};
 
-  return dynamic_cast<Object*>(ident->GetIdent());
+  return dynamic_cast<ObjectExpr*>(ident->GetIdent());
 }
 
 bool Parser::IsTypeName(const Token& tok) {
@@ -1079,7 +1079,7 @@ QualType Parser::ParseTypeName() {
 
 Expr* Parser::ParseConstantExpr() { return ParseConditionExpr(); }
 
-Constant* Parser::ParseStringLiteral() {
+ConstantExpr* Parser::ParseStringLiteral() {
   auto tok{Expect(Tag::kStringLiteral)};
 
   auto str{Scanner{tok.GetStr()}.HandleStringLiteral().first};
@@ -1088,7 +1088,7 @@ Constant* Parser::ParseStringLiteral() {
     str += Scanner{tok.GetStr()}.HandleStringLiteral().first;
   }
 
-  return MakeAstNode<Constant>(
+  return MakeAstNode<ConstantExpr>(
       tok, ArrayType::Get(QualType{ArithmeticType::Get(8)}, std::size(str)),
       str);
 }
@@ -1117,7 +1117,7 @@ Declaration* Parser::MakeDeclarator(const Token& tok, const QualType& type,
       }
     } else {
       curr_scope_->InsertNormal(
-          tok.GetStr(), MakeAstNode<Identifier>(tok, type, kNone, true));
+          tok.GetStr(), MakeAstNode<IdentifierExpr>(tok, type, kNone, true));
 
       return nullptr;
     }
@@ -1153,17 +1153,17 @@ Declaration* Parser::MakeDeclarator(const Token& tok, const QualType& type,
   //    }
   //  }
 
-  Identifier* ret;
+  IdentifierExpr* ret;
   if (type->IsFunctionTy()) {
     if (align > 0) {
       Error(tok, "'_Alignas' attribute only applies to variables and fields");
     }
-    ret = MakeAstNode<Identifier>(tok, type, linkage, false);
+    ret = MakeAstNode<IdentifierExpr>(tok, type, linkage, false);
   } else {
-    ret = MakeAstNode<Object>(tok, type, 0, linkage, false,
+    ret = MakeAstNode<ObjectExpr>(tok, type, 0, linkage, false,
                               curr_func_def_ == nullptr);
     if (align > 0) {
-      dynamic_cast<Object*>(ret)->SetAlign(align);
+      dynamic_cast<ObjectExpr*>(ret)->SetAlign(align);
     }
   }
 
@@ -1172,15 +1172,15 @@ Declaration* Parser::MakeDeclarator(const Token& tok, const QualType& type,
   return MakeAstNode<Declaration>(ret);
 }
 
-std::set<Initializer> Parser::ParseInitDeclaratorSub(Identifier* ident) {
+std::set<Initializer> Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
   if (!curr_scope_->IsFileScope() && ident->GetLinkage() == kExternal) {
-    Error(ident->GetToken(), "{} has both 'extern' and initializer",
+    Error(ident->GetLoc(), "{} has both 'extern' and initializer",
           ident->GetName());
   }
 
   if (!ident->GetQualType()->IsComplete() &&
       !ident->GetQualType()->IsArrayTy()) {
-    Error(ident->GetToken(),
+    Error(ident->GetLoc(),
           "variable '{}' has initializer but incomplete type",
           ident->GetName());
   }
@@ -1301,7 +1301,7 @@ Expr* Parser::ParseSizeof() {
     Error(tok, "sizeof(incomplete type)");
   }
 
-  return MakeAstNode<Constant>(tok, ArithmeticType::Get(kLong | kUnsigned),
+  return MakeAstNode<ConstantExpr>(tok, ArithmeticType::Get(kLong | kUnsigned),
                                static_cast<std::uint64_t>(type->GetWidth()));
 }
 
@@ -1318,7 +1318,7 @@ Expr* Parser::ParseAlignof() {
   type = ParseTypeName();
   Expect(Tag::kRightParen);
 
-  return MakeAstNode<Constant>(tok, type->GetAlign());
+  return MakeAstNode<ConstantExpr>(tok, type->GetAlign());
 }
 
 Expr* Parser::ParsePostfixExprTail(Expr* expr) {
@@ -1429,7 +1429,7 @@ Expr* Parser::ParseFloat() {
     Error(tok, "invalid suffix:{}", str.substr(backup));
   }
 
-  return MakeAstNode<Constant>(tok, ArithmeticType::Get(type_spec), val);
+  return MakeAstNode<ConstantExpr>(tok, ArithmeticType::Get(type_spec), val);
 }
 
 Expr* Parser::ParseInteger() {
@@ -1535,13 +1535,13 @@ Expr* Parser::ParseInteger() {
     }
   }
 
-  return MakeAstNode<Constant>(tok, ArithmeticType::Get(type_spec), val);
+  return MakeAstNode<ConstantExpr>(tok, ArithmeticType::Get(type_spec), val);
 }
 
 Expr* Parser::ParseCharacter() {
   auto tok{Next()};
   auto val{Scanner{tok.GetStr()}.HandleCharacter().first};
-  return MakeAstNode<Constant>(tok, val);
+  return MakeAstNode<ConstantExpr>(tok, val);
 }
 
 // attribute-specifier:
@@ -1803,14 +1803,14 @@ CaseStmt* Parser::ParseCaseStmt() {
 
   auto expr{ParseExpr()};
   if (!expr->GetQualType()->IsIntegerTy()) {
-    Error(expr->GetToken(), "expect integer");
+    Error(expr->GetLoc(), "expect integer");
   }
   auto val{CalcExpr<std::int32_t>{}.Calc(expr)};
 
   if (Try(Tag::kEllipsis)) {
     auto expr2{ParseExpr()};
     if (!expr2->GetQualType()->IsIntegerTy()) {
-      Error(expr2->GetToken(), "expect integer");
+      Error(expr2->GetLoc(), "expect integer");
     }
     auto val2{CalcExpr<std::int32_t>{}.Calc(expr)};
     Expect(Tag::kColon);
@@ -1844,7 +1844,7 @@ GotoStmt* Parser::ParseGotoStmt() {
   Expect(Tag::kSemicolon);
 
   return MakeAstNode<GotoStmt>(
-      MakeAstNode<Identifier>(tok, QualType{VoidType::Get()}, kNone, false));
+      MakeAstNode<IdentifierExpr>(tok, QualType{VoidType::Get()}, kNone, false));
 }
 
 LabelStmt* Parser::ParseLabelStmt() {
@@ -1854,7 +1854,7 @@ LabelStmt* Parser::ParseLabelStmt() {
   TryAttributeSpec();
 
   return MakeAstNode<LabelStmt>(
-      MakeAstNode<Identifier>(tok, QualType{VoidType::Get()}, kNone, false));
+      MakeAstNode<IdentifierExpr>(tok, QualType{VoidType::Get()}, kNone, false));
 }
 
 ContinueStmt* Parser::ParseContinueStmt() {
@@ -1896,7 +1896,7 @@ bool Parser::IsDecl(const Token& tok) {
   return false;
 }
 
-void Parser::EnterFunc(Identifier* ident) {
+void Parser::EnterFunc(IdentifierExpr* ident) {
   curr_func_def_ = MakeAstNode<FuncDef>(ident);
 }
 

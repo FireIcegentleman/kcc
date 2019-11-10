@@ -14980,7 +14980,8 @@ Semicolon                str: ;                        loc: </usr/include/wctype
 Int                      str: int                      loc: <test/dev/test.c:28:1>
 Identifier               str: main                     loc: <test/dev/test.c:28:5>
 LeftParen                str: (                        loc: <test/dev/test.c:28:9>
-RightParen               str: )                        loc: <test/dev/test.c:28:10>
-LeftBrace                str: {                        loc: <test/dev/test.c:28:12>
-RightBrace               str: }                        loc: <test/dev/test.c:30:1>
-Eof                      str:                          loc: <test/dev/test.c:31:1>
+Void                     str: void                     loc: <test/dev/test.c:28:10>
+RightParen               str: )                        loc: <test/dev/test.c:28:14>
+LeftBrace                str: {                        loc: <test/dev/test.c:28:16>
+RightBrace               str: }                        loc: <test/dev/test.c:28:17>
+Eof                      str:                          loc: <test/dev/test.c:29:1>

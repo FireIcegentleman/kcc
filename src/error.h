@@ -14,6 +14,7 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
+#include "ast.h"
 #include "location.h"
 #include "token.h"
 
@@ -53,6 +54,12 @@ template <typename... Args>
 [[noreturn]] void Error(const Token &tok, std::string_view format_str,
                         const Args &... args) {
   Error(tok.GetLoc(), format_str, args...);
+}
+
+template <typename... Args>
+[[noreturn]] void Error(Expr *expr, std::string_view format_str,
+                        const Args &... args) {
+  Error(expr->GetLoc(), format_str, args...);
 }
 
 template <typename... Args>

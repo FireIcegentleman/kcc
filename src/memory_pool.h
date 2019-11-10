@@ -9,6 +9,10 @@
 #include <cstdint>
 #include <utility>
 
+#include "ast.h"
+#include "scope.h"
+#include "type.h"
+
 namespace kcc {
 
 template <typename T, std::size_t BlockSize = 4096>
@@ -95,6 +99,45 @@ MemoryPool<T, BlockSize>::PadPointer(DataPointer p, SizeType align) const
   auto result{reinterpret_cast<std::uintptr_t>(p)};
   return ((align - result) % align);
 }
+
+inline MemoryPool<UnaryOpExpr> UnaryOpExprPool;
+inline MemoryPool<TypeCastExpr> TypeCastExprPool;
+inline MemoryPool<BinaryOpExpr> BinaryOpExprPool;
+inline MemoryPool<ConditionOpExpr> ConditionOpExprPool;
+inline MemoryPool<FuncCallExpr> FuncCallExprPool;
+inline MemoryPool<ConstantExpr> ConstantPool;
+inline MemoryPool<StringLiteral> StringLiteralPool;
+inline MemoryPool<IdentifierExpr> IdentifierPool;
+inline MemoryPool<EnumeratorExpr> EnumeratorPool;
+inline MemoryPool<ObjectExpr> ObjectPool;
+
+inline MemoryPool<LabelStmt> LabelStmtPool;
+inline MemoryPool<CaseStmt> CaseStmtPool;
+inline MemoryPool<DefaultStmt> DefaultStmtPool;
+inline MemoryPool<CompoundStmt> CompoundStmtPool;
+inline MemoryPool<ExprStmt> ExprStmtPool;
+inline MemoryPool<IfStmt> IfStmtPool;
+inline MemoryPool<SwitchStmt> SwitchStmtPool;
+inline MemoryPool<WhileStmt> WhileStmtPool;
+inline MemoryPool<DoWhileStmt> DoWhileStmtPool;
+inline MemoryPool<ForStmt> ForStmtPool;
+inline MemoryPool<GotoStmt> GotoStmtPool;
+inline MemoryPool<ContinueStmt> ContinueStmtPool;
+inline MemoryPool<BreakStmt> BreakStmtPool;
+inline MemoryPool<ReturnStmt> ReturnStmtPool;
+
+inline MemoryPool<TranslationUnit> TranslationUnitPool;
+inline MemoryPool<Declaration> DeclarationPool;
+inline MemoryPool<FuncDef> FuncDefPool;
+
+inline MemoryPool<VoidType> VoidTypePool;
+inline MemoryPool<ArithmeticType> ArithmeticTypePool;
+inline MemoryPool<PointerType> PointerTypePool;
+inline MemoryPool<ArrayType> ArrayTypePool;
+inline MemoryPool<StructType> StructTypePool;
+inline MemoryPool<FunctionType> FunctionTypePool;
+
+inline MemoryPool<Scope> ScopePool;
 
 }  // namespace kcc
 
