@@ -162,6 +162,14 @@ class Parser {
   std::set<Initializer> ParseInitDeclaratorSub(IdentifierExpr* ident);
   void ParseInitializer(std::set<Initializer>& inits, QualType type,
                         std::int32_t offset, bool designated, bool force_brace);
+  void ParseArrayInitializer(std::set<Initializer>& inits, Type* type,
+                             std::int32_t offset, std::int32_t designated);
+  bool ParseLiteralInitializer(std::set<Initializer>& inits, Type* type,
+                               std::int32_t offset);
+  void ParseStructInitializer(std::set<Initializer>& inits, Type* type,
+                              std::int32_t offset, bool designated);
+  static auto ParseStructDesignator(Type* type, const std::string& name)
+      -> decltype(std::begin(type->StructGetMembers()));
 
   /*
    * GNU 扩展
@@ -188,9 +196,8 @@ class Parser {
 template <typename T, typename... Args>
 T* Parser::MakeAstNode(Args&&... args) {
   auto t{T::Get(std::forward<Args>(args)...)};
-  t->Check();
   t->SetLoc(loc_);
-
+  t->Check();
   return t;
 }
 

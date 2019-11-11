@@ -65,16 +65,11 @@ bool operator!=(QualType lhs, QualType rhs) { return !(lhs == rhs); }
 /*
  * Type
  */
-QualType Type::MayCast(QualType type, bool in_proto) {
+QualType Type::MayCast(QualType type) {
   if (type->IsFunctionTy()) {
     return type->GetPointerTo();
   } else if (type->IsArrayTy()) {
-    auto ret{PointerType::Get(type->ArrayGetElementType())};
-    if (in_proto) {
-      return ret;
-    } else {
-      return QualType{ret, kConst};
-    }
+    return PointerType::Get(type->ArrayGetElementType());
   } else {
     return type;
   }

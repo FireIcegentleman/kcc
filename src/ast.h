@@ -398,7 +398,7 @@ class ObjectExpr : public IdentifierExpr {
   Declaration* GetDecl();
   void SetDecl(Declaration* decl);
   bool HasInit() const;
-  bool Anonymous() const;
+  bool IsAnonymous() const;
   bool InGlobal() const;
 
  private:
@@ -752,8 +752,9 @@ class FuncDef : public ExtDecl {
 };
 
 template <typename T, typename... Args>
-T* MakeNode(Args&&... args) {
+T* MakeNode(const Location& loc, Args&&... args) {
   auto t{T::Get(std::forward<Args>(args)...)};
+  t->SetLoc(loc);
   t->Check();
   return t;
 }

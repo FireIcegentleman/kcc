@@ -442,6 +442,18 @@ void JsonGen::Visit(const Declaration& node) {
   node.ident_->Accept(*this);
   children.append(result_);
 
+  for (const auto& item : node.inits_) {
+    QJsonObject obj;
+    obj["name"] = QString::number(item.offset_)
+                      .append(' ')
+                      .append(QString::fromStdString(item.type_->ToString()));
+    item.expr_->Accept(*this);
+    QJsonArray arr;
+    arr.append(result_);
+    obj["children"] = arr;
+    children.append(obj);
+  }
+
   root["children"] = children;
 
   result_ = root;

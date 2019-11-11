@@ -106,7 +106,7 @@ bool operator!=(QualType lhs, QualType rhs);
 class Type {
  public:
   // 数组函数隐式转换为指针
-  static QualType MayCast(QualType type, bool in_proto = false);
+  static QualType MayCast(QualType type);
 
   virtual ~Type() = default;
 

@@ -4,6 +4,7 @@
 
 #include "location.h"
 
+#include <cassert>
 #include <cstring>
 
 #include <fmt/core.h>
@@ -17,6 +18,10 @@ std::string Location::ToLocStr() const {
 
 std::string Location::GetLineContent() const {
   std::string str;
+
+  if (content == nullptr) {
+    assert(false);
+  }
 
   for (auto index{line_begin};
        index < std::strlen(content) && content[index] != '\n'; ++index) {

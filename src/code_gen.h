@@ -96,7 +96,7 @@ class CodeGen : public Visitor {
   virtual void Visit(const BreakStmt &node) override;
   virtual void Visit(const ContinueStmt &node) override;
   virtual void Visit(const GotoStmt &node) override;
-  void Visit(const StringLiteralExpr &node) override;
+  virtual void Visit(const StringLiteralExpr &node) override;
 
   void PushBlock(llvm::BasicBlock *continue_block,
                  llvm::BasicBlock *break_stack);

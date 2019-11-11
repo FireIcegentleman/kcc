@@ -554,6 +554,8 @@ Expr* Parser::ParseMultiplicativeExpr() {
 }
 
 Expr* Parser::ParseCastExpr() {
+  MarkLoc();
+
   if (Try(Tag::kLeftParen)) {
     if (IsTypeName(Peek())) {
       auto type{ParseTypeName()};
@@ -996,7 +998,7 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
 
   switch (encoding) {
     case Encoding::kNone:
-      type_spec = kInt;
+      type_spec = kChar;
       break;
     case Encoding::kChar16:
       type_spec = kShort | kUnsigned;
@@ -1930,6 +1932,10 @@ void Parser::ParseDirectDeclaratorTail(QualType& base_type) {
 }
 
 std::size_t Parser::ParseArrayLength() {
+  if (Test(Tag::kRightSquare)) {
+    return 0;
+  }
+
   auto expr{ParseAssignExpr()};
 
   if (!expr->GetQualType()->IsIntegerTy()) {
@@ -1940,7 +1946,7 @@ std::size_t Parser::ParseArrayLength() {
   // 不支持变长数组
   auto len{CalcExpr<std::int32_t>{}.Calc(expr)};
 
-  if (len <= 0) {
+  if (len < 0) {
     Error(expr, "Array size must be greater than 0: '{}'", len);
   }
 
@@ -1988,7 +1994,7 @@ ObjectExpr* Parser::ParseParamDecl() {
   Token tok;
   ParseDeclarator(tok, base_type);
 
-  base_type = Type::MayCast(base_type, true);
+  base_type = Type::MayCast(base_type);
 
   if (std::empty(tok.GetStr())) {
     return MakeAstNode<ObjectExpr>("", base_type, 0, kNone, true);
@@ -2031,15 +2037,289 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
           ident->GetName());
   }
 
-  if (!ident->GetQualType()->IsComplete() &&
-      !ident->GetQualType()->IsArrayTy()) {
+  if (!ident->GetType()->IsComplete() && !ident->GetType()->IsArrayTy()) {
     Error(ident->GetLoc(), "variable '{}' has initializer but incomplete type",
           ident->GetName());
   }
 
   std::set<Initializer> inits;
-  // ParseInitializer(inits, ident->GetType(), 0, false, true);
+  ParseInitializer(inits, ident->GetType(), 0, false, true);
   return inits;
+}
+
+void Parser::ParseInitializer(std::set<Initializer>& inits, QualType type,
+                              std::int32_t offset, bool designated,
+                              bool force_brace) {
+  if (designated && !Test(Tag::kPeriod) && Test(Tag::kLeftSquare)) {
+    Expect(Tag::kEqual);
+  }
+
+  Expr* expr;
+  if (type->IsArrayTy()) {
+    if (force_brace && !Test(Tag::kLeftBrace) && !Test(Tag::kStringLiteral)) {
+      Expect(Tag::kLeftBrace);
+    } else if (!ParseLiteralInitializer(inits, type.GetType(), offset)) {
+      ParseArrayInitializer(inits, type.GetType(), offset, designated);
+      type->SetComplete(true);
+    } else {
+      return;
+    }
+  } else if (type->IsStructOrUnionTy()) {
+    if (!Test(Tag::kPeriod) && !Test(Tag::kLeftBrace)) {
+      auto begin{index_};
+      expr = ParseAssignExpr();
+      if (type->Compatible(expr->GetType())) {
+        inits.insert({type.GetType(), offset, expr});
+        return;
+      }
+      index_ = begin;
+      if (force_brace) {
+        Expect(Tag::kLeftBrace);
+      }
+    }
+
+    return ParseStructInitializer(inits, type.GetType(), offset, designated);
+  } else {
+    auto has_brace{Try(Tag::kLeftBrace)};
+    expr = ParseAssignExpr();
+
+    if (has_brace) {
+      Try(Tag::kComma);
+      Expect(Tag::kRightBrace);
+    }
+
+    inits.insert({type.GetType(), offset, expr});
+  }
+}
+
+void Parser::ParseArrayInitializer(std::set<Initializer>& inits, Type* type,
+                                   std::int32_t offset,
+                                   std::int32_t designated) {
+  std::int32_t index{};
+  auto width{type->ArrayGetElementType()->GetWidth()};
+  auto has_brace{Try(Tag::kLeftBrace)};
+
+  while (true) {
+    if (Test(Tag::kRightBrace)) {
+      if (has_brace) {
+        Next();
+      } else {
+        return;
+      }
+    }
+
+    if (!designated && !has_brace &&
+        (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
+      PutBack();
+      return;
+    } else if ((designated = Try(Tag::kLeftSquare))) {
+      auto expr{ParseAssignExpr()};
+      if (!expr->GetType()->IsIntegerTy()) {
+        Error(expr, "expect integer type");
+      }
+
+      index = CalcExpr<std::int32_t>{}.Calc(expr);
+      Expect(Tag::kRightSquare);
+
+      if (index < 0 ||
+          (type->IsComplete() &&
+           static_cast<std::size_t>(index) > type->ArrayGetNumElements())) {
+        Error(Peek(), "excess elements in array initializer");
+      }
+    }
+
+    ParseInitializer(inits, type->ArrayGetElementType(), offset + index * width,
+                     designated, false);
+    designated = false;
+    ++index;
+
+    if (type->IsComplete() &&
+        static_cast<std::size_t>(index) >= type->ArrayGetNumElements()) {
+      break;
+    } else if (!type->IsComplete()) {
+      type->ArraySetNumElements(std::max(static_cast<std::size_t>(index),
+                                         type->ArrayGetNumElements()));
+    }
+
+    if (!Try(Tag::kComma)) {
+      if (has_brace) {
+        Expect(Tag::kRightBrace);
+      } else {
+        return;
+      }
+    }
+  }
+
+  if (has_brace) {
+    Try(Tag::kComma);
+
+    if (!Try(Tag::kRightBrace)) {
+      Error(Peek(), "excess elements in array initializer");
+    }
+  }
+}
+
+bool Parser::ParseLiteralInitializer(std::set<Initializer>& inits, Type* type,
+                                     std::int32_t offset) {
+  if (!type->ArrayGetElementType()->IsIntegerTy()) {
+    return false;
+  }
+
+  auto has_brace{Try(Tag::kLeftBrace)};
+  if (!Test(Tag::kStringLiteral)) {
+    if (has_brace) {
+      PutBack();
+    } else {
+      return false;
+    }
+  }
+
+  auto str{ParseStringLiteral()};
+
+  if (has_brace) {
+    Try(Tag::kComma);
+    Expect(Tag::kRightBrace);
+  }
+
+  if (!type->IsComplete()) {
+    type->ArraySetNumElements(str->GetType()->ArrayGetNumElements());
+    type->SetComplete(true);
+  }
+
+  auto width{std::min(type->GetWidth(), str->GetType()->GetWidth())};
+  auto val{str->GetVal().c_str()};
+
+  for (; width >= 8; width -= 8) {
+    auto p = reinterpret_cast<const std::uint64_t*>(val);
+    auto t = ArithmeticType::Get(kLong | kUnsigned);
+    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
+    inits.insert({t, offset, v});
+    offset += 8;
+    val += 8;
+  }
+
+  for (; width >= 4; width -= 4) {
+    auto p = reinterpret_cast<const std::uint32_t*>(val);
+    auto t = ArithmeticType::Get(kInt | kUnsigned);
+    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
+    inits.insert({t, offset, v});
+    offset += 4;
+    val += 4;
+  }
+
+  for (; width >= 2; width -= 2) {
+    auto p = reinterpret_cast<const std::uint16_t*>(val);
+    auto t = ArithmeticType::Get(kShort | kUnsigned);
+    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
+    inits.insert({t, offset, v});
+    offset += 2;
+    val += 2;
+  }
+
+  for (; width >= 1; --width) {
+    auto p = reinterpret_cast<const std::uint8_t*>(val);
+    auto t = ArithmeticType::Get(kChar | kUnsigned);
+    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
+    inits.insert({t, offset, v});
+    offset += 1;
+    val += 1;
+  }
+
+  return true;
+}
+
+void Parser::ParseStructInitializer(std::set<Initializer>& inits, Type* type,
+                                    std::int32_t offset, bool designated) {
+  auto has_brace{Try(Tag::kLeftBrace)};
+  auto member{std::begin(type->StructGetMembers())};
+
+  while (true) {
+    if (Test(Tag::kRightBrace)) {
+      if (has_brace) {
+        Next();
+      } else {
+        return;
+      }
+    }
+
+    if (!designated && !has_brace &&
+        (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
+      PutBack();
+      return;
+    }
+
+    if ((designated = Try(Tag::kPeriod))) {
+      auto tok{Expect(Tag::kIdentifier)};
+      auto name{tok.GetIdentifier()};
+
+      if (!type->StructGetMember(name)) {
+        Error(tok, "member '{}' not found", name);
+      }
+
+      member = ParseStructDesignator(type, name);
+    }
+
+    if (member == std::end(type->StructGetMembers())) {
+      break;
+    }
+
+    if ((*member)->IsAnonymous()) {
+      if (designated) {
+        PutBack();
+        PutBack();
+      }
+
+      ParseInitializer(inits, (*member)->GetType(), offset, designated, false);
+    } else {
+      ParseInitializer(inits, (*member)->GetType(),
+                       offset + (*member)->GetOffset(), designated, false);
+    }
+
+    designated = false;
+    ++member;
+
+    if (!type->IsStructTy()) {
+      break;
+    }
+
+    if (!has_brace && member == std::end(type->StructGetMembers())) {
+      break;
+    }
+
+    if (Try(Tag::kComma)) {
+      if (has_brace) {
+        Expect(Tag::kRightBrace);
+      } else {
+        return;
+      }
+    }
+  }
+
+  if (has_brace) {
+    Try(Tag::kComma);
+    if (!Try(Tag::kRightBrace)) {
+      Error(Peek(), "excess members in struct initializer");
+    }
+  }
+}
+
+auto Parser::ParseStructDesignator(Type* type, const std::string& name)
+    -> decltype(std::begin(type->StructGetMembers())) {
+  auto iter{std::begin(type->StructGetMembers())};
+
+  for (; iter != std::end(type->StructGetMembers()); ++iter) {
+    if ((*iter)->IsAnonymous()) {
+      auto anonymous_type{(*iter)->GetType()};
+      if (anonymous_type->StructGetMember(name)) {
+        return iter;
+      }
+    } else if ((*iter)->GetName() == name) {
+      return iter;
+    }
+  }
+
+  assert(false);
+  return iter;
 }
 
 /*

@@ -43,7 +43,11 @@ std::string Preprocessor::Cpp(const std::string &input_file) {
 
   pclose(fp);
 
+#ifdef NBULITIN
+  return preprocessed_code;
+#elif
   return Preprocessor::Builtin + preprocessed_code;
+#endif
 }
 
 }  // namespace kcc

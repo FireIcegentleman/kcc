@@ -95,7 +95,7 @@ Expr* Expr::MayCast(Expr* expr) {
   auto type{Type::MayCast(expr->GetQualType())};
 
   if (type != expr->GetQualType()) {
-    return MakeNode<TypeCastExpr>(expr, type);
+    return MakeNode<TypeCastExpr>(expr->GetLoc(), expr, type);
   } else {
     return expr;
   }
@@ -105,7 +105,7 @@ Expr* Expr::MayCastTo(Expr* expr, QualType to) {
   expr = MayCast(expr);
 
   if (!expr->GetQualType()->Equal(to.GetType())) {
-    return MakeNode<TypeCastExpr>(expr, to);
+    return MakeNode<TypeCastExpr>(expr->GetLoc(), expr, to);
   } else {
     return expr;
   }
@@ -247,13 +247,19 @@ TypeCastExpr* TypeCastExpr::Get(Expr* expr, QualType to) {
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
 
 void TypeCastExpr::Check() {
+  if (Type::MayCast(expr_->GetQualType())->Equal(to_.GetType())) {
+    type_ = to_;
+    return;
+  }
+
   if (!(to_->IsVoidTy() || to_->IsScalarTy())) {
     Error(loc_, "Can only be converted to void or scalar type: '{};",
           to_->ToString());
   }
+
   if (!to_->IsVoidTy() && !expr_->GetType()->IsScalarTy()) {
     Error(loc_,
-          "If the conversion type is not void, the expression can only be a "
+          "If the conversion type is not void, the expression can only be a"
           "scalar type: '{};",
           expr_->GetType()->ToString());
   }
@@ -559,7 +565,7 @@ AstNodeType FuncCallExpr::Kind() const { return AstNodeType::kFuncCallExpr; }
 
 void FuncCallExpr::Check() {
   if (callee_->GetType()->IsPointerTy()) {
-    callee_ = MakeNode<UnaryOpExpr>(Tag::kStar, callee_);
+    callee_ = MakeNode<UnaryOpExpr>(callee_->GetLoc(), Tag::kStar, callee_);
   }
 
   if (!callee_->GetType()->IsFunctionTy()) {
@@ -574,6 +580,7 @@ void FuncCallExpr::Check() {
     if (args_iter == std::end(args_)) {
       Error(loc_, "too few arguments for function call");
     }
+
     *args_iter = Expr::MayCastTo(*args_iter, param->GetType());
     ++args_iter;
   }
@@ -768,7 +775,7 @@ void ObjectExpr::SetDecl(Declaration* decl) { decl_ = decl; }
 
 bool ObjectExpr::HasInit() const { return decl_->HasInit(); }
 
-bool ObjectExpr::Anonymous() const { return anonymous_; }
+bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
 bool ObjectExpr::InGlobal() const { return linkage_ != kNone; }
 
@@ -1069,7 +1076,7 @@ void Declaration::AddInits(const std::set<Initializer>& inits) {
 
 IdentifierExpr* Declaration::GetIdent() const { return ident_; }
 
-bool Declaration::IsObj() const { return false; }
+bool Declaration::IsObj() const { return dynamic_cast<ObjectExpr*>(ident_); }
 
 Declaration::Declaration(IdentifierExpr* ident) : ident_{ident} {}
 
@@ -1084,7 +1091,7 @@ AstNodeType FuncDef::Kind() const { return AstNodeType::kFuncDef; }
 
 void FuncDef::Check() {
   for (const auto& param : ident_->GetQualType()->FuncGetParams()) {
-    if (param->Anonymous()) {
+    if (param->IsAnonymous()) {
       Error(param, "param name omitted");
     }
   }
