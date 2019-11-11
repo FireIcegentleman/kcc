@@ -52,8 +52,8 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"_Static_assert", Tag::kStaticAssert});
   keywords_.insert({"_Thread_local", Tag::kThreadLocal});
 
-  keywords_.insert({"__func__", Tag::kFunc});
-  keywords_.insert({"__FUNCTION__", Tag::kFunc});
+  keywords_.insert({"__func__", Tag::kFuncName});
+  keywords_.insert({"__FUNCTION__", Tag::kFuncName});
 
   keywords_.insert({"__alignof__", Tag::kAlignof});
   keywords_.insert({"__inline__", Tag::kInline});

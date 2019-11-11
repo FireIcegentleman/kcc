@@ -19,7 +19,7 @@ class Visitor {
   virtual void Visit(const ConditionOpExpr &node) = 0;
   virtual void Visit(const FuncCallExpr &node) = 0;
   virtual void Visit(const ConstantExpr &node) = 0;
-  virtual void Visit(const StringLiteral &node) = 0;
+  virtual void Visit(const StringLiteralExpr &node) = 0;
   virtual void Visit(const IdentifierExpr &node) = 0;
   virtual void Visit(const EnumeratorExpr &node) = 0;
   virtual void Visit(const ObjectExpr &node) = 0;

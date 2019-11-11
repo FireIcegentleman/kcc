@@ -5,10 +5,16 @@
 #ifndef KCC_SRC_PARSE_H_
 #define KCC_SRC_PARSE_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <map>
+#include <set>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "ast.h"
+#include "location.h"
 #include "scope.h"
 #include "token.h"
 #include "type.h"
@@ -21,9 +27,95 @@ class Parser {
   TranslationUnit* ParseTranslationUnit();
 
  private:
+  template <typename T, typename... Args>
+  T* MakeAstNode(Args&&... args);
+
+  bool HasNext();
+  Token Peek();
+  Token PeekPrev();
+  Token Next();
+  void PutBack();
+  bool Test(Tag tag);
+  bool Try(Tag tag);
+  Token Expect(Tag tag);
+  void MarkLoc();
+
+  void EnterBlock(Type* func_type = nullptr);
+  void ExitBlock();
+  void EnterFunc(IdentifierExpr* ident);
+  void ExitFunc();
+  void EnterProto();
+  void ExitProto();
+  bool IsTypeName(const Token& tok);
+  bool IsDecl(const Token& tok);
+  Declaration* MakeDeclaration(const std::string& name, QualType type,
+                               std::uint32_t storage_class_spec,
+                               std::uint32_t func_spec, std::int32_t align);
+
+  /*
+   * ExtDecl
+   */
   ExtDecl* ParseExternalDecl();
   FuncDef* ParseFuncDef(const Declaration* decl);
 
+  /*
+   * Expr
+   */
+  Expr* ParseExpr();
+  Expr* ParseAssignExpr();
+  Expr* ParseConditionExpr();
+  Expr* ParseLogicalOrExpr();
+  Expr* ParseLogicalAndExpr();
+  Expr* ParseInclusiveOrExpr();
+  Expr* ParseExclusiveOrExpr();
+  Expr* ParseAndExpr();
+  Expr* ParseEqualityExpr();
+  Expr* ParseRelationExpr();
+  Expr* ParseShiftExpr();
+  Expr* ParseAdditiveExpr();
+  Expr* ParseMultiplicativeExpr();
+  Expr* ParseCastExpr();
+  Expr* ParseUnaryExpr();
+  Expr* ParseSizeof();
+  Expr* ParseAlignof();
+  Expr* ParsePostfixExpr();
+  Expr* TryParseCompoundLiteral();
+  Expr* ParseCompoundLiteral(QualType type);
+  Expr* ParsePostfixExprTail(Expr* expr);
+  Expr* ParseIndexExpr(Expr* expr);
+  Expr* ParseFuncCallExpr(Expr* expr);
+  Expr* ParseMemberRefExpr(Expr* expr);
+  Expr* ParsePrimaryExpr();
+  Expr* ParseConstant();
+  Expr* ParseCharacter();
+  Expr* ParseInteger();
+  Expr* ParseFloat();
+  StringLiteralExpr* ParseStringLiteral();
+  Expr* ParseGenericSelection();
+  Expr* ParseConstantExpr();
+
+  /*
+   * Stmt
+   */
+  Stmt* ParseStmt();
+  Stmt* ParseLabelStmt();
+  Stmt* ParseCaseStmt();
+  Stmt* ParseDefaultStmt();
+  CompoundStmt* ParseCompoundStmt(Type* func_type = nullptr);
+  Stmt* ParseExprStmt();
+  Stmt* ParseIfStmt();
+  Stmt* ParseSwitchStmt();
+  Stmt* ParseWhileStmt();
+  Stmt* ParseDoWhileStmt();
+  Stmt* ParseForStmt();
+  Stmt* ParseGotoStmt();
+  Stmt* ParseContinueStmt();
+  Stmt* ParseBreakStmt();
+  Stmt* ParseReturnStmt();
+
+  /*
+   * Decl
+   */
   CompoundStmt* ParseDecl(bool maybe_func_def = false);
   QualType ParseDeclSpec(std::uint32_t* storage_class_spec,
                          std::uint32_t* func_spec, std::int32_t* align);
@@ -38,105 +130,57 @@ class Parser {
   void ParseDirectDeclarator(Token& tok, QualType& base_type);
   void ParseDirectDeclaratorTail(QualType& base_type);
   void ParsePointer(QualType& type);
-
   Type* ParseStructUnionSpec(bool is_struct);
   Type* ParseEnumSpec();
   void ParseEnumerator(Type* type);
   std::int32_t ParseAlignas();
   std::size_t ParseArrayLength();
-  void EnterProto();
-  void ExitProto();
   std::pair<std::vector<ObjectExpr*>, bool> ParseParamTypeList();
-  bool IsTypeName(const Token& tok);
-  bool IsDecl(const Token& tok);
   QualType ParseTypeName();
   void ParseStructDeclList(StructType* base_type);
   ObjectExpr* ParseParamDecl();
   void ParseAbstractDeclarator(QualType& type);
-
   std::uint32_t ParseTypeQualList();
   void ParseDirectAbstractDeclarator(QualType& type);
-
   void ParseStaticAssertDecl();
 
-  Declaration* MakeDeclarator(const Token& tok, const QualType& type,
-                              std::uint32_t storage_class_spec,
-                              std::uint32_t func_spec, std::int32_t align);
-  Expr* ParseConstantExpr();
-  ConstantExpr* ParseStringLiteral();
+  /*
+   * Init
+   */
   std::set<Initializer> ParseInitDeclaratorSub(IdentifierExpr* ident);
   void ParseInitializer(std::set<Initializer>& inits, QualType type,
                         std::int32_t offset, bool designated, bool force_brace);
 
-  bool HasNext();
-  Token Peek();
-  Token PeekPrev();
-  Token Next();
-  void PutBack();
-  bool Test(Tag tag);
-  bool Try(Tag tag);
-  Token Expect(Tag tag);
-
-  Expr* ParseConstant();
-  Expr* ParseFloat();
-  Expr* ParseInteger();
-  Expr* ParseCharacter();
-  Expr* ParseSizeof();
-  Expr* ParseAlignof();
-  Expr* ParsePrimaryExpr();
-  Expr* ParsePostfixExprTail(Expr* expr);
-  Expr* ParsePostfixExpr();
-  Expr* ParseUnaryExpr();
-  Expr* ParseCastExpr();
-  Expr* ParseMultiplicativeExpr();
-  Expr* ParseAdditiveExpr();
-  Expr* ParseShiftExpr();
-  Expr* ParseRelationExpr();
-  Expr* ParseEqualityExpr();
-  Expr* ParseBitwiseAndExpr();
-  Expr* ParseBitwiseXorExpr();
-  Expr* ParseBitwiseOrExpr();
-  Expr* ParseLogicalAndExpr();
-  Expr* ParseLogicalOrExpr();
-  Expr* ParseConditionExpr();
-  Expr* ParseAssignExpr();
-  Expr* ParseCommaExpr();
-  Expr* ParseExpr();
-
-  void EnterBlock(Type* func_type = nullptr);
-  void ExitBlock();
-  void EnterFunc(IdentifierExpr* ident);
-  void ExitFunc();
-  Stmt* ParseStmt();
-  LabelStmt* ParseLabelStmt();
-  CaseStmt* ParseCaseStmt();
-  DefaultStmt* ParseDefaultStmt();
-  CompoundStmt* ParseCompoundStmt(Type* func_type = nullptr);
-  ExprStmt* ParseExprStmt();
-  IfStmt* ParseIfStmt();
-  SwitchStmt* ParseSwitchStmt();
-  WhileStmt* ParseWhileStmt();
-  DoWhileStmt* ParseDoWhileStmt();
-  ForStmt* ParseForStmt();
-  GotoStmt* ParseGotoStmt();
-  ContinueStmt* ParseContinueStmt();
-  BreakStmt* ParseBreakStmt();
-  ReturnStmt* ParseReturnStmt();
-
-  void TryAttributeSpec();
+  /*
+   * GNU 扩展
+   */
+  void TryParseAttributeSpec();
   void ParseAttributeList();
   void ParseAttribute();
   void ParseAttributeParamList();
   void ParseAttributeExprList();
-  void TryAsm();
+  void TryParseAsm();
 
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
+  Location loc_;
+
+  FuncDef* curr_func_def_{};
   Scope* curr_scope_{Scope::Get(nullptr, kFile)};
   std::map<std::string, LabelStmt*> curr_labels_;
-  FuncDef* curr_func_def_{};
+
+  TranslationUnit* unit_{MakeAstNode<TranslationUnit>()};
 };
+
+template <typename T, typename... Args>
+T* Parser::MakeAstNode(Args&&... args) {
+  auto t{T::Get(std::forward<Args>(args)...)};
+  t->Check();
+  t->SetLoc(loc_);
+
+  return t;
+}
 
 }  // namespace kcc
 

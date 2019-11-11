@@ -24,8 +24,6 @@
 namespace kcc {
 
 class Declaration;
-class ObjectExpr;
-class EnumeratorExpr;
 class Visitor;
 
 class AstNodeTypes : public QObject {
@@ -65,9 +63,7 @@ class AstNodeTypes : public QObject {
 
   Q_ENUM(Type)
 
-  static QString ToString(Type type) {
-    return QMetaEnum::fromType<Type>().valueToKey(type) + 1;
-  }
+  static QString ToString(Type type);
 };
 
 using AstNodeType = AstNodeTypes::Type;
@@ -80,15 +76,19 @@ class AstNode {
   virtual void Accept(Visitor& visitor) const = 0;
   virtual void Check() = 0;
 
+  QString KindStr() const;
+  Location GetLoc() const;
+  void SetLoc(const Location& loc);
+
  protected:
   AstNode() = default;
+
+  Location loc_;
 };
 
 class Expr : public AstNode {
  public:
   virtual bool IsLValue() const = 0;
-
-  Location GetLoc() const;
 
   QualType GetQualType() const;
   Type* GetType();
@@ -105,9 +105,8 @@ class Expr : public AstNode {
   static Type* Convert(Expr*& lhs, Expr*& rhs);
 
  protected:
-  explicit Expr(const Location& loc, QualType type = {});
+  explicit Expr(QualType type = {});
 
-  Location loc_;
   QualType type_;
 };
 
@@ -124,7 +123,7 @@ class UnaryOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static UnaryOpExpr* Get(const Location& loc, Tag tag, Expr* expr);
+  static UnaryOpExpr* Get(Tag tag, Expr* expr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -132,7 +131,7 @@ class UnaryOpExpr : public Expr {
   virtual bool IsLValue() const override;
 
  private:
-  UnaryOpExpr(const Location& loc, Tag tag, Expr* expr);
+  UnaryOpExpr(Tag tag, Expr* expr);
 
   void IncDecOpCheck();
   void UnaryAddSubOpCheck();
@@ -152,7 +151,7 @@ class TypeCastExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static TypeCastExpr* Get(const Location& loc, Expr* expr, QualType to);
+  static TypeCastExpr* Get(Expr* expr, QualType to);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -160,7 +159,7 @@ class TypeCastExpr : public Expr {
   virtual bool IsLValue() const override;
 
  private:
-  TypeCastExpr(const Location& loc, Expr* expr, QualType to);
+  TypeCastExpr(Expr* expr, QualType to);
 
   Expr* expr_;
   QualType to_;
@@ -182,7 +181,7 @@ class BinaryOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static BinaryOpExpr* Get(const Location& loc, Tag tag, Expr* lhs, Expr* rhs);
+  static BinaryOpExpr* Get(Tag tag, Expr* lhs, Expr* rhs);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -190,7 +189,7 @@ class BinaryOpExpr : public Expr {
   virtual bool IsLValue() const override;
 
  private:
-  BinaryOpExpr(const Location& loc, Tag tag, Expr* lhs, Expr* rhs);
+  BinaryOpExpr(Tag tag, Expr* lhs, Expr* rhs);
 
   void AssignOpCheck();
   void AddOpCheck();
@@ -216,8 +215,7 @@ class ConditionOpExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static ConditionOpExpr* Get(const Location& loc, Expr* cond, Expr* lhs,
-                              Expr* rhs);
+  static ConditionOpExpr* Get(Expr* cond, Expr* lhs, Expr* rhs);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -225,7 +223,7 @@ class ConditionOpExpr : public Expr {
   virtual bool IsLValue() const override;
 
  private:
-  ConditionOpExpr(const Location& loc, Expr* cond, Expr* lhs, Expr* rhs);
+  ConditionOpExpr(Expr* cond, Expr* lhs, Expr* rhs);
 
   Expr* cond_;
   Expr* lhs_;
@@ -260,9 +258,9 @@ class ConstantExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static ConstantExpr* Get(const Location& loc, std::int32_t val);
-  static ConstantExpr* Get(const Location& loc, Type* type, std::uint64_t val);
-  static ConstantExpr* Get(const Location& loc, Type* type, double val);
+  static ConstantExpr* Get(std::int32_t val);
+  static ConstantExpr* Get(Type* type, std::uint64_t val);
+  static ConstantExpr* Get(Type* type, double val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -273,22 +271,23 @@ class ConstantExpr : public Expr {
   double GetFloatPointVal() const;
 
  private:
-  ConstantExpr(const Location& loc, std::int32_t val);
-  ConstantExpr(const Location& loc, Type* type, std::uint64_t val);
-  ConstantExpr(const Location& loc, Type* type, double val);
+  ConstantExpr(std::int32_t val);
+  ConstantExpr(Type* type, std::uint64_t val);
+  ConstantExpr(Type* type, double val);
 
   std::uint64_t integer_val_{};
   double float_point_val_{};
 };
 
-class StringLiteral : public Expr {
+class StringLiteralExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
   friend class JsonGen;
   friend class CodeGen;
 
  public:
-  static StringLiteral* Get(const Location& loc, const std::string& val);
+  static StringLiteralExpr* Get(const std::string& val);
+  static StringLiteralExpr* Get(Type* type, const std::string& val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -298,7 +297,7 @@ class StringLiteral : public Expr {
   std::string GetVal() const;
 
  private:
-  StringLiteral(const Location& loc, const std::string& val);
+  StringLiteralExpr(Type* type, const std::string& val);
 
   std::string val_;
 };
@@ -321,9 +320,8 @@ class IdentifierExpr : public Expr {
   friend class CodeGen;
 
  public:
-  static IdentifierExpr* Get(const Location& loc, const std::string& name,
-                             QualType type, enum Linkage linkage,
-                             bool is_type_name);
+  static IdentifierExpr* Get(const std::string& name, QualType type,
+                             enum Linkage linkage, bool is_type_name);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -337,8 +335,8 @@ class IdentifierExpr : public Expr {
   bool IsEnumerator() const;
 
  protected:
-  IdentifierExpr(const Location& loc, const std::string& name, QualType type,
-                 enum Linkage linkage, bool is_type_name);
+  IdentifierExpr(const std::string& name, QualType type, enum Linkage linkage,
+                 bool is_type_name);
 
   std::string name_;
   enum Linkage linkage_;
@@ -352,8 +350,7 @@ class EnumeratorExpr : public IdentifierExpr {
   friend class CodeGen;
 
  public:
-  static EnumeratorExpr* Get(const Location& loc, const std::string& name,
-                             std::int32_t val);
+  static EnumeratorExpr* Get(const std::string& name, std::int32_t val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -363,8 +360,7 @@ class EnumeratorExpr : public IdentifierExpr {
   std::int32_t GetVal() const;
 
  private:
-  EnumeratorExpr(const Location& loc, const std::string& name,
-                 std::int32_t val);
+  EnumeratorExpr(const std::string& name, std::int32_t val);
 
   std::int32_t val_;
 };
@@ -383,10 +379,9 @@ class ObjectExpr : public IdentifierExpr {
   friend class CodeGen;
 
  public:
-  static ObjectExpr* Get(const Location& loc, const std::string& name,
-                         QualType type, std::uint32_t storage_class_spec = 0,
-                         enum Linkage linkage = kNone, bool anonymous = false,
-                         bool in_global = false);
+  static ObjectExpr* Get(const std::string& name, QualType type,
+                         std::uint32_t storage_class_spec = 0,
+                         enum Linkage linkage = kNone, bool anonymous = false);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -395,6 +390,7 @@ class ObjectExpr : public IdentifierExpr {
 
   bool IsStatic() const;
   void SetStorageClassSpec(std::uint32_t storage_class_spec);
+  std::uint32_t GetStorageClassSpec();
   std::int32_t GetAlign() const;
   void SetAlign(std::int32_t align);
   std::int32_t GetOffset() const;
@@ -403,19 +399,19 @@ class ObjectExpr : public IdentifierExpr {
   void SetDecl(Declaration* decl);
   bool HasInit() const;
   bool Anonymous() const;
+  bool InGlobal() const;
 
  private:
-  ObjectExpr(const Location& loc, const std::string& name, QualType type,
+  ObjectExpr(const std::string& name, QualType type,
              std::uint32_t storage_class_spec = 0, enum Linkage linkage = kNone,
-             bool anonymous = false, bool in_global = false);
+             bool anonymous = false);
 
-  bool anonymous_;
-  std::uint32_t storage_class_spec_;
+  bool anonymous_{};
+  std::uint32_t storage_class_spec_{};
   std::int32_t align_{};
   std::int32_t offset_{};
-  Declaration* decl_;
+  Declaration* decl_{};
 
-  bool in_global_{};
   llvm::AllocaInst* local_ptr_{};
   llvm::GlobalValue* global_ptr_{};
 };
@@ -756,7 +752,7 @@ class FuncDef : public ExtDecl {
 };
 
 template <typename T, typename... Args>
-T* MakeAstNode(Args&&... args) {
+T* MakeNode(Args&&... args) {
   auto t{T::Get(std::forward<Args>(args)...)};
   t->Check();
   return t;

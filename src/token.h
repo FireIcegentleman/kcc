@@ -9,6 +9,7 @@
 
 #include <QMetaEnum>
 #include <QObject>
+#include <QString>
 
 #include "location.h"
 
@@ -132,18 +133,18 @@ class TokenTag : public QObject {
     kSharp,
     kSharpSharp,
 
-    kFunc,
+    kFuncName,
     kExtension,  // __extension__
     kTypeof,     // typeof
 
     kNone,
-    kEof,
-    kInvalid,
+    kEof
   };
 
   Q_ENUM(Values)
 
   static std::string ToString(TokenTag::Values value);
+  static QString ToQString(TokenTag::Values value);
 };
 
 using Tag = TokenTag::Values;

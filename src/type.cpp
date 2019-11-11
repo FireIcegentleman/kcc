@@ -20,6 +20,20 @@ namespace kcc {
 /*
  * QualType
  */
+QualType::QualType(Type* type, std::uint32_t type_qual)
+    : type_{type}, type_qual_{type_qual} {}
+
+QualType::QualType(const QualType& item) {
+  type_ = item.type_;
+  type_qual_ = item.type_qual_;
+}
+
+QualType& QualType::operator=(const QualType& item) {
+  type_ = item.type_;
+  type_qual_ = item.type_qual_;
+  return *this;
+}
+
 Type& QualType::operator*() { return *type_; }
 
 const Type& QualType::operator*() const { return *type_; }
@@ -28,9 +42,15 @@ Type* QualType::operator->() { return type_; }
 
 const Type* QualType::operator->() const { return type_; }
 
-Type* QualType::GetType() { return type_; }
+Type* QualType::GetType() {
+  assert(type_ != nullptr);
+  return type_;
+}
 
-const Type* QualType::GetType() const { return type_; }
+const Type* QualType::GetType() const {
+  assert(type_ != nullptr);
+  return type_;
+}
 
 std::uint32_t QualType::GetTypeQual() const { return type_qual_; }
 
@@ -47,11 +67,11 @@ bool operator!=(QualType lhs, QualType rhs) { return !(lhs == rhs); }
  */
 QualType Type::MayCast(QualType type, bool in_proto) {
   if (type->IsFunctionTy()) {
-    return QualType{type->GetPointerTo()};
+    return type->GetPointerTo();
   } else if (type->IsArrayTy()) {
     auto ret{PointerType::Get(type->ArrayGetElementType())};
     if (in_proto) {
-      return QualType{ret};
+      return ret;
     } else {
       return QualType{ret, kConst};
     }
@@ -153,6 +173,8 @@ bool Type::IsUnionTy() const {
   auto p{dynamic_cast<const StructType*>(this)};
   return p && !p->IsStructTy();
 }
+
+bool Type::IsStructOrUnionTy() const { return IsStructTy() || IsUnionTy(); }
 
 bool Type::IsFunctionTy() const {
   return dynamic_cast<const FunctionType*>(this);
@@ -355,17 +377,7 @@ ArithmeticType* ArithmeticType::Get(std::uint32_t type_spec) {
   static auto long_double_type{new (ArithmeticTypePool.Allocate())
                                    ArithmeticType{kDouble | kLong}};
 
-  if (type_spec == kSigned) {
-    type_spec = kInt;
-  } else if (type_spec == kUnsigned) {
-    type_spec |= kInt;
-  }
-
-  type_spec &= ~kSigned;
-
-  if ((type_spec & kShort) || (type_spec & kLong) || (type_spec & kLongLong)) {
-    type_spec &= ~kInt;
-  }
+  type_spec = ArithmeticType::DealWithTypeSpec(type_spec);
 
   switch (type_spec) {
     case kBool:
@@ -405,7 +417,7 @@ ArithmeticType* ArithmeticType::Get(std::uint32_t type_spec) {
 Type* ArithmeticType::IntegerPromote(Type* type) {
   assert(type->IsIntegerTy());
 
-  auto int_type{ArithmeticType::Get(kInt)};
+  static auto int_type{ArithmeticType::Get(kInt)};
   if (type->ArithmeticRank() < int_type->Rank()) {
     return int_type;
   } else {
@@ -460,7 +472,6 @@ std::int32_t ArithmeticType::GetWidth() const {
       return 4;
     case kLong:
     case kLong | kUnsigned:
-      return 8;
     case kLongLong:
     case kLongLong | kUnsigned:
       return 8;
@@ -478,8 +489,8 @@ std::int32_t ArithmeticType::GetWidth() const {
 
 std::int32_t ArithmeticType::GetAlign() const { return GetWidth(); }
 
-// 它们是同一类型（同名或由 typedef 引入的别名）
-// 类型 char 不与 signed char 兼容，且不与 unsigned char 兼容
+// 它们是同一类型(同名或由 typedef 引入的别名)
+// 类型 char 不与 signed char 兼容, 且不与 unsigned char 兼容
 bool ArithmeticType::Compatible(const Type* other) const {
   return Equal(other);
 }
@@ -503,7 +514,7 @@ std::uint64_t ArithmeticType::MaxIntegerValue() const {
     case kShort | kUnsigned:
       return std::numeric_limits<std::uint16_t>::max();
     case kInt:
-      return std::numeric_limits<std::uint32_t>::max();
+      return std::numeric_limits<std::int32_t>::max();
     case kInt | kUnsigned:
       return std::numeric_limits<std::uint32_t>::max();
     case kLong:
@@ -521,19 +532,7 @@ std::uint64_t ArithmeticType::MaxIntegerValue() const {
 void ArithmeticType::SetUnsigned() { type_spec_ |= kUnsigned; }
 
 ArithmeticType::ArithmeticType(std::uint32_t type_spec) : Type{true} {
-  if (type_spec == kSigned) {
-    type_spec = kInt;
-  } else if (type_spec == kUnsigned) {
-    type_spec |= kInt;
-  }
-
-  type_spec &= ~kSigned;
-
-  if ((type_spec & kShort) || (type_spec & kLong) || (type_spec & kLongLong)) {
-    type_spec &= ~kInt;
-  }
-
-  type_spec_ = type_spec;
+  type_spec_ = ArithmeticType::DealWithTypeSpec(type_spec);
 
   if (IsBoolTy()) {
     llvm_type_ = Builder.getInt1Ty();
@@ -554,6 +553,22 @@ ArithmeticType::ArithmeticType(std::uint32_t type_spec) : Type{true} {
   } else {
     assert(false);
   }
+}
+
+std::uint32_t ArithmeticType::DealWithTypeSpec(std::uint32_t type_spec) {
+  if (type_spec == kSigned) {
+    type_spec = kInt;
+  } else if (type_spec == kUnsigned) {
+    type_spec |= kInt;
+  }
+
+  type_spec &= ~kSigned;
+
+  if ((type_spec & kShort) || (type_spec & kLong) || (type_spec & kLongLong)) {
+    type_spec &= ~kInt;
+  }
+
+  return type_spec;
 }
 
 std::int32_t ArithmeticType::Rank() const {
@@ -598,7 +613,7 @@ std::int32_t PointerType::GetWidth() const { return 8; }
 
 std::int32_t PointerType::GetAlign() const { return GetWidth(); }
 
-// 它们是指针类型，并指向兼容类型
+// 指向兼容类型
 bool PointerType::Compatible(const Type* other) const {
   if (other->IsPointerTy()) {
     return element_type_->Compatible(
@@ -642,10 +657,10 @@ std::int32_t ArrayType::GetWidth() const {
 
 std::int32_t ArrayType::GetAlign() const { return GetWidth(); }
 
-// 其元素类型兼容，且
-// 若都拥有常量大小，则大小相同。
-// 注意：未知边界数组与任何兼容元素类型的数组兼容。
-// VLA 与任何兼容元素类型的数组兼容。 (C99 起)
+// 其元素类型兼容, 且
+// 若都拥有常量大小, 则大小相同
+// 注意: 未知边界数组与任何兼容元素类型的数组兼容
+// VLA 与任何兼容元素类型的数组兼容
 bool ArrayType::Compatible(const Type* other) const {
   if (other->IsArrayTy()) {
     auto other_arr{dynamic_cast<const ArrayType*>(other)};
@@ -709,14 +724,14 @@ std::int32_t StructType::GetWidth() const { return width_; }
 
 std::int32_t StructType::GetAlign() const { return align_; }
 
-// (C99)若一者以标签声明，则另一者必须以同一标签声明。
-// 若它们都是完整类型，则其成员必须在数量上准确对应，以兼容类型声明，并拥有匹配的名称。
-// 另外，若它们都是枚举，则对应成员亦必须拥有相同值。
-// 另外，若它们是结构体或联合体，则
-// 对应的元素必须以同一顺序声明（仅结构体）
-// 对应的位域必须有相同宽度。
+// 若一者以标签声明, 则另一者必须以同一标签声明。
+// 若它们都是完整类型, 则其成员必须在数量上准确对应, 以兼容类型声明,
+// 并拥有匹配的名称 另外, 若它们都是枚举, 则对应成员亦必须拥有相同值。 另外,
+// 若它们是结构体或联合体, 则 对应的元素必须以同一顺序声明(仅结构体)
+// 对应的位域必须有相同宽度
+// TODO 位域
 bool StructType::Compatible(const Type* other) const {
-  if (other->IsStructTy()) {
+  if (other->IsStructOrUnionTy() && IsStruct() == other->IsStructTy()) {
     auto other_struct{dynamic_cast<const StructType*>(other)};
     if (HasName() && other_struct->HasName()) {
       if (name_ != other_struct->name_) {
@@ -730,8 +745,7 @@ bool StructType::Compatible(const Type* other) const {
       }
       auto iter{std::end(other_struct->members_)};
       for (const auto& member : members_) {
-        if (!member->GetQualType()->Compatible(
-                (*iter)->GetQualType().GetType())) {
+        if (!member->GetType()->Compatible((*iter)->GetType())) {
           return false;
         }
 
@@ -748,7 +762,7 @@ bool StructType::Compatible(const Type* other) const {
 }
 
 bool StructType::Equal(const Type* other) const {
-  if (other->IsStructTy()) {
+  if (other->IsStructOrUnionTy() && IsStruct() == other->IsStructTy()) {
     auto other_struct{dynamic_cast<const StructType*>(other)};
     if (HasName() && other_struct->HasName()) {
       if (name_ != other_struct->name_) {
@@ -760,9 +774,10 @@ bool StructType::Equal(const Type* other) const {
       if (GetNumMembers() != other_struct->GetNumMembers()) {
         return false;
       }
+
       auto iter{std::end(other_struct->members_)};
       for (const auto& member : members_) {
-        if (!member->GetQualType()->Equal((*iter)->GetQualType().GetType())) {
+        if (!member->GetType()->Equal((*iter)->GetType())) {
           return false;
         }
 
@@ -869,8 +884,7 @@ void StructType::Finish() {
     members.push_back(item->GetType()->GetLLVMType());
   }
 
-  auto p{llvm::cast<llvm::StructType>(llvm_type_)};
-  p->setBody(members);
+  llvm::cast<llvm::StructType>(llvm_type_)->setBody(members);
 }
 
 StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
@@ -918,12 +932,8 @@ std::int32_t FunctionType::GetAlign() const {
 }
 
 // 其返回类型兼容
-// 它们都使用参数列表，参数数量（包括省略号的使用）相同，而其对应参数，在应用数组到指针和函数到指针类型调整，
-// 及剥除顶层限定符后，拥有相同类型
-// 一个是旧式（无参数）定义，另一个有参数列表，参数列表不使用省略号，而每个参数（在函数参数类型调整后）
-// 都与默认参数提升后的对应旧式参数兼容
-// 一个是旧式（无参数）声明，另一个拥有参数列表，参数列表不使用省略号，而所有参数（在函数参数类型调整后）
-// 不受默认参数提升影响
+// 它们都使用参数列表, 参数数量(包括省略号的使用)相同, 而其对应参数,
+// 在应用数组到指针和函数到指针类型调整, 及剥除顶层限定符后, 拥有相同类型
 bool FunctionType::Compatible(const Type* other) const {
   if (other->IsFunctionTy()) {
     auto other_func{dynamic_cast<const FunctionType*>(other)};
@@ -936,7 +946,7 @@ bool FunctionType::Compatible(const Type* other) const {
 
     auto iter{std::begin(other_func->params_)};
     for (const auto& param : params_) {
-      if (!param->GetQualType()->Equal((*iter)->GetQualType().GetType())) {
+      if (!param->GetType()->Equal((*iter)->GetType())) {
         return false;
       }
       ++iter;
@@ -960,7 +970,7 @@ bool FunctionType::Equal(const Type* other) const {
 
     auto iter{std::begin(other_func->params_)};
     for (const auto& param : params_) {
-      if (!param->GetQualType()->Equal((*iter)->GetQualType().GetType())) {
+      if (!param->GetType()->Equal((*iter)->GetType())) {
         return false;
       }
       ++iter;

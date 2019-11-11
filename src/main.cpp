@@ -80,7 +80,7 @@ llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
 
 void RunDev();
 
-int main(int argc, char *argv[]) try {
+int main(int argc, char *argv[]) /*try*/ {
   llvm::cl::HideUnrelatedOptions(Category);
 
   llvm::cl::SetVersionPrinter([](llvm::raw_ostream &os) {
@@ -278,9 +278,10 @@ int main(int argc, char *argv[]) try {
       std::filesystem::remove(file);
     }
   }
-} catch (const std::exception &err) {
-  Error(err.what());
 }
+// catch (const std::exception &err) {
+//  Error(err.what());
+//}
 
 void RunDev() {
   Preprocessor preprocessor;
@@ -355,7 +356,6 @@ void RunDev() {
   // std::system("./test/dev/test");
 
   PrintWarnings();
-  unit->~TranslationUnit();
 
   std::exit(EXIT_SUCCESS);
 }

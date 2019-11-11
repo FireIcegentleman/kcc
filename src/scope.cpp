@@ -15,11 +15,12 @@ Scope* Scope::Get(Scope* parent, enum ScopeType type) {
 }
 
 void Scope::PrintCurrScope() const {
+  std::cout << "func / object / typedef / enumerator :\n";
   for (const auto& item : normal_) {
-    std::cout << "func / object / typedef / enumerator :\n";
     std::cout << item.first << ' ';
     std::cout << item.second->GetQualType()->ToString() << '\n';
   }
+
   std::cout << "struct / union / enum :\n";
   for (const auto& item : tags_) {
     std::cout << item.first << ' ';
@@ -70,19 +71,19 @@ IdentifierExpr* Scope::FindNormalInCurrScope(const std::string& name) {
 }
 
 IdentifierExpr* Scope::FindTag(const Token& tok) {
-  return FindTag(tok.GetStr());
+  return FindTag(tok.GetIdentifier());
 }
 
 IdentifierExpr* Scope::FindNormal(const Token& tok) {
-  return FindNormal(tok.GetStr());
+  return FindNormal(tok.GetIdentifier());
 }
 
 IdentifierExpr* Scope::FindTagInCurrScope(const Token& tok) {
-  return FindTagInCurrScope(tok.GetStr());
+  return FindTagInCurrScope(tok.GetIdentifier());
 }
 
 IdentifierExpr* Scope::FindNormalInCurrScope(const Token& tok) {
-  return FindNormalInCurrScope(tok.GetStr());
+  return FindNormalInCurrScope(tok.GetIdentifier());
 }
 
 std::unordered_map<std::string, IdentifierExpr*> Scope::AllTagInCurrScope()

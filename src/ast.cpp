@@ -20,8 +20,8 @@ ACCEPT(TypeCastExpr)
 ACCEPT(BinaryOpExpr)
 ACCEPT(ConditionOpExpr)
 ACCEPT(FuncCallExpr)
-ACCEPT(Constant)
-ACCEPT(StringLiteral)
+ACCEPT(ConstantExpr)
+ACCEPT(StringLiteralExpr)
 ACCEPT(IdentifierExpr)
 ACCEPT(EnumeratorExpr)
 ACCEPT(ObjectExpr)
@@ -46,10 +46,24 @@ ACCEPT(Declaration)
 ACCEPT(FuncDef)
 
 /*
+ * AstNodeTypes
+ */
+QString AstNodeTypes::ToString(AstNodeTypes::Type type) {
+  return QMetaEnum::fromType<Type>().valueToKey(type) + 1;
+}
+
+/*
+ * AstNode
+ */
+QString AstNode::KindStr() const { return AstNodeTypes::ToString(Kind()); }
+
+Location AstNode::GetLoc() const { return loc_; }
+
+void AstNode::SetLoc(const Location& loc) { loc_ = loc; }
+
+/*
  * Expr
  */
-Location Expr::GetLoc() const { return loc_; }
-
 QualType Expr::GetQualType() const { return type_; }
 
 Type* Expr::GetType() { return type_.GetType(); }
@@ -81,7 +95,7 @@ Expr* Expr::MayCast(Expr* expr) {
   auto type{Type::MayCast(expr->GetQualType())};
 
   if (type != expr->GetQualType()) {
-    return MakeAstNode<TypeCastExpr>(expr, type);
+    return MakeNode<TypeCastExpr>(expr, type);
   } else {
     return expr;
   }
@@ -91,28 +105,28 @@ Expr* Expr::MayCastTo(Expr* expr, QualType to) {
   expr = MayCast(expr);
 
   if (!expr->GetQualType()->Equal(to.GetType())) {
-    return MakeAstNode<TypeCastExpr>(expr, to);
+    return MakeNode<TypeCastExpr>(expr, to);
   } else {
     return expr;
   }
 }
 
 Type* Expr::Convert(Expr*& lhs, Expr*& rhs) {
-  auto type{ArithmeticType::MaxType(lhs->GetType(), rhs->GetType())};
+  auto type{QualType{ArithmeticType::MaxType(lhs->GetType(), rhs->GetType())}};
 
   lhs = Expr::MayCastTo(lhs, type);
   rhs = Expr::MayCastTo(rhs, type);
 
-  return type;
+  return type.GetType();
 }
 
-Expr::Expr(const Location& loc, QualType type) : loc_{loc}, type_{type} {}
+Expr::Expr(QualType type) : type_{type} {}
 
 /*
  * UnaryOpExpr
  */
-UnaryOpExpr* UnaryOpExpr::Get(const Location& loc, Tag tag, Expr* expr) {
-  return new (UnaryOpExprPool.Allocate()) UnaryOpExpr{loc, tag, expr};
+UnaryOpExpr* UnaryOpExpr::Get(Tag tag, Expr* expr) {
+  return new (UnaryOpExprPool.Allocate()) UnaryOpExpr{tag, expr};
 }
 
 AstNodeType UnaryOpExpr::Kind() const { return AstNodeType::kUnaryOpExpr; }
@@ -146,8 +160,7 @@ void UnaryOpExpr::Check() {
 
 bool UnaryOpExpr::IsLValue() const { return op_ == Tag::kStar; }
 
-UnaryOpExpr::UnaryOpExpr(const Location& loc, Tag tag, Expr* expr)
-    : Expr(loc), op_(tag) {
+UnaryOpExpr::UnaryOpExpr(Tag tag, Expr* expr) : op_(tag) {
   if (op_ == Tag::kAmp) {
     expr_ = expr;
   } else {
@@ -180,7 +193,7 @@ void UnaryOpExpr::UnaryAddSubOpCheck() {
   }
 
   auto new_type{ArithmeticType::IntegerPromote(expr_->GetQualType().GetType())};
-  expr_ = Expr::MayCastTo(expr_, new_type);
+  expr_ = Expr::MayCastTo(expr_, QualType{new_type});
 
   type_ = expr_->GetQualType();
 }
@@ -192,7 +205,7 @@ void UnaryOpExpr::NotOpCheck() {
   }
 
   auto new_type{ArithmeticType::IntegerPromote(expr_->GetQualType().GetType())};
-  expr_ = Expr::MayCastTo(expr_, new_type);
+  expr_ = Expr::MayCastTo(expr_, QualType{new_type});
 
   type_ = expr_->GetQualType();
 }
@@ -227,8 +240,8 @@ void UnaryOpExpr::AddrOpCheck() {
 /*
  * TypeCastExpr
  */
-TypeCastExpr* TypeCastExpr::Get(const Location& loc, Expr* expr, QualType to) {
-  return new (TypeCastExprPool.Allocate()) TypeCastExpr{loc, expr, to};
+TypeCastExpr* TypeCastExpr::Get(Expr* expr, QualType to) {
+  return new (TypeCastExprPool.Allocate()) TypeCastExpr{expr, to};
 }
 
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
@@ -258,15 +271,14 @@ void TypeCastExpr::Check() {
 
 bool TypeCastExpr::IsLValue() const { return false; }
 
-TypeCastExpr::TypeCastExpr(const Location& loc, Expr* expr, QualType to)
-    : Expr(loc, to), expr_{expr}, to_{to} {}
+TypeCastExpr::TypeCastExpr(Expr* expr, QualType to)
+    : Expr(to), expr_{expr}, to_{to} {}
 
 /*
  * BinaryOpExpr
  */
-BinaryOpExpr* BinaryOpExpr::Get(const Location& loc, Tag tag, Expr* lhs,
-                                Expr* rhs) {
-  return new (BinaryOpExprPool.Allocate()) BinaryOpExpr{loc, tag, lhs, rhs};
+BinaryOpExpr* BinaryOpExpr::Get(Tag tag, Expr* lhs, Expr* rhs) {
+  return new (BinaryOpExprPool.Allocate()) BinaryOpExpr{tag, lhs, rhs};
 }
 
 AstNodeType BinaryOpExpr::Kind() const { return AstNodeType::kBinaryOpExpr; }
@@ -334,8 +346,8 @@ bool BinaryOpExpr::IsLValue() const {
   }
 }
 
-BinaryOpExpr::BinaryOpExpr(const Location& loc, Tag tag, Expr* lhs, Expr* rhs)
-    : Expr(loc), op_(tag), lhs_(MayCast(lhs)), rhs_(MayCast(rhs)) {}
+BinaryOpExpr::BinaryOpExpr(Tag tag, Expr* lhs, Expr* rhs)
+    : op_(tag), lhs_(MayCast(lhs)), rhs_(MayCast(rhs)) {}
 
 void BinaryOpExpr::AssignOpCheck() {
   auto lhs_type{lhs_->GetQualType()};
@@ -495,10 +507,8 @@ void BinaryOpExpr::CommaOpCheck() { type_ = rhs_->GetQualType(); }
 /*
  * ConditionOpExpr
  */
-ConditionOpExpr* ConditionOpExpr::Get(const Location& loc, Expr* cond,
-                                      Expr* lhs, Expr* rhs) {
-  return new (ConditionOpExprPool.Allocate())
-      ConditionOpExpr{loc, cond, lhs, rhs};
+ConditionOpExpr* ConditionOpExpr::Get(Expr* cond, Expr* lhs, Expr* rhs) {
+  return new (ConditionOpExprPool.Allocate()) ConditionOpExpr{cond, lhs, rhs};
 }
 
 AstNodeType ConditionOpExpr::Kind() const {
@@ -511,12 +521,18 @@ void ConditionOpExpr::Check() {
           cond_->GetType()->ToString());
   }
 
-  auto lhs_type{lhs_->GetQualType()};
-  auto rhs_type{rhs_->GetQualType()};
-  // TODO 处理得不正确
+  auto lhs_type{lhs_->GetType()};
+  auto rhs_type{rhs_->GetType()};
+
   if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     type_ = Expr::Convert(lhs_, rhs_);
-  } else {
+  } else if (lhs_type->IsStructOrUnionTy() && rhs_type->IsStructOrUnionTy()) {
+    if (!lhs_type->Equal(rhs_type)) {
+      Error(loc_, "Must have the same struct or union type: '{}' vs '{}'",
+            lhs_type->ToString(), rhs_type->ToString());
+    }
+    type_ = lhs_type;
+  } else if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
     EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
     type_ = lhs_type;
   }
@@ -527,10 +543,8 @@ bool ConditionOpExpr::IsLValue() const {
   return false;
 }
 
-ConditionOpExpr::ConditionOpExpr(const Location& loc, Expr* cond, Expr* lhs,
-                                 Expr* rhs)
-    : Expr{loc},
-      cond_(Expr::MayCast(cond)),
+ConditionOpExpr::ConditionOpExpr(Expr* cond, Expr* lhs, Expr* rhs)
+    : cond_(Expr::MayCast(cond)),
       lhs_(Expr::MayCast(lhs)),
       rhs_(Expr::MayCast(rhs)) {}
 
@@ -545,7 +559,7 @@ AstNodeType FuncCallExpr::Kind() const { return AstNodeType::kFuncCallExpr; }
 
 void FuncCallExpr::Check() {
   if (callee_->GetType()->IsPointerTy()) {
-    callee_ = MakeAstNode<UnaryOpExpr>(callee_->GetLoc(), Tag::kStar, callee_);
+    callee_ = MakeNode<UnaryOpExpr>(Tag::kStar, callee_);
   }
 
   if (!callee_->GetType()->IsFunctionTy()) {
@@ -598,21 +612,21 @@ Type* FuncCallExpr::GetFuncType() const {
 }
 
 FuncCallExpr::FuncCallExpr(Expr* callee, std::vector<Expr*> args)
-    : Expr{callee->GetLoc()}, callee_{callee}, args_{std::move(args)} {}
+    : callee_{callee}, args_{std::move(args)} {}
 
 /*
  * Constant
  */
-ConstantExpr* ConstantExpr::Get(const Location& loc, std::int32_t val) {
-  return new (ConstantPool.Allocate()) ConstantExpr{loc, val};
+ConstantExpr* ConstantExpr::Get(std::int32_t val) {
+  return new (ConstantExprPool.Allocate()) ConstantExpr{val};
 }
 
-ConstantExpr* ConstantExpr::Get(const Location& loc, Type* type, std::uint64_t val) {
-  return new (ConstantPool.Allocate()) ConstantExpr{loc, type, val};
+ConstantExpr* ConstantExpr::Get(Type* type, std::uint64_t val) {
+  return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
 }
 
-ConstantExpr* ConstantExpr::Get(const Location& loc, Type* type, double val) {
-  return new (ConstantPool.Allocate()) ConstantExpr{loc, type, val};
+ConstantExpr* ConstantExpr::Get(Type* type, double val) {
+  return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
 }
 
 AstNodeType ConstantExpr::Kind() const { return AstNodeType::kConstantExpr; }
@@ -625,44 +639,47 @@ long ConstantExpr::GetIntegerVal() const { return integer_val_; }
 
 double ConstantExpr::GetFloatPointVal() const { return float_point_val_; }
 
-ConstantExpr::ConstantExpr(const Location& loc, std::int32_t val)
-    : Expr(loc, ArithmeticType::Get(32)), integer_val_(val) {}
+ConstantExpr::ConstantExpr(std::int32_t val)
+    : Expr(ArithmeticType::Get(32)), integer_val_(val) {}
 
-ConstantExpr::ConstantExpr(const Location& loc, Type* type, std::uint64_t val)
-    : Expr(loc, type), integer_val_(val) {}
+ConstantExpr::ConstantExpr(Type* type, std::uint64_t val)
+    : Expr(type), integer_val_(val) {}
 
-ConstantExpr::ConstantExpr(const Location& loc, Type* type, double val)
-    : Expr(loc, type), float_point_val_(val) {}
+ConstantExpr::ConstantExpr(Type* type, double val)
+    : Expr(type), float_point_val_(val) {}
 
 /*
  * StringLiteral
  */
-StringLiteral* StringLiteral::Get(const Location& loc, const std::string& val) {
-  return new (StringLiteralPool.Allocate()) StringLiteral(loc, val);
+StringLiteralExpr* StringLiteralExpr::Get(const std::string& val) {
+  return StringLiteralExpr::Get(ArithmeticType::Get(kChar), val);
 }
 
-AstNodeType StringLiteral::Kind() const {
+StringLiteralExpr* StringLiteralExpr::Get(Type* type, const std::string& val) {
+  return new (StringLiteralExprPool.Allocate()) StringLiteralExpr{type, val};
+}
+
+AstNodeType StringLiteralExpr::Kind() const {
   return AstNodeType::kStringLiteralExpr;
 }
 
-void StringLiteral::Check() {}
+void StringLiteralExpr::Check() {}
 
-bool StringLiteral::IsLValue() const { return false; }
+bool StringLiteralExpr::IsLValue() const { return false; }
 
-std::string StringLiteral::GetVal() const { return val_; }
+std::string StringLiteralExpr::GetVal() const { return val_; }
 
-StringLiteral::StringLiteral(const Location& loc, const std::string& val)
-    : Expr{loc, ArrayType::Get(ArithmeticType::Get(kChar), std::size(val))},
+StringLiteralExpr::StringLiteralExpr(Type* type, const std::string& val)
+    : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth() + 1)},
       val_{val} {}
 
 /*
  * Identifier
  */
-IdentifierExpr* IdentifierExpr::Get(const Location& loc,
-                                    const std::string& name, QualType type,
+IdentifierExpr* IdentifierExpr::Get(const std::string& name, QualType type,
                                     enum Linkage linkage, bool is_type_name) {
-  return new (IdentifierPool.Allocate())
-      IdentifierExpr{loc, name, type, linkage, is_type_name};
+  return new (IdentifierExprPool.Allocate())
+      IdentifierExpr{name, type, linkage, is_type_name};
 }
 
 AstNodeType IdentifierExpr::Kind() const {
@@ -687,20 +704,15 @@ bool IdentifierExpr::IsEnumerator() const {
   return dynamic_cast<const EnumeratorExpr*>(this);
 }
 
-IdentifierExpr::IdentifierExpr(const Location& loc, const std::string& name,
-                               QualType type, enum Linkage linkage,
-                               bool is_type_name)
-    : Expr{loc, type},
-      name_{name},
-      linkage_{linkage},
-      is_type_name_{is_type_name} {}
+IdentifierExpr::IdentifierExpr(const std::string& name, QualType type,
+                               enum Linkage linkage, bool is_type_name)
+    : Expr{type}, name_{name}, linkage_{linkage}, is_type_name_{is_type_name} {}
 
 /*
  * Enumerator
  */
-EnumeratorExpr* EnumeratorExpr::Get(const Location& loc,
-                                    const std::string& name, std::int32_t val) {
-  return new (EnumeratorPool.Allocate()) EnumeratorExpr{loc, name, val};
+EnumeratorExpr* EnumeratorExpr::Get(const std::string& name, std::int32_t val) {
+  return new (EnumeratorExprPool.Allocate()) EnumeratorExpr{name, val};
 }
 
 AstNodeType EnumeratorExpr::Kind() const {
@@ -713,20 +725,17 @@ bool EnumeratorExpr::IsLValue() const { return false; }
 
 std::int32_t EnumeratorExpr::GetVal() const { return val_; }
 
-EnumeratorExpr::EnumeratorExpr(const Location& loc, const std::string& name,
-                               std::int32_t val)
-    : IdentifierExpr{loc, name, ArithmeticType::Get(32), kNone, false},
-      val_{val} {}
+EnumeratorExpr::EnumeratorExpr(const std::string& name, std::int32_t val)
+    : IdentifierExpr{name, ArithmeticType::Get(32), kNone, false}, val_{val} {}
 
 /*
  * Object
  */
-ObjectExpr* ObjectExpr::Get(const Location& loc, const std::string& name,
-                            QualType type, std::uint32_t storage_class_spec,
-                            enum Linkage linkage, bool anonymous,
-                            bool in_global) {
-  return new (ObjectPool.Allocate()) ObjectExpr{
-      loc, name, type, storage_class_spec, linkage, anonymous, in_global};
+ObjectExpr* ObjectExpr::Get(const std::string& name, QualType type,
+                            std::uint32_t storage_class_spec,
+                            enum Linkage linkage, bool anonymous) {
+  return new (ObjectExprPool.Allocate())
+      ObjectExpr{name, type, storage_class_spec, linkage, anonymous};
 }
 
 AstNodeType ObjectExpr::Kind() const { return AstNodeType::kObjectExpr; }
@@ -742,6 +751,8 @@ bool ObjectExpr::IsStatic() const {
 void ObjectExpr::SetStorageClassSpec(std::uint32_t storage_class_spec) {
   storage_class_spec_ = storage_class_spec;
 }
+
+std::uint32_t ObjectExpr::GetStorageClassSpec() { return storage_class_spec_; }
 
 std::int32_t ObjectExpr::GetAlign() const { return align_; }
 
@@ -759,14 +770,15 @@ bool ObjectExpr::HasInit() const { return decl_->HasInit(); }
 
 bool ObjectExpr::Anonymous() const { return anonymous_; }
 
-ObjectExpr::ObjectExpr(const Location& loc, const std::string& name,
-                       QualType type, std::uint32_t storage_class_spec,
-                       enum Linkage linkage, bool anonymous, bool in_global)
-    : IdentifierExpr{loc, name, type, linkage, false},
+bool ObjectExpr::InGlobal() const { return linkage_ != kNone; }
+
+ObjectExpr::ObjectExpr(const std::string& name, QualType type,
+                       std::uint32_t storage_class_spec, enum Linkage linkage,
+                       bool anonymous)
+    : IdentifierExpr{name, type, linkage, false},
       anonymous_{anonymous},
       storage_class_spec_{storage_class_spec},
-      align_{type->GetAlign()},
-      in_global_{in_global} {}
+      align_{type->GetAlign()} {}
 
 /*
  * LabelStmt
@@ -870,7 +882,11 @@ IfStmt* IfStmt::Get(Expr* cond, Stmt* then_block, Stmt* else_block) {
 
 AstNodeType IfStmt::Kind() const { return AstNodeType::kIfStmt; }
 
-void IfStmt::Check() {}
+void IfStmt::Check() {
+  if (!cond_->GetType()->IsScalarTy()) {
+    Error(cond_->GetLoc(), "expect scalar");
+  }
+}
 
 IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
     : cond_{cond}, then_block_{then_block}, else_block_{else_block} {}
@@ -884,7 +900,11 @@ SwitchStmt* SwitchStmt::Get(Expr* cond, Stmt* block) {
 
 AstNodeType SwitchStmt::Kind() const { return AstNodeType::kSwitchStmt; }
 
-void SwitchStmt::Check() {}
+void SwitchStmt::Check() {
+  if (!cond_->GetType()->IsIntegerTy()) {
+    Error(cond_->GetLoc(), "switch quantity not an integer");
+  }
+}
 
 SwitchStmt::SwitchStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
 
@@ -897,7 +917,11 @@ WhileStmt* WhileStmt::Get(Expr* cond, Stmt* block) {
 
 AstNodeType WhileStmt::Kind() const { return AstNodeType::kWhileStmt; }
 
-void WhileStmt::Check() {}
+void WhileStmt::Check() {
+  if (!cond_->GetType()->IsScalarTy()) {
+    Error(cond_->GetLoc(), "expect scalar");
+  }
+}
 
 WhileStmt::WhileStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
 
@@ -910,7 +934,11 @@ DoWhileStmt* DoWhileStmt::Get(Expr* cond, Stmt* block) {
 
 AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
 
-void DoWhileStmt::Check() {}
+void DoWhileStmt::Check() {
+  if (!cond_->GetType()->IsScalarTy()) {
+    Error(cond_->GetLoc(), "expect scalar");
+  }
+}
 
 DoWhileStmt::DoWhileStmt(Expr* cond, Stmt* block)
     : cond_{cond}, block_{block} {}
@@ -925,7 +953,11 @@ ForStmt* ForStmt::Get(Expr* init, Expr* cond, Expr* inc, Stmt* block,
 
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
 
-void ForStmt::Check() {}
+void ForStmt::Check() {
+  if (!cond_->GetType()->IsScalarTy()) {
+    Error(cond_->GetLoc(), "expect scalar");
+  }
+}
 
 ForStmt::ForStmt(Expr* init, Expr* cond, Expr* inc, Stmt* block, Stmt* decl)
     : init_{init}, cond_{cond}, inc_{inc}, block_{block}, decl_{decl} {}

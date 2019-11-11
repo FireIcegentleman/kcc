@@ -105,11 +105,11 @@ inline MemoryPool<TypeCastExpr> TypeCastExprPool;
 inline MemoryPool<BinaryOpExpr> BinaryOpExprPool;
 inline MemoryPool<ConditionOpExpr> ConditionOpExprPool;
 inline MemoryPool<FuncCallExpr> FuncCallExprPool;
-inline MemoryPool<ConstantExpr> ConstantPool;
-inline MemoryPool<StringLiteral> StringLiteralPool;
-inline MemoryPool<IdentifierExpr> IdentifierPool;
-inline MemoryPool<EnumeratorExpr> EnumeratorPool;
-inline MemoryPool<ObjectExpr> ObjectPool;
+inline MemoryPool<ConstantExpr> ConstantExprPool;
+inline MemoryPool<StringLiteralExpr> StringLiteralExprPool;
+inline MemoryPool<IdentifierExpr> IdentifierExprPool;
+inline MemoryPool<EnumeratorExpr> EnumeratorExprPool;
+inline MemoryPool<ObjectExpr> ObjectExprPool;
 
 inline MemoryPool<LabelStmt> LabelStmtPool;
 inline MemoryPool<CaseStmt> CaseStmtPool;

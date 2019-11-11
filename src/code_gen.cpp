@@ -232,7 +232,7 @@ void CodeGen::Visit(const ConstantExpr& node) {
     result_ =
         llvm::ConstantFP::get(Context, llvm::APFloat(node.float_point_val_));
   } else {
-    result_ = Builder.CreateGlobalStringPtr(node.str_val_);
+    assert(false);
   }
 }
 
@@ -324,7 +324,7 @@ void CodeGen::Visit(const IdentifierExpr& node) {
 }
 
 void CodeGen::Visit(const ObjectExpr& node) {
-  if (!node.in_global_) {
+  if (!node.InGlobal()) {
     result_ = Builder.CreateAlignedLoad(node.local_ptr_, node.GetAlign());
   } else {
     assert(false);
@@ -342,7 +342,7 @@ void CodeGen::Visit(const Declaration& node) {
     auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
     auto type{node.ident_->GetType()};
 
-    if (!obj->in_global_) {
+    if (!obj->InGlobal()) {
       if (Builder.GetInsertBlock() == nullptr) {
         Error(node.ident_->GetLoc(), "fuck");
       }
@@ -1058,5 +1058,6 @@ std::string CodeGen::LLVMTypeToStr(llvm::Type* type) const {
   type->print(rso);
   return rso.str();
 }
+void CodeGen::Visit(const StringLiteralExpr&) {}
 
 }  // namespace kcc

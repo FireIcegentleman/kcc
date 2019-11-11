@@ -12,10 +12,20 @@
 
 namespace kcc {
 
+/*
+ * TokenTag
+ */
 std::string TokenTag::ToString(TokenTag::Values value) {
   return QMetaEnum::fromType<TokenTag::Values>().valueToKey(value) + 1;
 }
 
+QString TokenTag::ToQString(TokenTag::Values value) {
+  return QString::fromStdString(TokenTag::ToString(value));
+}
+
+/*
+ * Token
+ */
 bool Token::TagIs(Tag tag) const { return tag_ == tag; }
 
 void Token::SetTag(Tag tag) { tag_ = tag; }
@@ -27,7 +37,7 @@ std::string Token::GetStr() const { return str_; }
 void Token::SetStr(const std::string& str) { str_ = str; }
 
 std::string Token::GetIdentifier() const {
-  assert(tag_ == Tag::kIdentifier);
+  assert(IsIdentifier());
   return Scanner{str_}.HandleIdentifier();
 }
 

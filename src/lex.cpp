@@ -343,7 +343,7 @@ Token Scanner::Scan() {
   }
 }
 
-bool Scanner::HasNext() { return curr_index_ + 1 < std::size(source_); }
+bool Scanner::HasNext() { return curr_index_ < std::size(source_); }
 
 char Scanner::Peek() {
   // 注意 C++11 起, 若 curr_index_ == size() 则返回空字符
@@ -371,6 +371,7 @@ char Scanner::Next(bool push) {
 }
 
 void Scanner::PutBack() {
+  assert(curr_index_ > 0);
   auto ch{source_[--curr_index_]};
 
   assert(!std::empty(buffer_));
@@ -582,8 +583,9 @@ Encoding Scanner::HandleEncoding() {
 //  hexadecimal-escape-sequence
 //  universal-character-name
 // simple-escape-sequence: one of
-//  \' \" \? \\
-//  \a \b \f \n \r \t \v
+/*
+ * \' \" \? \\ \a \b \f \n \r \t \v
+ */
 std::int32_t Scanner::HandleEscape() {
   auto ch{Next()};
   switch (ch) {

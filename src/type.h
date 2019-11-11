@@ -78,14 +78,10 @@ class QualType {
 
  public:
   QualType() = default;
-  QualType(Type* type, std::uint32_t type_qual = 0)
-      : type_{type}, type_qual_{type_qual} {}
+  QualType(Type* type, std::uint32_t type_qual = 0);
 
-  QualType& operator=(const QualType& item) {
-    type_ = item.type_;
-    type_qual_ = 0;
-    return *this;
-  }
+  QualType(const QualType& item);
+  QualType& operator=(const QualType& item);
 
   Type& operator*();
   const Type& operator*() const;
@@ -100,7 +96,7 @@ class QualType {
   bool IsRestrict() const;
 
  private:
-  Type* type_;
+  Type* type_{};
   std::uint32_t type_qual_;
 };
 
@@ -110,7 +106,6 @@ bool operator!=(QualType lhs, QualType rhs);
 class Type {
  public:
   // 数组函数隐式转换为指针
-  // TODO 是否应该创建一个 ast 节点？
   static QualType MayCast(QualType type, bool in_proto = false);
 
   virtual ~Type() = default;
@@ -146,6 +141,7 @@ class Type {
   bool IsArrayTy() const;
   bool IsStructTy() const;
   bool IsUnionTy() const;
+  bool IsStructOrUnionTy() const;
   bool IsFunctionTy() const;
 
   bool IsObjectTy() const;
@@ -236,6 +232,8 @@ class ArithmeticType : public Type {
  private:
   explicit ArithmeticType(std::uint32_t type_spec);
 
+  static std::uint32_t DealWithTypeSpec(std::uint32_t type_spec);
+
   std::uint32_t type_spec_{};
 };
 
@@ -313,7 +311,7 @@ class StructType : public Type {
   bool is_struct_{};
   std::string name_;
   std::vector<ObjectExpr*> members_;
-  Scope* scope_;
+  Scope* scope_{};
 
   std::int32_t offset_{};
   std::int32_t width_{};
