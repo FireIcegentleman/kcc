@@ -19,6 +19,7 @@
 #include "error.h"
 #include "json_gen.h"
 #include "lex.h"
+#include "link.h"
 #include "obj_gen.h"
 #include "opt.h"
 #include "parse.h"
@@ -328,32 +329,38 @@ void RunDev() {
   }
   JsonGen{}.GenJson(unit, "test/dev/test.html");
 
-  //  {
-  //    std::cout << "code gen ............................ ";
-  //    const auto kT0{std::chrono::system_clock::now()};
-  //    CodeGen{"test/dev/test.c"}.GenCode(unit);
-  //    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
-  //                     std::chrono::system_clock::now() - kT0)
-  //                     .count()
-  //              << " μs\n";
-  //  }
-  //  Optimization(OptLevel::kO0);
-  //
-  //  std::error_code error_code;
-  //  llvm::raw_fd_ostream ir_file{"test/dev/test.ll", error_code};
-  //  ir_file << *Module;
-  //
-  //  std::system("llc test/dev/test.ll");
-  //  std::system(
-  //      "clang test/dev/test.c -o test/dev/standard.ll -std=c17 -S
-  //      -emit-llvm");
-  //  std::system("lli test/dev/test.ll");
-  //
-  //  ObjGen("test/dev/test.o");
-  //
-  //  std::system("clang test/dev/test.o -o test/dev/test");
+  {
+    std::cout << "code gen ............................ ";
+    const auto kT0{std::chrono::system_clock::now()};
+    CodeGen{"test/dev/test.c"}.GenCode(unit);
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::system_clock::now() - kT0)
+                     .count()
+              << " μs\n";
+  }
+  Optimization(OptLevel::kO0);
 
-  // std::system("./test/dev/test");
+  std::error_code error_code;
+  llvm::raw_fd_ostream ir_file{"test/dev/test.ll", error_code};
+  ir_file << *Module;
+
+  std::system("llc test/dev/test.ll");
+  std::system(
+      "clang test/dev/test.c -o test/dev/standard.ll -std=c17 -S -emit-llvm");
+  // std::system("lli test/dev/test.ll");
+
+  ObjGen("test/dev/test.o");
+
+  // FIXME
+  if (!Link({"test/dev/test.o"}, "test.out")) {
+    Error("link fail");
+  } else {
+    std::filesystem::copy_file(
+        std::filesystem::current_path() / "test.out",
+        std::filesystem::current_path() / "test/dev/test");
+  }
+
+  std::system("./test/dev/test");
 
   PrintWarnings();
 

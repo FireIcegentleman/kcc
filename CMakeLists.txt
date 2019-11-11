@@ -24,6 +24,7 @@ set(CMAKE_AUTOMOC ON)
 
 find_package(fmt REQUIRED)
 find_package(LLVM REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
 find_package(Qt5 REQUIRED COMPONENTS Core)
 find_package(Boost REQUIRED COMPONENTS locale)
 
@@ -35,8 +36,18 @@ add_executable(${PROJECT_NAME} ${cppsrc})
 
 include(format)
 
-target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES} Qt5::Core fmt::fmt
-                      LLVM)
+target_link_libraries(
+  ${PROJECT_NAME}
+  ${Boost_LIBRARIES}
+  Qt5::Core
+  fmt::fmt
+  clangLex
+  clangDriver
+  clangFrontend
+  clangBasic
+  clangSerialization
+  LLVM
+  lldELF)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 

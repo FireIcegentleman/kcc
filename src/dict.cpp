@@ -55,6 +55,7 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"__func__", Tag::kFuncName});
   keywords_.insert({"__FUNCTION__", Tag::kFuncName});
 
+  keywords_.insert({"__inline", Tag::kInline});
   keywords_.insert({"__alignof__", Tag::kAlignof});
   keywords_.insert({"__inline__", Tag::kInline});
   keywords_.insert({"__restrict", Tag::kRestrict});

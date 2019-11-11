@@ -884,6 +884,8 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
 }
 
 std::int32_t StructType::MakeAlign(std::int32_t offset, std::int32_t align) {
+  assert(align != 0);
+
   if (offset % align == 0) {
     return offset;
   } else {

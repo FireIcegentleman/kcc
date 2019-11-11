@@ -25,9 +25,6 @@
 //#include <wchar.h>
 //#include <wctype.h>
 
-int printf(const char *s,...);
+int printf(const char *s, ...);
 
-int main(void) {
-  // int a[10] = {1, 2, 3};
-  printf("%s", __func__);
-}
+int main(void) { printf("Hello World!"); }

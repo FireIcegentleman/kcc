@@ -4,10 +4,26 @@
 
 #include "cpp.h"
 
-#include <cstddef>
-#include <cstdio>
+#include <memory>
 
-#include "error.h"
+#include <clang/Basic/SourceLocation.h>
+#include <clang/Basic/SourceManager.h>
+#include <clang/Basic/TargetInfo.h>
+#include <clang/Basic/TargetOptions.h>
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/CompilerInvocation.h>
+#include <clang/Frontend/FrontendOptions.h>
+#include <clang/Frontend/LangStandard.h>
+#include <clang/Lex/DirectoryLookup.h>
+#include <clang/Lex/HeaderSearch.h>
+#include <clang/Lex/HeaderSearchOptions.h>
+#include <clang/Lex/Preprocessor.h>
+#include <clang/Lex/Token.h>
+#include <llvm/ADT/Triple.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+
+//#include "error.h"
 
 namespace kcc {
 
@@ -26,28 +42,78 @@ void Preprocessor::SetMacroDefinitions(
 }
 
 std::string Preprocessor::Cpp(const std::string &input_file) {
-  constexpr std::size_t kSize{4096};
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetMCs();
 
-  FILE *fp;
-  char buff[kSize];
-  std::string preprocessed_code;
-  preprocessed_code.reserve(kSize);
+  auto ci{std::make_unique<clang::CompilerInstance>()};
 
-  if ((fp = popen((cmd_ + input_file).c_str(), "r")) == nullptr) {
-    Error("Unable to create pipeline");
-  }
+  ci->createDiagnostics();
 
-  while (std::fgets(buff, sizeof(buff), fp)) {
-    preprocessed_code += buff;
-  }
+  auto &lang_opts{ci->getLangOpts()};
+  lang_opts.C17 = true;
+  lang_opts.GNUMode = true;
+  lang_opts.GNUKeywords = true;
 
-  pclose(fp);
+  auto invocation{std::make_shared<clang::CompilerInvocation>()};
+  llvm::Triple triple{llvm::sys::getDefaultTargetTriple()};
+  invocation->setLangDefaults(lang_opts, clang::InputKind::C, triple,
+                              ci->getPreprocessorOpts(),
+                              clang::LangStandard::lang_c17);
+  ci->setInvocation(invocation);
 
-#ifdef NBULITIN
-  return preprocessed_code;
-#elif
-  return Preprocessor::Builtin + preprocessed_code;
-#endif
+  auto pto{std::make_shared<clang::TargetOptions>()};
+  pto->Triple = llvm::sys::getDefaultTargetTriple();
+
+  std::shared_ptr<clang::TargetInfo> pti(
+      clang::TargetInfo::CreateTargetInfo(ci->getDiagnostics(), pto));
+  ci->setTarget(pti.get());
+
+  ci->createFileManager();
+  ci->createSourceManager(ci->getFileManager());
+  ci->createPreprocessor(clang::TranslationUnitKind::TU_Complete);
+
+  auto header_search_opts{std::make_shared<clang::HeaderSearchOptions>()};
+  auto &pp{ci->getPreprocessor()};
+  auto &header_search{pp.getHeaderSearchInfo()};
+
+  header_search.AddSearchPath(
+      clang::DirectoryLookup(ci->getFileManager().getDirectory("/usr/include"),
+                             clang::SrcMgr::C_System, false),
+      true);
+  header_search.AddSearchPath(
+      clang::DirectoryLookup(
+          ci->getFileManager().getDirectory("/usr/local/include"),
+          clang::SrcMgr::C_System, false),
+      true);
+  header_search.AddSearchPath(
+      clang::DirectoryLookup(
+          ci->getFileManager().getDirectory("/usr/lib/clang/9.0.0/include"),
+          clang::SrcMgr::C_System, false),
+      true);
+
+  auto file{ci->getFileManager().getFile(input_file)};
+
+  ci->getSourceManager().setMainFileID(ci->getSourceManager().createFileID(
+      file, clang::SourceLocation(), clang::SrcMgr::C_User));
+
+  pp.EnterMainSourceFile();
+  ci->getDiagnosticClient().BeginSourceFile(ci->getLangOpts(),
+                                            &ci->getPreprocessor());
+  clang::Token tok;
+  std::string code;
+  do {
+    pp.Lex(tok);
+    if (ci->getDiagnostics().hasErrorOccurred()) {
+      break;
+    }
+
+    code += pp.getSpelling(tok) += '\n';
+  } while (tok.isNot(clang::tok::eof));
+
+  ci->getDiagnosticClient().EndSourceFile();
+
+  return code;
 }
 
 }  // namespace kcc
