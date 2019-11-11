@@ -23,8 +23,6 @@ TranslationUnit* Parser::ParseTranslationUnit() {
     unit_->AddExtDecl(ParseExternalDecl());
   }
 
-  curr_scope_->PrintCurrScope();
-
   return unit_;
 }
 
@@ -164,7 +162,6 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
   auto ident{curr_scope_->FindNormalInCurrScope(name)};
   //有链接对象(外部或内部)的声明可以重复
   if (ident) {
-    // FIXME
     if (!type->Compatible(ident->GetType())) {
       Error(loc_, "conflicting types '{}' vs '{}'", type->ToString(),
             ident->GetType()->ToString());
@@ -209,6 +206,12 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     ret =
         MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage, false);
     if (align > 0) {
+      if (align < type->GetWidth()) {
+        Error(loc_,
+              "requested alignment is less than minimum alignment of {} for "
+              "type '{}'",
+              type->GetWidth(), type->ToString());
+      }
       dynamic_cast<ObjectExpr*>(ret)->SetAlign(align);
     }
   }
@@ -1255,9 +1258,9 @@ Stmt* Parser::ParseForStmt() {
   Expect(Tag::kFor);
   Expect(Tag::kLeftParen);
 
-  Expr *init, *cond, *inc;
-  Stmt* block;
-  Stmt* decl;
+  Expr *init{}, *cond{}, *inc{};
+  Stmt* block{};
+  Stmt* decl{};
 
   EnterBlock();
   if (IsDecl(Peek())) {
@@ -1337,7 +1340,7 @@ CompoundStmt* Parser::ParseDecl(bool maybe_func_def) {
     ParseStaticAssertDecl();
     return nullptr;
   } else {
-    std::uint32_t storage_class_spec{}, func_spec;
+    std::uint32_t storage_class_spec{}, func_spec{};
     std::int32_t align{};
     auto base_type{ParseDeclSpec(&storage_class_spec, &func_spec, &align)};
 
@@ -1357,129 +1360,24 @@ CompoundStmt* Parser::ParseDecl(bool maybe_func_def) {
   }
 }
 
-CompoundStmt* Parser::ParseInitDeclaratorList(QualType& base_type,
-                                              std::uint32_t storage_class_spec,
-                                              std::uint32_t func_spec,
-                                              std::int32_t align) {
-  auto stmts{MakeAstNode<CompoundStmt>()};
-
-  do {
-    stmts->AddStmt(
-        ParseInitDeclarator(base_type, storage_class_spec, func_spec, align));
-  } while (Try(Tag::kComma));
-
-  return stmts;
-}
-
-Declaration* Parser::ParseInitDeclarator(QualType& base_type,
-                                         std::uint32_t storage_class_spec,
-                                         std::uint32_t func_spec,
-                                         std::int32_t align) {
-  Token tok;
-  ParseDeclarator(tok, base_type);
-
-  if (std::empty(tok.GetStr())) {
-    Error(tok, "expect identifier");
-  }
-
-  auto decl{MakeDeclaration(tok.GetIdentifier(), base_type, storage_class_spec,
-                            func_spec, align)};
-
-  if (decl && Try(Tag::kEqual) && decl->IsObj()) {
-    Error(tok, "not support init");
-    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
-  }
-
-  return decl;
-}
-
-void Parser::ParseAbstractDeclarator(QualType& type) {
-  ParsePointer(type);
-  ParseDirectAbstractDeclarator(type);
-}
-
-void Parser::ParseDirectAbstractDeclarator(QualType& type) {
-  Token tok;
-  ParseDirectDeclarator(tok, type);
-  auto name{tok.GetStr()};
-
-  if (!std::empty(name)) {
-    Error(tok, "unexpected identifier '{}'", name);
-  }
-}
-
-void Parser::ParseDeclarator(Token& tok, QualType& base_type) {
-  ParsePointer(base_type);
-  ParseDirectDeclarator(tok, base_type);
-}
-
-void Parser::ParseDirectDeclarator(Token& tok, QualType& base_type) {
-  if (Test(Tag::kIdentifier)) {
-    tok = Next();
-    ParseDirectDeclaratorTail(base_type);
-  } else if (Try(Tag::kLeftParen)) {
-    auto begin{index_};
-    auto temp{QualType{ArithmeticType::Get(kInt)}};
-    // 此时的 base_type 不一定是正确的, 先跳过括号中的内容
-    ParseDeclarator(tok, temp);
-    Expect(Tag::kRightParen);
-
-    ParseDirectDeclaratorTail(base_type);
-    auto end{index_};
-
-    index_ = begin;
-    ParseDeclarator(tok, base_type);
-    Expect(Tag::kRightParen);
-    index_ = end;
-  } else {
-    ParseDirectDeclaratorTail(base_type);
-  }
-}
-
-void Parser::ParsePointer(QualType& type) {
-  while (Try(Tag::kStar)) {
-    type = QualType{PointerType::Get(type), ParseTypeQualList()};
-  }
-}
-
-std::uint32_t Parser::ParseTypeQualList() {
-  auto tok{Peek()};
-  std::uint32_t type_qual{};
-
-  while (true) {
-    if (Try(Tag::kConst)) {
-      type_qual |= kConst;
-    } else if (Try(Tag::kRestrict)) {
-      type_qual |= kRestrict;
-    } else if (Try(Tag::kVolatile)) {
-      Error(tok, "Does not support volatile");
-    } else if (Try(Tag::kAtomic)) {
-      Error(tok, "Does not support _Atomic");
-    } else {
-      break;
-    }
-  }
-
-  return type_qual;
-}
-
 void Parser::ParseStaticAssertDecl() {
   Expect(Tag::kLeftParen);
   auto expr{ParseConstantExpr()};
   Expect(Tag::kComma);
 
+  // TODO 不处理转义序列
   auto msg{ParseStringLiteral()->GetVal()};
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
   if (!CalcExpr<std::int32_t>{}.Calc(expr)) {
-    Error(expr->GetLoc(), "static_assert failed \"{}\"", msg);
+    Error(expr, "static_assert failed \"{}\"", msg);
   }
 }
 
-// 不支持在 struct / union 中使用 _Alignas
-// 不支持在函数参数列表中使用 storage class specifier
-// 在 struct / union 中和函数参数声明中只能使用 type specifier 和 type qualifier
+/*
+ * Decl Spec
+ */
 QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
                                std::uint32_t* func_spec, std::int32_t* align) {
 #define CheckAndSetStorageClassSpec(spec)                       \
@@ -1509,10 +1407,11 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
     tok = Next();
 
     switch (tok.GetTag()) {
+      // GNU 扩展
       case Tag::kExtension:
         break;
 
-      // Storage Class Specifier, 至多有一个
+        // Storage Class Specifier, 至多有一个
       case Tag::kTypedef:
         CheckAndSetStorageClassSpec(kTypedef) break;
       case Tag::kExtern:
@@ -1651,21 +1550,20 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
 finish:
   PutBack();
 
-  // TODO 在什么情况下
   TryParseAttributeSpec();
 
   switch (type_spec) {
     case 0:
       Error(tok, "type specifier missing: {}", tok.GetStr());
     case kVoid:
-      type = QualType{VoidType::Get()};
+      type = VoidType::Get();
       break;
     case kStructUnionSpec:
     case kEnumSpec:
     case kTypedefName:
       break;
     default:
-      type = QualType{ArithmeticType::Get(type_spec)};
+      type = ArithmeticType::Get(type_spec);
   }
 
   return QualType{type.GetType(), type.GetTypeQual() | type_qual};
@@ -1682,7 +1580,7 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
   std::string tag_name;
 
   if (Try(Tag::kIdentifier)) {
-    tag_name = tok.GetStr();
+    tag_name = tok.GetIdentifier();
     // 定义
     if (Try(Tag::kLeftBrace)) {
       auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
@@ -1711,12 +1609,12 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
 
       if (tag) {
         return tag->GetType();
+      } else {
+        auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
+        auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
+        curr_scope_->InsertTag(tag_name, ident);
+        return type;
       }
-
-      auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
-      auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
-      curr_scope_->InsertTag(tag_name, ident);
-      return type;
     }
   } else {
     // 无标识符只能是定义
@@ -1731,41 +1629,40 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
 }
 
 void Parser::ParseStructDeclList(StructType* type) {
-  // TODO 为什么会指向相同的地方
-  auto scope_backup{*curr_scope_};
-  *curr_scope_ = *type->GetScope();
+  assert(!type->IsComplete());
+
+  auto scope_backup{curr_scope_};
+  curr_scope_ = type->GetScope();
 
   while (!Test(Tag::kRightBrace)) {
-    if (!HasNext()) {
-      Error(PeekPrev(), "premature end of input");
-    }
-
     if (Try(Tag::kStaticAssert)) {
       ParseStaticAssertDecl();
     } else {
-      std::int32_t align{};
-      auto base_type{ParseDeclSpec(nullptr, nullptr, &align)};
+      auto base_type{ParseDeclSpec(nullptr, nullptr, nullptr)};
 
       do {
         Token tok;
         ParseDeclarator(tok, base_type);
+        auto name{tok.GetIdentifier()};
 
         TryParseAttributeSpec();
 
-        // TODO 位域
+        // 位域
+        if (Try(Tag::kColon)) {
+          Error(Peek(), "Bit field not supported");
+        }
 
         // 可能是匿名 struct / union
-        if (std::empty(tok.GetStr())) {
+        if (std::empty(name)) {
           if (base_type->IsStructTy() && !base_type->StructHasName()) {
-            auto anony{MakeAstNode<ObjectExpr>("", base_type, 0, kNone, true)};
-            type->MergeAnonymous(anony);
+            auto anonymous{
+                MakeAstNode<ObjectExpr>("", base_type, 0, kNone, true)};
+            type->MergeAnonymous(anonymous);
             continue;
           } else {
             Error(Peek(), "declaration does not declare anything");
           }
         } else {
-          std::string name{tok.GetStr()};
-
           if (type->GetMember(name)) {
             Error(Peek(), "duplicate member:{}", name);
           } else if (base_type->IsArrayTy() && !base_type->IsComplete()) {
@@ -1785,9 +1682,6 @@ void Parser::ParseStructDeclList(StructType* type) {
             Error(Peek(), "field '{}' declared as a function", name);
           } else {
             auto member{MakeAstNode<ObjectExpr>(name, base_type)};
-            if (align > 0) {
-              member->SetAlign(align);
-            }
             type->AddMember(member);
           }
         }
@@ -1802,18 +1696,16 @@ finalize:
 
   type->SetComplete(true);
 
-  // TODO
   // struct / union 中的 tag 的作用域与该 struct / union 所在的作用域相同
-  //  for (const auto& [name, tag] : curr_scope_->AllTagInCurrScope()) {
-  //    if (scope_backup.FindTagInCurrScope(name)) {
-  //      Error(tag->GetToken(), "redefinition of tag {}", tag->GetName());
-  //    } else {
-  //      scope_backup.InsertTag(name, tag);
-  //    }
-  //  }
+  for (const auto& [name, tag] : curr_scope_->AllTagInCurrScope()) {
+    if (scope_backup->FindTagInCurrScope(name)) {
+      Error(tag->GetLoc(), "redefinition of tag {}", tag->GetName());
+    } else {
+      scope_backup->InsertTag(name, tag);
+    }
+  }
 
-  *type->GetScope() = *curr_scope_;
-  *curr_scope_ = scope_backup;
+  curr_scope_ = scope_backup;
 }
 
 Type* Parser::ParseEnumSpec() {
@@ -1823,17 +1715,16 @@ Type* Parser::ParseEnumSpec() {
   auto tok{Peek()};
 
   if (Try(Tag::kIdentifier)) {
-    tag_name = tok.GetStr();
+    tag_name = tok.GetIdentifier();
     // 定义
     if (Try(Tag::kLeftBrace)) {
       auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
 
       if (!tag) {
         auto type{ArithmeticType::Get(32)};
-        auto ident{MakeAstNode<IdentifierExpr>(tok.GetIdentifier(), type, kNone,
-                                               true)};
+        auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
         curr_scope_->InsertTag(tag_name, ident);
-        ParseEnumerator(type);
+        ParseEnumerator();
 
         Expect(Tag::kRightBrace);
         return type;
@@ -1852,20 +1743,20 @@ Type* Parser::ParseEnumSpec() {
     }
   } else {
     Expect(Tag::kLeftBrace);
-    auto type{ArithmeticType::Get(32)};
-    ParseEnumerator(type);
+    ParseEnumerator();
     Expect(Tag::kRightBrace);
-    return type;
+    return ArithmeticType::Get(32);
   }
 }
 
-void Parser::ParseEnumerator(Type* type) {
+void Parser::ParseEnumerator() {
   std::int32_t val{};
 
   do {
     auto tok{Expect(Tag::kIdentifier)};
     TryParseAttributeSpec();
-    auto name{tok.GetStr()};
+
+    auto name{tok.GetIdentifier()};
     auto ident{curr_scope_->FindNormalInCurrScope(name)};
 
     if (ident) {
@@ -1883,14 +1774,12 @@ void Parser::ParseEnumerator(Type* type) {
 
     Try(Tag::kComma);
   } while (!Test(Tag::kRightBrace));
-
-  type->SetComplete(true);
 }
 
 std::int32_t Parser::ParseAlignas() {
   Expect(Tag::kLeftParen);
 
-  std::int32_t align;
+  std::int32_t align{};
   auto tok{Peek()};
 
   if (IsTypeName(tok)) {
@@ -1903,7 +1792,6 @@ std::int32_t Parser::ParseAlignas() {
 
   Expect(Tag::kRightParen);
 
-  // TODO 获取完整声明后检查 align 是否小于类型的 width
   if (align < 0 || ((align - 1) & align)) {
     Error(tok, "requested alignment is not a power of 2");
   }
@@ -1911,9 +1799,101 @@ std::int32_t Parser::ParseAlignas() {
   return align;
 }
 
-// 只支持
-// direct-declarator[assignment-expression-opt]
-// direct-declarator[parameter-type-list]
+/*
+ * Declarator
+ */
+CompoundStmt* Parser::ParseInitDeclaratorList(QualType& base_type,
+                                              std::uint32_t storage_class_spec,
+                                              std::uint32_t func_spec,
+                                              std::int32_t align) {
+  auto stmts{MakeAstNode<CompoundStmt>()};
+
+  do {
+    stmts->AddStmt(
+        ParseInitDeclarator(base_type, storage_class_spec, func_spec, align));
+  } while (Try(Tag::kComma));
+
+  return stmts;
+}
+
+Declaration* Parser::ParseInitDeclarator(QualType& base_type,
+                                         std::uint32_t storage_class_spec,
+                                         std::uint32_t func_spec,
+                                         std::int32_t align) {
+  Token tok;
+  ParseDeclarator(tok, base_type);
+  auto name{tok.GetIdentifier()};
+
+  if (std::empty(name)) {
+    Error(tok, "expect identifier");
+  }
+
+  auto decl{
+      MakeDeclaration(name, base_type, storage_class_spec, func_spec, align)};
+
+  if (decl && Try(Tag::kEqual) && decl->IsObj()) {
+    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
+  }
+
+  return decl;
+}
+
+void Parser::ParseDeclarator(Token& tok, QualType& base_type) {
+  ParsePointer(base_type);
+  ParseDirectDeclarator(tok, base_type);
+}
+
+void Parser::ParsePointer(QualType& type) {
+  while (Try(Tag::kStar)) {
+    type = QualType{PointerType::Get(type), ParseTypeQualList()};
+  }
+}
+
+std::uint32_t Parser::ParseTypeQualList() {
+  MarkLoc();
+
+  std::uint32_t type_qual{};
+
+  while (true) {
+    if (Try(Tag::kConst)) {
+      type_qual |= kConst;
+    } else if (Try(Tag::kRestrict)) {
+      type_qual |= kRestrict;
+    } else if (Try(Tag::kVolatile)) {
+      Error(loc_, "Does not support volatile");
+    } else if (Try(Tag::kAtomic)) {
+      Error(loc_, "Does not support _Atomic");
+    } else {
+      break;
+    }
+  }
+
+  return type_qual;
+}
+
+void Parser::ParseDirectDeclarator(Token& tok, QualType& base_type) {
+  if (Test(Tag::kIdentifier)) {
+    tok = Next();
+    ParseDirectDeclaratorTail(base_type);
+  } else if (Try(Tag::kLeftParen)) {
+    auto begin{index_};
+    auto temp{QualType{ArithmeticType::Get(kInt)}};
+    // 此时的 base_type 不一定是正确的, 先跳过括号中的内容
+    ParseDeclarator(tok, temp);
+    Expect(Tag::kRightParen);
+
+    ParseDirectDeclaratorTail(base_type);
+    auto end{index_};
+
+    index_ = begin;
+    ParseDeclarator(tok, base_type);
+    Expect(Tag::kRightParen);
+    index_ = end;
+  } else {
+    ParseDirectDeclaratorTail(base_type);
+  }
+}
+
 void Parser::ParseDirectDeclaratorTail(QualType& base_type) {
   if (Try(Tag::kLeftSquare)) {
     if (base_type->IsFunctionTy()) {
@@ -1929,7 +1909,7 @@ void Parser::ParseDirectDeclaratorTail(QualType& base_type) {
       Error(Peek(), "has incomplete element type");
     }
 
-    base_type = QualType{ArrayType::Get(base_type, len)};
+    base_type = ArrayType::Get(base_type, len);
   } else if (Try(Tag::kLeftParen)) {
     if (base_type->IsFunctionTy()) {
       Error(Peek(), "the return value of function cannot be function");
@@ -1945,7 +1925,7 @@ void Parser::ParseDirectDeclaratorTail(QualType& base_type) {
 
     ParseDirectDeclaratorTail(base_type);
 
-    base_type = QualType{FunctionType::Get(base_type, params, var_args)};
+    base_type = FunctionType::Get(base_type, params, var_args);
   }
 }
 
@@ -1953,7 +1933,7 @@ std::size_t Parser::ParseArrayLength() {
   auto expr{ParseAssignExpr()};
 
   if (!expr->GetQualType()->IsIntegerTy()) {
-    Error(expr->GetLoc(), "The array size must be an integer: '{}'",
+    Error(expr, "The array size must be an integer: '{}'",
           expr->GetType()->ToString());
   }
 
@@ -1961,7 +1941,7 @@ std::size_t Parser::ParseArrayLength() {
   auto len{CalcExpr<std::int32_t>{}.Calc(expr)};
 
   if (len <= 0) {
-    Error(expr->GetLoc(), "Array size must be greater than 0: {}", len);
+    Error(expr, "Array size must be greater than 0: '{}'", len);
   }
 
   return len;
@@ -1976,7 +1956,7 @@ std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
   }
 
   auto param{ParseParamDecl()};
-  if (param->GetQualType()->IsVoidTy()) {
+  if (param->GetType()->IsVoidTy()) {
     return {{}, false};
   }
 
@@ -1984,13 +1964,15 @@ std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
   params.push_back(param);
 
   while (Try(Tag::kComma)) {
+    MarkLoc();
+
     if (Try(Tag::kEllipsis)) {
       return {params, true};
     }
 
     param = ParseParamDecl();
-    if (param->GetQualType()->IsVoidTy()) {
-      Error("error");
+    if (param->GetType()->IsVoidTy()) {
+      Error(loc_, "'void' must be the first and only parameter if specified");
     }
     params.push_back(param);
   }
@@ -2001,29 +1983,48 @@ std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
 // declaration-specifiers declarator
 // declaration-specifiers abstract-declarator（此时不能是函数定义）
 ObjectExpr* Parser::ParseParamDecl() {
-  std::uint32_t storage_class_spec{}, func_spec{};
-  auto base_type{ParseDeclSpec(&storage_class_spec, &func_spec, nullptr)};
+  auto base_type{ParseDeclSpec(nullptr, nullptr, nullptr)};
 
   Token tok;
   ParseDeclarator(tok, base_type);
+
   base_type = Type::MayCast(base_type, true);
 
   if (std::empty(tok.GetStr())) {
     return MakeAstNode<ObjectExpr>("", base_type, 0, kNone, true);
   }
 
-  auto ident{MakeDeclaration(tok.GetIdentifier(), base_type, storage_class_spec,
-                             func_spec, -1)};
+  auto decl{MakeDeclaration(tok.GetIdentifier(), base_type, 0, 0, 0)};
 
-  return dynamic_cast<ObjectExpr*>(ident->GetIdent());
+  return dynamic_cast<ObjectExpr*>(decl->GetIdent());
 }
 
+/*
+ * Type Name
+ */
 QualType Parser::ParseTypeName() {
   auto base_type{ParseDeclSpec(nullptr, nullptr, nullptr)};
   ParseAbstractDeclarator(base_type);
   return base_type;
 }
 
+void Parser::ParseAbstractDeclarator(QualType& type) {
+  ParsePointer(type);
+  ParseDirectAbstractDeclarator(type);
+}
+
+void Parser::ParseDirectAbstractDeclarator(QualType& type) {
+  Token tok;
+  ParseDirectDeclarator(tok, type);
+
+  if (!std::empty(tok.GetStr())) {
+    Error(tok, "unexpected identifier '{}'", tok.GetStr());
+  }
+}
+
+/*
+ * Init
+ */
 std::set<Initializer> Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
   if (!curr_scope_->IsFileScope() && ident->GetLinkage() == kExternal) {
     Error(ident->GetLoc(), "{} has both 'extern' and initializer",
@@ -2041,6 +2042,9 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
   return inits;
 }
 
+/*
+ * GNU 扩展
+ */
 // attribute-specifier:
 //  __ATTRIBUTE__ '(' '(' attribute-list-opt ')' ')'
 //
@@ -2123,11 +2127,5 @@ void Parser::TryParseAsm() {
     Expect(Tag::kRightParen);
   }
 }
-
-// void Parser::ParseInitializer(std::set<Initializer>& inits, QualType type,
-//                              std::int32_t offset, bool designated,
-//                              bool force_brace) {
-//
-//}
 
 }  // namespace kcc

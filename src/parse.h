@@ -117,8 +117,22 @@ class Parser {
    * Decl
    */
   CompoundStmt* ParseDecl(bool maybe_func_def = false);
+  void ParseStaticAssertDecl();
+
+  /*
+   * Decl Spec
+   */
   QualType ParseDeclSpec(std::uint32_t* storage_class_spec,
                          std::uint32_t* func_spec, std::int32_t* align);
+  Type* ParseStructUnionSpec(bool is_struct);
+  void ParseStructDeclList(StructType* type);
+  Type* ParseEnumSpec();
+  void ParseEnumerator();
+  std::int32_t ParseAlignas();
+
+  /*
+   * Declarator
+   */
   CompoundStmt* ParseInitDeclaratorList(QualType& base_type,
                                         std::uint32_t storage_class_spec,
                                         std::uint32_t func_spec,
@@ -127,22 +141,20 @@ class Parser {
                                    std::uint32_t storage_class_spec,
                                    std::uint32_t func_spec, std::int32_t align);
   void ParseDeclarator(Token& tok, QualType& base_type);
+  void ParsePointer(QualType& type);
+  std::uint32_t ParseTypeQualList();
   void ParseDirectDeclarator(Token& tok, QualType& base_type);
   void ParseDirectDeclaratorTail(QualType& base_type);
-  void ParsePointer(QualType& type);
-  Type* ParseStructUnionSpec(bool is_struct);
-  Type* ParseEnumSpec();
-  void ParseEnumerator(Type* type);
-  std::int32_t ParseAlignas();
   std::size_t ParseArrayLength();
   std::pair<std::vector<ObjectExpr*>, bool> ParseParamTypeList();
-  QualType ParseTypeName();
-  void ParseStructDeclList(StructType* base_type);
   ObjectExpr* ParseParamDecl();
+
+  /*
+   * type name
+   */
+  QualType ParseTypeName();
   void ParseAbstractDeclarator(QualType& type);
-  std::uint32_t ParseTypeQualList();
   void ParseDirectAbstractDeclarator(QualType& type);
-  void ParseStaticAssertDecl();
 
   /*
    * Init

@@ -15,17 +15,19 @@ Scope* Scope::Get(Scope* parent, enum ScopeType type) {
 }
 
 void Scope::PrintCurrScope() const {
+  std::cout << "---------------------------------------\n";
   std::cout << "func / object / typedef / enumerator :\n";
   for (const auto& item : normal_) {
     std::cout << item.first << ' ';
     std::cout << item.second->GetQualType()->ToString() << '\n';
   }
-
+  std::cout << "---------------------------------------\n";
   std::cout << "struct / union / enum :\n";
   for (const auto& item : tags_) {
     std::cout << item.first << ' ';
     std::cout << item.second->GetQualType()->ToString() << '\n';
   }
+  std::cout << "---------------------------------------\n";
 }
 
 void Scope::InsertTag(const std::string& name, IdentifierExpr* ident) {

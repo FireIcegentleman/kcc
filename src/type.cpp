@@ -729,7 +729,6 @@ std::int32_t StructType::GetAlign() const { return align_; }
 // 并拥有匹配的名称 另外, 若它们都是枚举, 则对应成员亦必须拥有相同值。 另外,
 // 若它们是结构体或联合体, 则 对应的元素必须以同一顺序声明(仅结构体)
 // 对应的位域必须有相同宽度
-// TODO 位域
 bool StructType::Compatible(const Type* other) const {
   if (other->IsStructOrUnionTy() && IsStruct() == other->IsStructTy()) {
     auto other_struct{dynamic_cast<const StructType*>(other)};
@@ -743,16 +742,8 @@ bool StructType::Compatible(const Type* other) const {
       if (GetNumMembers() != other_struct->GetNumMembers()) {
         return false;
       }
-      auto iter{std::end(other_struct->members_)};
-      for (const auto& member : members_) {
-        if (!member->GetType()->Compatible((*iter)->GetType())) {
-          return false;
-        }
 
-        if (member->GetName() != (*iter)->GetName()) {
-          return false;
-        }
-      }
+      return GetLLVMType() == other_struct->GetLLVMType();
     }
 
     return true;
@@ -775,16 +766,7 @@ bool StructType::Equal(const Type* other) const {
         return false;
       }
 
-      auto iter{std::end(other_struct->members_)};
-      for (const auto& member : members_) {
-        if (!member->GetType()->Equal((*iter)->GetType())) {
-          return false;
-        }
-
-        if (member->GetName() != (*iter)->GetName()) {
-          return false;
-        }
-      }
+      return GetLLVMType() == other_struct->GetLLVMType();
     }
 
     return true;
@@ -888,7 +870,10 @@ void StructType::Finish() {
 }
 
 StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
-    : Type{false}, is_struct_{is_struct}, name_{name}, scope_{parent} {
+    : Type{false},
+      is_struct_{is_struct},
+      name_{name},
+      scope_{Scope::Get(parent, kBlock)} {
   if (HasName()) {
     for (const auto& item : Module->getIdentifiedStructTypes()) {
       if (item->getName() == name) {
