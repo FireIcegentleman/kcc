@@ -186,16 +186,16 @@ void RunKcc(const std::string &file_name) {
 }
 
 void RunDev() {
-  EnsureFileExists("test/dev/test.c");
+  EnsureFileExists("test.c");
 
   Preprocessor preprocessor;
   std::cout << "cpp ............................ ";
 
   TimingStart();
-  auto preprocessed_code{preprocessor.Cpp("test/dev/test.c")};
+  auto preprocessed_code{preprocessor.Cpp("test.c")};
   TimingEnd();
 
-  std::ofstream preprocess_file{"test/dev/test.i"};
+  std::ofstream preprocess_file{"test.i"};
   preprocess_file << preprocessed_code << std::flush;
 
   Scanner scanner{std::move(preprocessed_code)};
@@ -205,7 +205,7 @@ void RunDev() {
   auto tokens{scanner.Tokenize()};
   TimingEnd();
 
-  std::ofstream tokens_file{"test/dev/test.txt"};
+  std::ofstream tokens_file{"test.txt"};
   std::transform(std::begin(tokens), std::end(tokens),
                  std::ostream_iterator<std::string>{tokens_file, "\n"},
                  std::mem_fn(&Token::ToString));
@@ -218,9 +218,9 @@ void RunDev() {
   auto unit{parser.ParseTranslationUnit()};
   TimingEnd();
 
-  JsonGen{}.GenJson(unit, "test/dev/test.html");
+  JsonGen{}.GenJson(unit, "test.html");
 
-  CodeGen code_gen{"test/dev/test.c"};
+  CodeGen code_gen{"test.c"};
   std::cout << "code gen ....................... ";
 
   TimingStart();
@@ -234,31 +234,30 @@ void RunDev() {
   TimingEnd();
 
   std::error_code error_code;
-  llvm::raw_fd_ostream ir_file{"test/dev/test.ll", error_code};
+  llvm::raw_fd_ostream ir_file{"test.ll", error_code};
   ir_file << *Module;
 
-  std::system(
-      "clang test/dev/test.c -o test/dev/standard.ll -std=c17 -S -emit-llvm");
+  std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
 
-  std::system("llc test/dev/test.ll");
+  std::system("llc test.ll");
 
   std::cout << "obj gen ........................ ";
 
   TimingStart();
-  ObjGen("test/dev/test.o");
+  ObjGen("test.o");
   TimingEnd();
 
   std::cout << "link ........................... ";
 
   TimingStart();
-  if (!Link({"test/dev/test.o"}, OptimizationLevel, "test/dev/test")) {
+  if (!Link({"test.o"}, OptimizationLevel, "test")) {
     Error("link fail");
   }
   TimingEnd();
 
   std::cout << "run ............................ \n";
   // std::system("lli test/dev/test.ll");
-  std::system("./test/dev/test");
+  std::system("./test");
 
   PrintWarnings();
 }

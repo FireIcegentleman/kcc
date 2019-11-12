@@ -15,7 +15,7 @@
 //#include <stdbool.h>
 //#include <stddef.h>
 //#include <stdint.h>
-//#include <stdio.h>
+#include <stdio.h>
 //#include <stdlib.h>
 //#include <stdnoreturn.h>
 //#include <string.h>
@@ -24,7 +24,5 @@
 //#include <uchar.h>
 //#include <wchar.h>
 //#include <wctype.h>
-
-int printf(const char *s, ...);
 
 int main(void) { printf("Hello World!"); }

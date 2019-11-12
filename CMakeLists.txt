@@ -12,7 +12,7 @@ if(CMAKE_BUILD_TYPE MATCHES "Release")
   set(sanitizer "None")
 else()
   # Address Thread Undefined None
-  set(sanitizer "Undefined")
+  set(sanitizer "None")
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -29,8 +29,10 @@ find_package(Qt5 REQUIRED COMPONENTS Core)
 find_package(Boost REQUIRED COMPONENTS locale)
 
 include_directories(${LLVM_INCLUDE_DIRS})
-add_definitions(-DKCC_VERSION="${PROJECT_VERSION}" -DNBULITIN
-                -DFMT_STRING_ALIAS ${LLVM_DEFINITIONS})
+add_definitions(
+  -DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS ${LLVM_DEFINITIONS}
+  # -DNBULITIN
+)
 
 add_executable(${PROJECT_NAME} ${cppsrc})
 
