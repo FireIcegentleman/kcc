@@ -55,7 +55,7 @@ Preprocessor::Preprocessor() {
   header_search.AddSearchPath(
       clang::DirectoryLookup(
           ci_.getFileManager().getDirectory(
-              "usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include"),
+              "/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include"),
           clang::SrcMgr::C_System, false),
       true);
   header_search.AddSearchPath(

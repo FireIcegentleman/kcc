@@ -646,7 +646,8 @@ ArrayType* ArrayType::Get(QualType contained_type, std::size_t num_elements) {
 }
 
 std::int32_t ArrayType::GetWidth() const {
-  assert(num_elements_ != 0);
+  // FIXME
+  // assert(num_elements_ != 0);
   return contained_type_->GetWidth() * num_elements_;
 }
 
