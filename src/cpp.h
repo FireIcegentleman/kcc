@@ -8,21 +8,21 @@
 #include <string>
 #include <vector>
 
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Lex/Preprocessor.h>
+
 namespace kcc {
 
-// clang 处理了三标符
 class Preprocessor {
  public:
+  Preprocessor();
   void SetIncludePaths(const std::vector<std::string> &include_paths);
   void SetMacroDefinitions(const std::vector<std::string> &macro_definitions);
   std::string Cpp(const std::string &input_file);
 
  private:
-  std::string cmd_{
-      R"(clang -E -std=c17 -D__builtin_va_copy\(dest,src\)=)"
-      R"(\(\(dest\)[0]=\(src\)[0]\) -D__builtin_va_arg\(ap,type\)=)"
-      R"(*\(type*\)\(__builtin_reg_class\(type\)?__va_arg_gp\(ap\):)"
-      R"(__va_arg_fp\(ap\)\) )"};
+  clang::CompilerInstance ci_;
+  clang::Preprocessor *pp_;
 
   inline static std::string Builtin{
       "typedef struct {\n"

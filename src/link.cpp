@@ -10,8 +10,6 @@ namespace kcc {
 bool Link(const std::vector<std::string> &obj_file,
           const std::string &output_file) {
   static std::vector<const char *> args{
-      //"-pie",
-      //"--eh-frame-hdr",
       "-m elf_x86_64",
       "-dynamic-linker",
       "/lib64/ld-linux-x86-64.so.2",
@@ -40,7 +38,7 @@ bool Link(const std::vector<std::string> &obj_file,
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
       "crtn.o"};
 
-  std::string str{"-o " + output_file};
+  std::string str{"-o" + output_file};
   args.push_back(str.c_str());
 
   for (const auto &item : obj_file) {

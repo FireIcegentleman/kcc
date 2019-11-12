@@ -81,7 +81,7 @@ llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
 
 void RunDev();
 
-int main(int argc, char *argv[]) /*try*/ {
+int main(int argc, char *argv[]) try {
   llvm::cl::HideUnrelatedOptions(Category);
 
   llvm::cl::SetVersionPrinter([](llvm::raw_ostream &os) {
@@ -138,7 +138,7 @@ int main(int argc, char *argv[]) /*try*/ {
     Error("Cannot specify -o when generating multiple output files");
   }
 
-  Preprocessor pre;
+  static Preprocessor pre;
   pre.SetIncludePaths(IncludePaths);
   pre.SetMacroDefinitions(MacroDefines);
 
@@ -233,7 +233,7 @@ int main(int argc, char *argv[]) /*try*/ {
       }
     }
   } else {
-    std::ostringstream obj_files;
+    std::vector<std::string> obj_files;
     std::vector<std::string> files_to_delete;
     std::default_random_engine e{std::random_device{}()};
 
@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) /*try*/ {
       auto obj_file{std::filesystem::path{file}.filename().stem().string() +
                     std::to_string(e()) + ".o"};
 
-      obj_files << (curr_path / obj_file).string() << ' ';
+      obj_files.push_back((curr_path / obj_file).string());
       files_to_delete.push_back(obj_file);
 
       ObjGen(obj_file);
@@ -263,11 +263,7 @@ int main(int argc, char *argv[]) /*try*/ {
       OutputFilePath = "a.out";
     }
 
-    std::string cmd("clang -o " +
-                    (curr_path / OutputFilePath.c_str()).string() + ' ' +
-                    obj_files.str());
-
-    if (!CommandSuccess(std::system(cmd.c_str()))) {
+    if (!Link(obj_files, (curr_path / OutputFilePath.c_str()).string())) {
       for (const auto &file : files_to_delete) {
         std::filesystem::remove(file);
       }
@@ -279,13 +275,12 @@ int main(int argc, char *argv[]) /*try*/ {
       std::filesystem::remove(file);
     }
   }
+} catch (...) {
+  Error("Compiler internal error");
 }
-// catch (const std::exception &err) {
-//  Error(err.what());
-//}
 
 void RunDev() {
-  Preprocessor preprocessor;
+  static Preprocessor preprocessor;
   std::string preprocessed_code;
   {
     std::cout << "cpp ............................ ";
@@ -351,13 +346,8 @@ void RunDev() {
 
   ObjGen("test/dev/test.o");
 
-  // FIXME
-  if (!Link({"test/dev/test.o"}, "test.out")) {
+  if (!Link({"test/dev/test.o"}, "test/dev/test")) {
     Error("link fail");
-  } else {
-    std::filesystem::copy_file(
-        std::filesystem::current_path() / "test.out",
-        std::filesystem::current_path() / "test/dev/test");
   }
 
   std::system("./test/dev/test");
