@@ -168,7 +168,7 @@ class Type {
   std::size_t ArrayGetNumElements() const;
   QualType ArrayGetElementType() const;
 
-  bool StructHasName() const;
+  bool StructOrUnionHasName() const;
   void StructSetName(const std::string& name);
   std::string StructGetName() const;
   std::int32_t StructGetNumMembers() const;

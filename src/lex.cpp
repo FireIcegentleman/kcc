@@ -46,7 +46,9 @@ std::vector<Token> Scanner::Tokenize() {
     auto token{Scan()};
     token_sequence.push_back(token);
 
-    if (token.IsEof()) {
+    if (token.TagIs(Tag::kNone)) {
+      Error(loc_, "token error");
+    } else if (token.IsEof()) {
       break;
     }
   }

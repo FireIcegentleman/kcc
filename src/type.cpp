@@ -238,7 +238,7 @@ QualType Type::ArrayGetElementType() const {
   return dynamic_cast<const ArrayType*>(this)->GetElementType();
 }
 
-bool Type::StructHasName() const {
+bool Type::StructOrUnionHasName() const {
   return dynamic_cast<const StructType*>(this)->HasName();
 }
 
@@ -811,7 +811,7 @@ void StructType::AddMember(ObjectExpr* member) {
 
   if (is_struct_) {
     offset_ = offset + member->GetQualType()->GetWidth();
-    width_ = MakeAlign(offset, align_);
+    width_ = MakeAlign(offset_, align_);
   } else {
     assert(offset_ == 0);
     width_ = std::max(width_, member->GetQualType()->GetWidth());

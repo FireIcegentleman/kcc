@@ -1522,7 +1522,9 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
         type_qual |= kRestrict;
         break;
       case Tag::kVolatile:
-        Error(tok, "Does not support volatile");
+        // TODO
+        type_qual |= kVolatile;
+        break;
 
         // Function specifier
       case Tag::kInline:
@@ -1645,7 +1647,6 @@ void Parser::ParseStructDeclList(StructType* type) {
       do {
         Token tok;
         ParseDeclarator(tok, base_type);
-        auto name{tok.GetIdentifier()};
 
         TryParseAttributeSpec();
 
@@ -1655,8 +1656,9 @@ void Parser::ParseStructDeclList(StructType* type) {
         }
 
         // 可能是匿名 struct / union
-        if (std::empty(name)) {
-          if (base_type->IsStructTy() && !base_type->StructHasName()) {
+        if (std::empty(tok.GetStr())) {
+          if (base_type->IsStructOrUnionTy() &&
+              !base_type->StructOrUnionHasName()) {
             auto anonymous{
                 MakeAstNode<ObjectExpr>("", base_type, 0, kNone, true)};
             type->MergeAnonymous(anonymous);
@@ -1665,6 +1667,8 @@ void Parser::ParseStructDeclList(StructType* type) {
             Error(Peek(), "declaration does not declare anything");
           }
         } else {
+          auto name{tok.GetIdentifier()};
+
           if (type->GetMember(name)) {
             Error(Peek(), "duplicate member:{}", name);
           } else if (base_type->IsArrayTy() && !base_type->IsComplete()) {

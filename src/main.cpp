@@ -220,44 +220,46 @@ void RunDev() {
 
   JsonGen{}.GenJson(unit, "test.html");
 
-  CodeGen code_gen{"test.c"};
-  std::cout << "code gen ....................... ";
+  if (!ParseOnly) {
+    CodeGen code_gen{"test.c"};
+    std::cout << "code gen ....................... ";
 
-  TimingStart();
-  code_gen.GenCode(unit);
-  TimingEnd();
+    TimingStart();
+    code_gen.GenCode(unit);
+    TimingEnd();
 
-  std::cout << "opt ............................ ";
+    std::cout << "opt ............................ ";
 
-  TimingStart();
-  Optimization(OptimizationLevel);
-  TimingEnd();
+    TimingStart();
+    Optimization(OptimizationLevel);
+    TimingEnd();
 
-  std::error_code error_code;
-  llvm::raw_fd_ostream ir_file{"test.ll", error_code};
-  ir_file << *Module;
+    std::error_code error_code;
+    llvm::raw_fd_ostream ir_file{"test.ll", error_code};
+    ir_file << *Module;
 
-  std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
+    std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
 
-  std::system("llc test.ll");
+    std::system("llc test.ll");
 
-  std::cout << "obj gen ........................ ";
+    std::cout << "obj gen ........................ ";
 
-  TimingStart();
-  ObjGen("test.o");
-  TimingEnd();
+    TimingStart();
+    ObjGen("test.o");
+    TimingEnd();
 
-  std::cout << "link ........................... ";
+    std::cout << "link ........................... ";
 
-  TimingStart();
-  if (!Link({"test.o"}, OptimizationLevel, "test")) {
-    Error("link fail");
+    TimingStart();
+    if (!Link({"test.o"}, OptimizationLevel, "test")) {
+      Error("link fail");
+    }
+    TimingEnd();
+
+    std::cout << "run ............................ \n";
+    // std::system("lli test/dev/test.ll");
+    std::system("./test");
   }
-  TimingEnd();
-
-  std::cout << "run ............................ \n";
-  // std::system("lli test/dev/test.ll");
-  std::system("./test");
 
   PrintWarnings();
 }

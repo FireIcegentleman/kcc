@@ -92,6 +92,9 @@ inline llvm::cl::opt<bool> Timing{"t", llvm::cl::desc{"Timing"},
 inline llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
                                    llvm::cl::cat{Category}};
 
+inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
+                                     llvm::cl::cat{Category}};
+
 std::string GetPath();
 
 void TimingStart();
