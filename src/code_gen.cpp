@@ -8,7 +8,6 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/TargetRegistry.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetOptions.h>
 
 #include "error.h"
@@ -19,12 +18,7 @@ namespace kcc {
 CodeGen::CodeGen(const std::string& file_name) {
   Module = std::make_unique<llvm::Module>(file_name, Context);
   DataLayout = llvm::DataLayout{Module.get()};
-
-  // 初始化
-  llvm::InitializeAllTargetInfos();
-  llvm::InitializeAllTargets();
-  llvm::InitializeAllTargetMCs();
-
+  
   // 获取当前计算机的目标三元组
   auto target_triple{llvm::sys::getDefaultTargetTriple()};
 

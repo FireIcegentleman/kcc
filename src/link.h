@@ -8,10 +8,12 @@
 #include <string>
 #include <vector>
 
+#include "util.h"
+
 namespace kcc {
 
-bool Link(const std::vector<std::string> &obj_file,
-          const std::string &output_file = "a.out");
+bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
+          const std::string &output_file);
 
 }  // namespace kcc
 

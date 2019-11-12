@@ -18,10 +18,16 @@
 #include <fmt/format.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
 
 namespace kcc {
 
 Preprocessor::Preprocessor() {
+  // 初始化
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetMCs();
+
   ci_.createDiagnostics();
 
   auto pto{std::make_shared<clang::TargetOptions>()};
@@ -47,8 +53,10 @@ Preprocessor::Preprocessor() {
   auto &header_search{pp_->getHeaderSearchInfo()};
 
   header_search.AddSearchPath(
-      clang::DirectoryLookup(ci_.getFileManager().getDirectory("/usr/include"),
-                             clang::SrcMgr::C_System, false),
+      clang::DirectoryLookup(
+          ci_.getFileManager().getDirectory(
+              "usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include"),
+          clang::SrcMgr::C_System, false),
       true);
   header_search.AddSearchPath(
       clang::DirectoryLookup(
@@ -57,8 +65,13 @@ Preprocessor::Preprocessor() {
       true);
   header_search.AddSearchPath(
       clang::DirectoryLookup(
-          ci_.getFileManager().getDirectory("/usr/lib/clang/9.0.0/include"),
+          ci_.getFileManager().getDirectory(
+              "/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include-fixed"),
           clang::SrcMgr::C_System, false),
+      true);
+  header_search.AddSearchPath(
+      clang::DirectoryLookup(ci_.getFileManager().getDirectory("/usr/include"),
+                             clang::SrcMgr::C_System, false),
       true);
 
   pp_->setPredefines(

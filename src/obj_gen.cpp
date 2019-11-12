@@ -33,7 +33,7 @@ void ObjGen(const std::string& obj_file,
   llvm::legacy::PassManager pass;
 
   if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, file_type)) {
-    Error("TheTargetMachine can't emit a file of this type");
+    Error("The TargetMachine can't emit a file of this type");
   }
 
   pass.run(*Module);

@@ -7,21 +7,63 @@
 #include <cstdint>
 #include <memory>
 
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/CodeGen/TargetPassConfig.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/InitializePasses.h>
 #include <llvm/PassRegistry.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
+#include "error.h"
 #include "util.h"
 
 namespace kcc {
 
+void AddOptimizationPasses(llvm::legacy::PassManagerBase &mpm,
+                           llvm::legacy::FunctionPassManager &fpm,
+                           llvm::TargetMachine *tm, std::uint32_t opt_level) {
+  fpm.add(llvm::createVerifierPass());
+
+  llvm::PassManagerBuilder builder;
+  builder.OptLevel = opt_level;
+  builder.SizeLevel = 0;
+
+  if (opt_level > 1) {
+    builder.Inliner = llvm::createFunctionInliningPass(opt_level, 0, false);
+  } else {
+    builder.Inliner = llvm::createAlwaysInlinerLegacyPass();
+  }
+
+  builder.DisableUnrollLoops = false;
+
+  if (builder.LoopVectorize) {
+    builder.LoopVectorize = (opt_level > 1);
+  }
+
+  builder.SLPVectorize = (opt_level > 1);
+
+  tm->adjustPassManager(builder);
+
+  builder.populateFunctionPassManager(fpm);
+  builder.populateModulePassManager(mpm);
+}
+
+void AddStandardLinkPasses(llvm::legacy::PassManagerBase &pm) {
+  llvm::PassManagerBuilder builder;
+  builder.VerifyInput = true;
+
+  builder.Inliner = llvm::createFunctionInliningPass();
+  builder.populateLTOPassManager(pm);
+}
+
 void Optimization(OptLevel opt_level) {
-  std::uint32_t level{static_cast<std::uint32_t>(opt_level)};
+  auto level{static_cast<std::uint32_t>(opt_level)};
 
   if (level != 0) {
     // 初始化
@@ -48,47 +90,50 @@ void Optimization(OptLevel opt_level) {
     llvm::initializeDwarfEHPreparePass(registry);
     llvm::initializeSafeStackLegacyPassPass(registry);
     llvm::initializeSjLjEHPreparePass(registry);
+    llvm::initializeStackProtectorPass(registry);
     llvm::initializePreISelIntrinsicLoweringLegacyPassPass(registry);
     llvm::initializeGlobalMergePass(registry);
     llvm::initializeIndirectBrExpandPassPass(registry);
+    llvm::initializeInterleavedLoadCombinePass(registry);
     llvm::initializeInterleavedAccessPass(registry);
     llvm::initializeEntryExitInstrumenterPass(registry);
     llvm::initializePostInlineEntryExitInstrumenterPass(registry);
     llvm::initializeUnreachableBlockElimLegacyPassPass(registry);
     llvm::initializeExpandReductionsPass(registry);
     llvm::initializeWasmEHPreparePass(registry);
+    llvm::initializeWriteBitcodePassPass(registry);
+    llvm::initializeHardwareLoopsPass(registry);
 
-    auto fp_pass{
-        std::make_unique<llvm::legacy::FunctionPassManager>(Module.get())};
-
-    fp_pass->add(llvm::createTargetTransformInfoWrapperPass(
-        TargetMachine->getTargetIRAnalysis()));
-    // 验证输入是否正确
-    fp_pass->add(llvm::createVerifierPass());
+    if (llvm::verifyModule(*Module, &llvm::errs())) {
+      Error("input module is broken");
+    }
 
     llvm::legacy::PassManager passes;
-    passes.add(llvm::createVerifierPass());
 
-    llvm::PassManagerBuilder builder;
-    builder.OptLevel = level;
+    llvm::TargetLibraryInfoImpl tlti(llvm::Triple{Module->getTargetTriple()});
+    passes.add(new llvm::TargetLibraryInfoWrapperPass(tlti));
+    passes.add(llvm::createTargetTransformInfoWrapperPass(
+        TargetMachine->getTargetIRAnalysis()));
 
-    if (level > 1) {
-      builder.Inliner = llvm::createFunctionInliningPass(level, 0, false);
-    } else {
-      builder.Inliner = llvm::createAlwaysInlinerLegacyPass();
-    }
+    auto fp_passes{
+        std::make_unique<llvm::legacy::FunctionPassManager>(Module.get())};
 
-    TargetMachine->adjustPassManager(builder);
+    fp_passes->add(llvm::createTargetTransformInfoWrapperPass(
+        TargetMachine->getTargetIRAnalysis()));
 
-    builder.populateFunctionPassManager(*fp_pass);
-    builder.populateModulePassManager(passes);
+    auto &ltm{static_cast<llvm::LLVMTargetMachine &>(*TargetMachine)};
+    passes.add(ltm.createPassConfig(passes));
 
-    fp_pass->doInitialization();
+    AddStandardLinkPasses(passes);
+    AddOptimizationPasses(passes, *fp_passes, TargetMachine.get(), level);
+
+    fp_passes->doInitialization();
     for (auto &f : *Module) {
-      fp_pass->run(f);
+      fp_passes->run(f);
     }
-    fp_pass->doFinalization();
+    fp_passes->doFinalization();
 
+    passes.add(llvm::createVerifierPass());
     passes.run(*Module);
   }
 }

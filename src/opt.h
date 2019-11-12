@@ -5,9 +5,9 @@
 #ifndef KCC_SRC_OPT_H_
 #define KCC_SRC_OPT_H_
 
-namespace kcc {
+#include "util.h"
 
-enum class OptLevel { kO0, kO1, kO2, kO3 };
+namespace kcc {
 
 void Optimization(OptLevel opt_level);
 
