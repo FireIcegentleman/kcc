@@ -3,13 +3,17 @@ source_filename = "test.c"
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu"
 
-@__const.main.a = private unnamed_addr constant [5 x i32] [i32 102, i32 117, i32 0, i32 0, i32 0], align 16
+@__const.main.str = private unnamed_addr constant [4 x i8] c"abc\00", align 1
+@__const.main.wstr = private unnamed_addr constant [4 x i32] [i32 29483, i32 0, i32 0, i32 0], align 16
 
 ; Function Attrs: noinline nounwind optnone sspstrong uwtable
 define dso_local i32 @main() #0 {
-  %1 = alloca [5 x i32], align 16
-  %2 = bitcast [5 x i32]* %1 to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %2, i8* align 16 bitcast ([5 x i32]* @__const.main.a to i8*), i64 20, i1 false)
+  %1 = alloca [4 x i8], align 1
+  %2 = alloca [4 x i32], align 16
+  %3 = bitcast [4 x i8]* %1 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 1 %3, i8* align 1 getelementptr inbounds ([4 x i8], [4 x i8]* @__const.main.str, i32 0, i32 0), i64 4, i1 false)
+  %4 = bitcast [4 x i32]* %2 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %4, i8* align 16 bitcast ([4 x i32]* @__const.main.wstr to i8*), i64 16, i1 false)
   ret i32 0
 }
 

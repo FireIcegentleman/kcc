@@ -29,10 +29,8 @@ find_package(Qt5 REQUIRED COMPONENTS Core)
 find_package(Boost REQUIRED COMPONENTS locale)
 
 include_directories(${LLVM_INCLUDE_DIRS})
-add_definitions(
-  -DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS ${LLVM_DEFINITIONS}
-  # -DNBULITIN
-)
+add_definitions(-DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
+                ${LLVM_DEFINITIONS} -DDEV)
 
 add_executable(${PROJECT_NAME} ${cppsrc})
 

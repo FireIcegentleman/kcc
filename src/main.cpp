@@ -32,17 +32,21 @@
 using namespace kcc;
 
 void RunKcc(const std::string &file_name);
+#ifdef DEV
 void RunDev();
+#endif
 
 int main(int argc, char *argv[]) try {
   TimingStart();
 
   InitCommandLine(argc, argv);
 
+#ifdef DEV
   if (DevMode) {
     RunDev();
     return EXIT_SUCCESS;
   }
+#endif
 
   CommandLineCheck();
 
@@ -186,6 +190,7 @@ void RunKcc(const std::string &file_name) {
          llvm::TargetMachine::CodeGenFileType::CGFT_ObjectFile);
 }
 
+#ifdef DEV
 void RunDev() {
   EnsureFileExists("test.c");
 
@@ -267,3 +272,4 @@ void RunDev() {
 
   PrintWarnings();
 }
+#endif

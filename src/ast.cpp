@@ -1056,6 +1056,22 @@ bool operator<(const Initializer& lhs, const Initializer& rhs) {
 }
 
 /*
+ * Initializers
+ */
+void Initializers::AddInit(const Initializer& init) {
+  for (auto& item : inits_) {
+    if (item.offset_ == init.offset_) {
+      item = init;
+      return;
+    }
+  }
+
+  inits_.push_back(init);
+}
+
+std::size_t Initializers::size() const { return std::size(inits_); }
+
+/*
  * Declaration
  */
 Declaration* Declaration::Get(IdentifierExpr* ident) {
@@ -1068,10 +1084,29 @@ void Declaration::Check() {}
 
 bool Declaration::HasInit() const { return std::size(inits_); }
 
-void Declaration::AddInit(const Initializer& init) { inits_.insert(init); }
-
-void Declaration::AddInits(const std::set<Initializer>& inits) {
+void Declaration::AddInits(const Initializers& inits) {
   inits_ = inits;
+
+  std::sort(std::begin(inits_), std::end(inits_));
+
+  if (ident_->GetType()->IsScalarTy()) {
+    assert(std::size(inits_) == 1);
+    auto& init{*std::begin(inits_)};
+    if (!init.type_->Equal(init.expr_->GetType())) {
+      init.expr_ = MakeNode<TypeCastExpr>(loc_, init.expr_, init.type_);
+    }
+  } else if (ident_->GetType()->IsAggregateTy()) {
+    auto last{*(std::end(inits_) - 1)};
+    if (last.offset_ + last.type_->GetWidth() > ident_->GetType()->GetWidth()) {
+      Error(ident_->GetLoc(), "excess elements in array initializer");
+    }
+
+    for (auto& init : inits_) {
+      if (!init.type_->Equal(init.expr_->GetType())) {
+        init.expr_ = MakeNode<TypeCastExpr>(loc_, init.expr_, init.type_);
+      }
+    }
+  }
 }
 
 IdentifierExpr* Declaration::GetIdent() const { return ident_; }

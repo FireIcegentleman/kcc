@@ -20,6 +20,8 @@
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 
+#include "util.h"
+
 namespace kcc {
 
 Preprocessor::Preprocessor() {
@@ -122,8 +124,12 @@ std::string Preprocessor::Cpp(const std::string &input_file) {
 
   ci_.getDiagnosticClient().EndSourceFile();
 
-#ifdef NBULITIN
-  return code;
+#ifdef DEV
+  if (NoBuiltin) {
+    return code;
+  } else {
+    return Preprocessor::Builtin + code;
+  }
 #else
   return Preprocessor::Builtin + code;
 #endif

@@ -34,17 +34,16 @@ class Preprocessor {
       "typedef __va_elem __builtin_va_list[1];\n"
       "void __builtin_va_start(__builtin_va_list, int);\n"
       "void __builtin_va_end(__builtin_va_list);\n"
-      //      "static void *__va_arg_gp(__va_elem *ap) {\n"
-      //      "  void *r = (char *)ap->reg_save_area + ap->gp_offset;\n"
-      //      "  ap->gp_offset += 8;\n"
-      //      "  return r;\n"
-      //      "}\n"
-      //      "static void *__va_arg_fp(__va_elem *ap) {\n"
-      //      "  void *r = (char *)ap->reg_save_area + ap->fp_offset;\n"
-      //      "  ap->fp_offset += 16;\n"
-      //      "  return r;\n"
-      //      "}\n"
-  };
+      "static void *__va_arg_gp(__va_elem *ap) {\n"
+      "  void *r = (char *)ap->reg_save_area + ap->gp_offset;\n"
+      "  ap->gp_offset += 8;\n"
+      "  return r;\n"
+      "}\n"
+      "static void *__va_arg_fp(__va_elem *ap) {\n"
+      "  void *r = (char *)ap->reg_save_area + ap->fp_offset;\n"
+      "  ap->fp_offset += 16;\n"
+      "  return r;\n"
+      "}\n"};
 };
 
 }  // namespace kcc

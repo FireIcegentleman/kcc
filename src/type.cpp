@@ -91,6 +91,9 @@ void Type::SetComplete(bool complete) {
 
   if (IsStructOrUnionTy()) {
     StructFinish();
+  } else if (IsArrayTy()) {
+    assert(ArrayGetNumElements() != 0);
+    ArrayFinish();
   }
 }
 
@@ -183,8 +186,8 @@ bool Type::IsCharacterTy() const {
 }
 
 bool Type::IsIntegerTy() const {
-  return dynamic_cast<const ArithmeticType*>(this) && !IsFloatPointTy() &&
-         !IsBoolTy();
+  // TODO 是否包括 bool
+  return dynamic_cast<const ArithmeticType*>(this) && !IsFloatPointTy();
 }
 
 bool Type::IsRealTy() const { return IsIntegerTy() || IsRealFloatPointTy(); }
@@ -237,6 +240,8 @@ std::size_t Type::ArrayGetNumElements() const {
 QualType Type::ArrayGetElementType() const {
   return dynamic_cast<const ArrayType*>(this)->GetElementType();
 }
+
+void Type::ArrayFinish() { dynamic_cast<ArrayType*>(this)->Finish(); }
 
 bool Type::StructOrUnionHasName() const {
   return dynamic_cast<const StructType*>(this)->HasName();
@@ -646,8 +651,6 @@ ArrayType* ArrayType::Get(QualType contained_type, std::size_t num_elements) {
 }
 
 std::int32_t ArrayType::GetWidth() const {
-  // FIXME
-  // assert(num_elements_ != 0);
   return contained_type_->GetWidth() * num_elements_;
 }
 
@@ -690,15 +693,17 @@ bool ArrayType::Equal(const Type* other) const {
 }
 
 void ArrayType::SetNumElements(std::size_t num_elements) {
-  if (num_elements > 0) {
-    SetComplete(true);
-  }
   num_elements_ = num_elements;
 }
 
 std::size_t ArrayType::GetNumElements() const { return num_elements_; }
 
 QualType ArrayType::GetElementType() const { return contained_type_; }
+
+void ArrayType::Finish() {
+  llvm_type_ =
+      llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
+}
 
 ArrayType::ArrayType(QualType contained_type, std::size_t num_elements)
     : Type{num_elements > 0},

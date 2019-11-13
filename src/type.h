@@ -167,6 +167,7 @@ class Type {
   void ArraySetNumElements(std::size_t num_elements);
   std::size_t ArrayGetNumElements() const;
   QualType ArrayGetElementType() const;
+  void ArrayFinish();
 
   bool StructOrUnionHasName() const;
   void StructSetName(const std::string& name);
@@ -266,12 +267,13 @@ class ArrayType : public Type {
   void SetNumElements(std::size_t num_elements);
   std::size_t GetNumElements() const;
   QualType GetElementType() const;
+  void Finish();
 
  private:
   ArrayType(QualType contained_type, std::size_t num_elements);
 
   QualType contained_type_;
-  std::size_t num_elements_;
+  std::size_t num_elements_{};
 };
 
 class StructType : public Type {

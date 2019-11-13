@@ -688,6 +688,8 @@ class TranslationUnit : public AstNode {
 };
 
 class Initializer {
+  friend class Declaration;
+  friend class Initializers;
   friend class JsonGen;
   friend class CodeGen;
   friend bool operator<(const Initializer& lhs, const Initializer& rhs);
@@ -699,6 +701,20 @@ class Initializer {
   Type* type_;
   std::int32_t offset_;
   Expr* expr_;
+};
+
+class Initializers {
+ public:
+  void AddInit(const Initializer& init);
+  std::size_t size() const;
+
+  auto begin() { return std::begin(inits_); }
+  auto begin() const { return std::begin(inits_); }
+  auto end() { return std::end(inits_); }
+  auto end() const { return std::end(inits_); }
+
+ private:
+  std::vector<Initializer> inits_;
 };
 
 bool operator<(const Initializer& lhs, const Initializer& rhs);
@@ -715,8 +731,7 @@ class Declaration : public Stmt {
   virtual void Check() override;
 
   bool HasInit() const;
-  void AddInit(const Initializer& init);
-  void AddInits(const std::set<Initializer>& inits);
+  void AddInits(const Initializers& inits);
   IdentifierExpr* GetIdent() const;
   bool IsObj() const;
 
@@ -724,7 +739,7 @@ class Declaration : public Stmt {
   explicit Declaration(IdentifierExpr* ident);
 
   IdentifierExpr* ident_;
-  std::set<Initializer> inits_;
+  Initializers inits_;
 };
 
 class FuncDef : public ExtDecl {

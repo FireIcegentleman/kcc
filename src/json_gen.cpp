@@ -110,8 +110,10 @@ void JsonGen::Visit(const FuncCallExpr& node) {
 void JsonGen::Visit(const ConstantExpr& node) {
   auto str{node.KindStr().append(": ")};
 
-  if (node.GetType()->IsIntegerTy() || node.GetType()->IsFloatPointTy()) {
+  if (node.GetType()->IsIntegerTy()) {
     str.append(QString::number(node.integer_val_));
+  } else if (node.GetType()->IsFloatPointTy()) {
+    str.append(QString::number(node.float_point_val_));
   } else {
     assert(false);
   }

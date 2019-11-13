@@ -24,6 +24,4 @@
 //#include <wchar.h>
 //#include <wctype.h>
 
-int printf(const char *s, ...);
-
-int main(void) { printf("Hello World!%d", 42); }
+int main(void) {}
