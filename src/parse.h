@@ -179,6 +179,12 @@ class Parser {
   void ParseAttributeParamList();
   void ParseAttributeExprList();
   void TryParseAsm();
+  QualType ParseTypeof();
+
+  /*
+   * built in
+   */
+  Expr* ParseOffsetof();
 
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};

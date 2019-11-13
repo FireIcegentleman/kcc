@@ -337,6 +337,8 @@ Token Scanner::Scan() {
     case 'Y':
     case 'Z':
     case '_':
+      // TODO 是扩展吗？
+    case '$':
       return SkipIdentifier();
     case '\0':
       buffer_.clear();
@@ -512,7 +514,7 @@ Token Scanner::SkipIdentifier() {
   std::int32_t ch{Next()};
 
   while (std::isalnum(ch) || ch == '_' || IsUCN(ch) ||
-         (0x80 <= ch && ch <= 0xfd)) {
+         (0x80 <= ch && ch <= 0xfd) || ch == '$') {
     if (IsUCN(ch)) {
       HandleEscape();
     }

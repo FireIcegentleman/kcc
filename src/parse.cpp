@@ -604,6 +604,8 @@ Expr* Parser::ParseUnaryExpr() {
       return ParseSizeof();
     case Tag::kAlignof:
       return ParseAlignof();
+    case Tag::kOffsetof:
+      return ParseOffsetof();
     default:
       PutBack();
       return ParsePostfixExpr();
@@ -616,17 +618,18 @@ Expr* Parser::ParseSizeof() {
 
   if (Try(Tag::kLeftParen)) {
     if (!IsTypeName(Peek())) {
-      Error(loc_, "expect type name");
+      auto expr{ParseExpr()};
+      type = expr->GetType();
+    } else {
+      type = ParseTypeName();
     }
-
-    type = ParseTypeName();
     Expect(Tag::kRightParen);
   } else {
     auto expr{ParseUnaryExpr()};
-    type = expr->GetQualType();
+    type = expr->GetType();
   }
 
-  if (!type->IsComplete()) {
+  if (!type->IsComplete() && !type->IsVoidTy()) {
     Error(loc_, "sizeof(incomplete type)");
   }
 
@@ -1182,7 +1185,9 @@ CompoundStmt* Parser::ParseCompoundStmt(Type* func_type) {
   std::vector<Stmt*> stmts;
   while (!Try(Tag::kRightBrace)) {
     if (IsDecl(Peek())) {
-      stmts.push_back(ParseDecl());
+      if (auto decl{ParseDecl()}; decl) {
+        stmts.push_back(decl);
+      }
     } else {
       stmts.push_back(ParseStmt());
     }
@@ -1417,6 +1422,10 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
       // GNU 扩展
       case Tag::kExtension:
         break;
+      // TODO check
+      case Tag::kTypeof:
+        type = ParseTypeof();
+        break;
 
         // Storage Class Specifier, 至多有一个
       case Tag::kTypedef:
@@ -1527,7 +1536,7 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
         type_qual |= kRestrict;
         break;
       case Tag::kVolatile:
-        // 不支持
+        // TODO
         type_qual |= kVolatile;
         break;
 
@@ -1647,7 +1656,9 @@ void Parser::ParseStructDeclList(StructType* type) {
     if (Try(Tag::kStaticAssert)) {
       ParseStaticAssertDecl();
     } else {
-      auto base_type{ParseDeclSpec(nullptr, nullptr, nullptr)};
+      // TODO
+      std::int32_t align{};
+      auto base_type{ParseDeclSpec(nullptr, nullptr, &align)};
 
       do {
         Token tok;
@@ -1969,9 +1980,10 @@ std::size_t Parser::ParseArrayLength() {
 
 std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
   if (Test(Tag::kRightParen)) {
-    Warning(
-        Peek(),
-        "The parameter list is not allowed to be empty, you should use void");
+    //    Warning(
+    //        Peek(),
+    //        "The parameter list is not allowed to be empty, you should use
+    //        void");
     return {{}, false};
   }
 
@@ -2453,6 +2465,38 @@ void Parser::TryParseAsm() {
     ParseStringLiteral();
     Expect(Tag::kRightParen);
   }
+}
+
+QualType Parser::ParseTypeof() {
+  Expect(Tag::kLeftParen);
+
+  if (!IsTypeName(Peek())) {
+    Error(loc_, "expect type name");
+  }
+  auto type{ParseTypeName()};
+  Expect(Tag::kRightParen);
+
+  return type;
+}
+
+/*
+ * built in
+ */
+Expr* Parser::ParseOffsetof() {
+  Expect(Tag::kLeftParen);
+
+  if (!IsTypeName(Peek())) {
+    Error(loc_, "expect type name");
+  }
+  auto type{ParseTypeName()};
+
+  Expect(Tag::kComma);
+  auto name{Expect(Tag::kIdentifier).GetIdentifier()};
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<ConstantExpr>(
+      ArithmeticType::Get(kLong | kUnsigned),
+      static_cast<std::uint64_t>(type->StructGetMember(name)->GetOffset()));
 }
 
 }  // namespace kcc

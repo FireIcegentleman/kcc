@@ -82,7 +82,12 @@ Preprocessor::Preprocessor() {
       pp_->getPredefines() +
       "#define __builtin_va_copy(dest,src) ((dest)[0]=(src)[0])\n"
       "#define __builtin_va_arg(ap,type) "
-      "*(type*)(__builtin_reg_class(type)?__va_arg_gp(ap):__va_arg_fp(ap)) \n");
+      "*(type*)(__builtin_reg_class(type)?__va_arg_gp(ap):__va_arg_fp(ap))\n"
+      "#define DECIMAL_DIG 21\n"
+      "#define FLT_EVAL_METHOD 0\n"
+      "#define FLT_TRUE_MIN 0x1p-149\n"
+      "#define DBL_TRUE_MIN 0x0.0000000000001p-1022\n"
+      "#define __STDC_VERSION__ 201710L\n");
 }
 
 void Preprocessor::SetIncludePaths(

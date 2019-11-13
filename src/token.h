@@ -136,6 +136,7 @@ class TokenTag : public QObject {
     kFuncName,
     kExtension,  // __extension__
     kTypeof,     // typeof
+    kOffsetof,   // __builtin_offsetof
 
     kNone,
     kEof

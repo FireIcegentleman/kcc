@@ -135,6 +135,8 @@ void UnaryOpExpr::Check() {
   switch (op_) {
     case Tag::kPlusPlus:
     case Tag::kMinusMinus:
+    case Tag::kPostfixPlusPlus:
+    case Tag::kPostfixMinusMinus:
       IncDecOpCheck();
       break;
     case Tag::kPlus:
@@ -961,7 +963,7 @@ ForStmt* ForStmt::Get(Expr* init, Expr* cond, Expr* inc, Stmt* block,
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
 
 void ForStmt::Check() {
-  if (!cond_->GetType()->IsScalarTy()) {
+  if (cond_ && !cond_->GetType()->IsScalarTy()) {
     Error(cond_->GetLoc(), "expect scalar");
   }
 }
@@ -1097,7 +1099,7 @@ void Declaration::AddInits(const Initializers& inits) {
     assert(std::size(inits_) == 1);
     auto& init{*std::begin(inits_)};
     if (!init.type_->Equal(init.expr_->GetType())) {
-      init.expr_ = MakeNode<TypeCastExpr>(loc_, init.expr_, init.type_);
+      init.expr_ = Expr::MayCastTo(init.expr_, init.type_);
     }
   } else if (ident_->GetType()->IsAggregateTy()) {
     auto last{*(std::end(inits_) - 1)};
@@ -1107,7 +1109,7 @@ void Declaration::AddInits(const Initializers& inits) {
 
     for (auto& init : inits_) {
       if (!init.type_->Equal(init.expr_->GetType())) {
-        init.expr_ = MakeNode<TypeCastExpr>(loc_, init.expr_, init.type_);
+        init.expr_ = Expr::MayCastTo(init.expr_, init.type_);
       }
     }
   }
