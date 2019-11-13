@@ -20,8 +20,8 @@
 //#include <string.h>
 //#include <threads.h>
 //#include <time.h>
-//#include <uchar.h>
+#include <uchar.h>
 //#include <wchar.h>
 //#include <wctype.h>
 
-int main(void) { int a[5] = {L"fu"}; }
+int main(void) { char32_t 你好[5] = {L"fu"}; }

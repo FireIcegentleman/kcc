@@ -18,11 +18,11 @@ void AppendUCN(std::string& s, std::int32_t val) {
 }
 
 void ConvertToUtf16(std::string& s) {
-  s = boost::locale::conv::between(s, "UTF-16", "UTF-8");
+  s = boost::locale::conv::between(s, "UTF-16LE", "UTF-8");
 }
 
 void ConvertToUtf32(std::string& s) {
-  s = boost::locale::conv::between(s, "UTF-32", "UTF-8");
+  s = boost::locale::conv::between(s, "UTF-32LE", "UTF-8");
 }
 
 void ConvertStringLiteral(std::string& s, Encoding encoding) {

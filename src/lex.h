@@ -30,12 +30,12 @@ class Scanner {
   Token Scan();
 
   bool HasNext();
-  char Peek();
-  char Next(bool push = true);
+  std::int32_t Peek();
+  std::int32_t Next(bool push = true);
   void PutBack();
-  bool Test(char c);
-  bool Try(char c);
-  bool IsUCN(char ch);
+  bool Test(std::int32_t c);
+  bool Try(std::int32_t c);
+  bool IsUCN(std::int32_t ch);
 
   Token MakeToken(Tag tag);
   void MarkLocation();
@@ -51,7 +51,7 @@ class Scanner {
   Encoding HandleEncoding();
   std::int32_t HandleEscape();
   std::int32_t HandleHexEscape();
-  std::int32_t HandleOctEscape(char ch);
+  std::int32_t HandleOctEscape(std::int32_t ch);
   std::int32_t HandleUCN(std::int32_t length);
 
   std::string source_;

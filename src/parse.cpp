@@ -2213,7 +2213,7 @@ bool Parser::ParseLiteralInitializer(std::set<Initializer>& inits, Type* type,
   auto width{type->ArrayGetElementType()->GetWidth()};
   auto size{str_node->GetType()->ArrayGetNumElements()};
   auto str{str_node->GetVal().c_str()};
-  // FIXME
+
   switch (width) {
     case 1:
       for (std::size_t i{}; i < size; ++i) {

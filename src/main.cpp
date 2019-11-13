@@ -221,8 +221,10 @@ void RunDev() {
 
   JsonGen{}.GenJson(unit, "test.html");
 
-  std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
-  std::system("./api standard.ll -o standard.cpp");
+  if (StandardIR) {
+    std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
+    std::system("./api standard.ll -o standard.cpp");
+  }
 
   if (!ParseOnly) {
     CodeGen code_gen{"test.c"};

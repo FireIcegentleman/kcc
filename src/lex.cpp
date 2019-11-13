@@ -19,9 +19,9 @@
 
 namespace kcc {
 
-bool IsOctDigit(char ch) { return ch >= '0' && ch <= '7'; }
+bool IsOctDigit(std::int32_t ch) { return ch >= '0' && ch <= '7'; }
 
-std::int32_t CharToDigit(char ch) {
+std::int32_t CharToDigit(std::int32_t ch) {
   if (ch >= '0' && ch <= '9') {
     return ch - '0';
   } else if (ch >= 'a' && ch <= 'f') {
@@ -270,6 +270,7 @@ Token Scanner::Scan() {
     case 'u':
     case 'U':
     case 'L':
+      PutBack();
       HandleEncoding();
 
       if (Try('\'')) {
@@ -277,6 +278,7 @@ Token Scanner::Scan() {
       } else if (Try('"')) {
         return SkipStringLiteral();
       } else {
+        Next();
         return SkipIdentifier();
       }
     case '\\':
@@ -340,19 +342,26 @@ Token Scanner::Scan() {
       buffer_.clear();
       return MakeToken(Tag::kEof);
     default: {
-      Error(loc_, "Invalid input: {}", ch);
+      // 字节 0xFE 和 0xFF 在 UTF-8 编码中从未用到
+      if (ch >= 0x80 && ch <= 0xfd) {
+        return SkipIdentifier();
+      } else {
+        Error(loc_, "Invalid input: {}", static_cast<char>(ch));
+      }
     }
   }
 }
 
 bool Scanner::HasNext() { return curr_index_ < std::size(source_); }
 
-char Scanner::Peek() {
+std::int32_t Scanner::Peek() {
   // 注意 C++11 起, 若 curr_index_ == size() 则返回空字符
-  return source_[curr_index_];
+  auto ret{source_[curr_index_]};
+  // 可能是 UTF-8 编码的非 ascii 字符, 此时值为负
+  return ret >= 0 ? ret : ret + 256;
 }
 
-char Scanner::Next(bool push) {
+std::int32_t Scanner::Next(bool push) {
   auto ch{Peek()};
   ++curr_index_;
 
@@ -387,9 +396,9 @@ void Scanner::PutBack() {
   }
 }
 
-bool Scanner::Test(char c) { return Peek() == c; }
+bool Scanner::Test(std::int32_t c) { return Peek() == c; }
 
-bool Scanner::Try(char c) {
+bool Scanner::Try(std::int32_t c) {
   if (Peek() == c) {
     Next();
     return true;
@@ -398,7 +407,9 @@ bool Scanner::Try(char c) {
   }
 }
 
-bool Scanner::IsUCN(char ch) { return ch == '\\' && (Test('u') || Test('U')); }
+bool Scanner::IsUCN(std::int32_t ch) {
+  return ch == '\\' && (Test('u') || Test('U'));
+}
 
 Token Scanner::MakeToken(Tag tag) {
   curr_token_.SetTag(tag);
@@ -498,9 +509,10 @@ Token Scanner::SkipNumber() {
 //  0123456789
 Token Scanner::SkipIdentifier() {
   PutBack();
-  char ch{Next()};
+  std::int32_t ch{Next()};
 
-  while (std::isalnum(ch) || ch == '_' || IsUCN(ch)) {
+  while (std::isalnum(ch) || ch == '_' || IsUCN(ch) ||
+         (0x80 <= ch && ch <= 0xfd)) {
     if (IsUCN(ch)) {
       HandleEscape();
     }
@@ -660,7 +672,7 @@ std::int32_t Scanner::HandleHexEscape() {
 //  \ octal-digit
 //  \ octal-digit octal-digit
 //  \ octal-digit octal-digit octal-digit
-std::int32_t Scanner::HandleOctEscape(char ch) {
+std::int32_t Scanner::HandleOctEscape(std::int32_t ch) {
   std::int32_t value{CharToDigit(ch)};
 
   if (!IsOctDigit(ch)) {
@@ -668,7 +680,7 @@ std::int32_t Scanner::HandleOctEscape(char ch) {
   }
 
   for (std::int32_t i{0}; i < 3; ++i) {
-    if (char next{Next()}; IsOctDigit(next)) {
+    if (auto next{Next()}; IsOctDigit(next)) {
       value = (static_cast<std::uint32_t>(value) << 3U) + CharToDigit(next);
     } else {
       PutBack();
