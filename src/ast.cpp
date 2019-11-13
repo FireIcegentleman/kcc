@@ -1085,6 +1085,10 @@ void Declaration::Check() {}
 bool Declaration::HasInit() const { return std::size(inits_); }
 
 void Declaration::AddInits(const Initializers& inits) {
+  if (std::size(inits) == 0) {
+    Error(loc_, "empty initializer");
+  }
+
   inits_ = inits;
 
   std::sort(std::begin(inits_), std::end(inits_));

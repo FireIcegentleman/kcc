@@ -259,7 +259,7 @@ std::int32_t Type::StructGetNumMembers() const {
   return dynamic_cast<const StructType*>(this)->GetNumMembers();
 }
 
-std::vector<ObjectExpr*> Type::StructGetMembers() {
+std::vector<ObjectExpr*>& Type::StructGetMembers() {
   return dynamic_cast<StructType*>(this)->GetMembers();
 }
 
@@ -654,7 +654,7 @@ std::int32_t ArrayType::GetWidth() const {
   return contained_type_->GetWidth() * num_elements_;
 }
 
-std::int32_t ArrayType::GetAlign() const { return GetWidth(); }
+std::int32_t ArrayType::GetAlign() const { return contained_type_->GetAlign(); }
 
 // 其元素类型兼容, 且
 // 若都拥有常量大小, 则大小相同
@@ -786,7 +786,7 @@ std::string StructType::GetName() const { return name_; }
 
 std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 
-std::vector<ObjectExpr*> StructType::GetMembers() { return members_; }
+std::vector<ObjectExpr*>& StructType::GetMembers() { return members_; }
 
 ObjectExpr* StructType::GetMember(const std::string& name) const {
   auto iter{scope_->FindNormalInCurrScope(name)};
@@ -826,28 +826,25 @@ void StructType::AddMember(ObjectExpr* member) {
 
 void StructType::MergeAnonymous(ObjectExpr* anonymous) {
   // 匿名 struct / union
-  auto annoy_type{
-      dynamic_cast<const StructType*>(anonymous->GetQualType().GetType())};
-  auto offset = MakeAlign(offset_, anonymous->GetAlign());
+  auto annoy_type{dynamic_cast<const StructType*>(anonymous->GetType())};
+  assert(annoy_type != nullptr);
 
-  for (auto& kv : *annoy_type->scope_) {
-    auto name{kv.first};
+  auto offset{MakeAlign(offset_, anonymous->GetAlign())};
+  anonymous->SetOffset(offset);
+  members_.push_back(anonymous);
 
-    if (auto member{dynamic_cast<ObjectExpr*>(kv.second)}; !member) {
+  for (auto& [name, obj] : *annoy_type->scope_) {
+    if (auto member{dynamic_cast<ObjectExpr*>(obj)}; !member) {
       continue;
     } else {
-      member->SetOffset(offset + member->GetOffset());
-
       if (GetMember(name)) {
         Error(member->GetLoc(), "duplicated member: {}", name);
       }
 
+      member->SetOffset(offset + member->GetOffset());
       scope_->InsertNormal(name, member);
     }
   }
-
-  anonymous->SetOffset(offset);
-  members_.push_back(anonymous);
 
   align_ = std::max(align_, anonymous->GetAlign());
 

@@ -101,6 +101,10 @@ inline llvm::cl::opt<bool> StandardIR{"ir", llvm::cl::desc{"emit Standard IR"},
 
 inline llvm::cl::opt<bool> NoBuiltin{"no-builtin", llvm::cl::desc{"No Builtin"},
                                      llvm::cl::cat{Category}};
+
+inline llvm::cl::opt<bool> SymbolTable{"symbol",
+                                       llvm::cl::desc{"Print symbol table"},
+                                       llvm::cl::cat{Category}};
 #endif
 
 std::string GetPath();

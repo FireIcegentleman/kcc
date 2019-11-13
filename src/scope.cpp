@@ -4,9 +4,11 @@
 
 #include "scope.h"
 
-#include <iostream>
-
 #include "memory_pool.h"
+
+#ifdef DEV
+#include <iostream>
+#endif
 
 namespace kcc {
 
@@ -14,21 +16,31 @@ Scope* Scope::Get(Scope* parent, enum ScopeType type) {
   return new (ScopePool.Allocate()) Scope{parent, type};
 }
 
+#ifdef DEV
 void Scope::PrintCurrScope() const {
-  std::cout << "---------------------------------------\n";
+  std::cout << "\n\n---------------------------------------\n";
   std::cout << "func / object / typedef / enumerator :\n";
-  for (const auto& item : normal_) {
-    std::cout << item.first << ' ';
-    std::cout << item.second->GetQualType()->ToString() << '\n';
+  for (const auto& [name, obj] : normal_) {
+    std::cout << "name: " << name << "\t\t\t";
+    std::cout << "type: " << obj->GetType()->ToString() << '\n';
   }
-  std::cout << "---------------------------------------\n";
+  std::cout << "---------------------------------------" << std::endl;
   std::cout << "struct / union / enum :\n";
-  for (const auto& item : tags_) {
-    std::cout << item.first << ' ';
-    std::cout << item.second->GetQualType()->ToString() << '\n';
+  for (const auto& [name, obj] : tags_) {
+    std::cout << "name: " << name << "\t\t\t";
+    std::cout << "type: " << obj->GetType()->ToString();
+
+    if (obj->GetType()->IsStructOrUnionTy()) {
+      std::cout << "\t\t\tmember: " << obj->GetType()->StructGetNumMembers();
+      for (const auto& item : obj->GetType()->StructGetMembers()) {
+        std::cout << item->GetName() << ' ';
+      }
+    }
+    std::cout << '\n';
   }
-  std::cout << "---------------------------------------\n";
+  std::cout << "---------------------------------------" << std::endl;
 }
+#endif
 
 void Scope::InsertTag(const std::string& name, IdentifierExpr* ident) {
   tags_[name] = ident;

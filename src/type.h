@@ -173,7 +173,7 @@ class Type {
   void StructSetName(const std::string& name);
   std::string StructGetName() const;
   std::int32_t StructGetNumMembers() const;
-  std::vector<ObjectExpr*> StructGetMembers();
+  std::vector<ObjectExpr*> &StructGetMembers();
   ObjectExpr* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
   Scope* StructGetScope();
@@ -294,7 +294,7 @@ class StructType : public Type {
   std::string GetName() const;
 
   std::int32_t GetNumMembers() const;
-  std::vector<ObjectExpr*> GetMembers();
+  std::vector<ObjectExpr*> &GetMembers();
   ObjectExpr* GetMember(const std::string& name) const;
   QualType GetMemberType(std::int32_t i) const;
   Scope* GetScope();

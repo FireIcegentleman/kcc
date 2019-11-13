@@ -38,7 +38,9 @@ class Scope {
  public:
   static Scope* Get(Scope* parent, enum ScopeType type);
 
+#ifdef DEV
   void PrintCurrScope() const;
+#endif
 
   auto begin() { return std::begin(normal_); }
   auto end() { return std::end(normal_); }

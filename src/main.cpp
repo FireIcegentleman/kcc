@@ -33,6 +33,8 @@ using namespace kcc;
 
 void RunKcc(const std::string &file_name);
 #ifdef DEV
+#include <assert.h>
+
 void RunDev();
 #endif
 
@@ -192,16 +194,19 @@ void RunKcc(const std::string &file_name) {
 
 #ifdef DEV
 void RunDev() {
-  EnsureFileExists("test.c");
+  assert(std::size(InputFilePaths) == 1);
+  auto file{InputFilePaths.front()};
+
+  EnsureFileExists(file);
 
   Preprocessor preprocessor;
   std::cout << "cpp ............................ ";
 
   TimingStart();
-  auto preprocessed_code{preprocessor.Cpp("test.c")};
+  auto preprocessed_code{preprocessor.Cpp(file)};
   TimingEnd();
 
-  std::ofstream preprocess_file{"test.i"};
+  std::ofstream preprocess_file{GetFileName(file, ".i")};
   preprocess_file << preprocessed_code << std::flush;
 
   Scanner scanner{std::move(preprocessed_code)};
@@ -211,7 +216,7 @@ void RunDev() {
   auto tokens{scanner.Tokenize()};
   TimingEnd();
 
-  std::ofstream tokens_file{"test.txt"};
+  std::ofstream tokens_file{GetFileName(file, ".txt")};
   std::transform(std::begin(tokens), std::end(tokens),
                  std::ostream_iterator<std::string>{tokens_file, "\n"},
                  std::mem_fn(&Token::ToString));
@@ -224,15 +229,16 @@ void RunDev() {
   auto unit{parser.ParseTranslationUnit()};
   TimingEnd();
 
-  JsonGen{}.GenJson(unit, "test.html");
+  JsonGen{}.GenJson(unit, GetFileName(file, ".html"));
 
   if (StandardIR) {
-    std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
+    std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm " + file};
+    std::system(cmd.c_str());
     std::system("./api standard.ll -o standard.cpp");
   }
 
   if (!ParseOnly) {
-    CodeGen code_gen{"test.c"};
+    CodeGen code_gen{file};
     std::cout << "code gen ....................... ";
 
     TimingStart();
@@ -246,28 +252,36 @@ void RunDev() {
     TimingEnd();
 
     std::error_code error_code;
-    llvm::raw_fd_ostream ir_file{"test.ll", error_code};
+    llvm::raw_fd_ostream ir_file{GetFileName(file, ".ll"), error_code};
     ir_file << *Module;
 
-    std::system("llc test.ll");
+    {
+      std::string cmd{"llc " + GetFileName(file, ".ll")};
+      std::system(cmd.c_str());
+    }
 
     std::cout << "obj gen ........................ ";
 
     TimingStart();
-    ObjGen("test.o");
+    ObjGen(GetFileName(file, ".o"));
     TimingEnd();
 
     std::cout << "link ........................... ";
 
     TimingStart();
-    if (!Link({"test.o"}, OptimizationLevel, "test")) {
+    if (!Link({GetFileName(file, ".o")}, OptimizationLevel,
+              GetFileName(file, ".out"))) {
       Error("link fail");
     }
     TimingEnd();
 
     std::cout << "run ............................ \n";
-    // std::system("lli test/dev/test.ll");
-    std::system("./test");
+
+    {
+      // std::string cmd{"lli " + GetFileName(file, ".ll")};
+      std::string cmd{"./" + GetFileName(file, ".out")};
+      std::system(cmd.c_str());
+    }
   }
 
   PrintWarnings();

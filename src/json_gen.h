@@ -88,7 +88,7 @@ class JsonGen : public Visitor {
 
   constexpr static std::string_view kAfter{
       "// Set the dimensions and margins of the diagram\n"
-      "    var margin = { top: 20, right: 90, bottom: 30, left: 90 },\n"
+      "    var margin = { top: 20, right: 90, bottom: 30, left: 120 },\n"
       "      width = 5000 - margin.left - margin.right,\n"
       "      height = 850 - margin.top - margin.bottom;\n"
       "\n"

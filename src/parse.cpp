@@ -14,6 +14,10 @@
 #include "error.h"
 #include "lex.h"
 
+#ifdef DEV
+#include "util.h"
+#endif
+
 namespace kcc {
 
 Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {}
@@ -21,6 +25,10 @@ Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {}
 TranslationUnit* Parser::ParseTranslationUnit() {
   while (HasNext()) {
     unit_->AddExtDecl(ParseExternalDecl());
+  }
+
+  if (SymbolTable) {
+    curr_scope_->PrintCurrScope();
   }
 
   return unit_;
@@ -1653,8 +1661,14 @@ void Parser::ParseStructDeclList(StructType* type) {
           Error(Peek(), "Bit field not supported");
         }
 
-        // 可能是匿名 struct / union
+        // struct A {
+        //  int a;
+        //  struct {
+        //    int c;
+        //  };
+        //};
         if (std::empty(tok.GetStr())) {
+          // 此时该 struct / union 不能有名字
           if (copy->IsStructOrUnionTy() && !copy->StructOrUnionHasName()) {
             auto anonymous{MakeAstNode<ObjectExpr>("", copy, 0, kNone, true)};
             type->MergeAnonymous(anonymous);
@@ -2054,12 +2068,14 @@ Initializers Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
 void Parser::ParseInitializer(Initializers& inits, QualType type,
                               std::int32_t offset, bool designated,
                               bool force_brace) {
+  // 比如解析 {[2]=1}
   if (designated && !Test(Tag::kPeriod) && !Test(Tag::kLeftSquare)) {
     Expect(Tag::kEqual);
   }
 
-  Expr* expr;
   if (type->IsArrayTy()) {
+    // int a[2] = 1;
+    // 不能直接 Expect , 如果有 '{' , 只能由 ParseArrayInitializer 来处理
     if (force_brace && !Test(Tag::kLeftBrace) && !Test(Tag::kStringLiteral)) {
       Expect(Tag::kLeftBrace);
     } else if (!ParseLiteralInitializer(inits, type.GetType(), offset)) {
@@ -2072,13 +2088,26 @@ void Parser::ParseInitializer(Initializers& inits, QualType type,
     if (!Test(Tag::kPeriod) && !Test(Tag::kLeftBrace)) {
       // struct A a = {...};
       // struct A b = a;
-      expr = ParseAssignExpr();
+      // 或者是
+      // struct {
+      //    struct {
+      //      int a;
+      //      int b;
+      //    } x;
+      //    struct {
+      //      char c[8];
+      //    } y;
+      //  } v = {
+      //      1,
+      //      2,
+      //  };
+      auto begin{index_};
+      auto expr{ParseAssignExpr()};
       if (type->Compatible(expr->GetType())) {
         inits.AddInit({type.GetType(), offset, expr});
         return;
       } else {
-        Error("initializing '{}' with an expression of incompatible type '{}'",
-              type->ToString(), expr->GetType()->ToString());
+        index_ = begin;
       }
     }
 
@@ -2087,7 +2116,7 @@ void Parser::ParseInitializer(Initializers& inits, QualType type,
     // 标量类型
     // int a={10}; / int a={10,}; 都是合法的
     auto has_brace{Try(Tag::kLeftBrace)};
-    expr = ParseAssignExpr();
+    auto expr{ParseAssignExpr()};
 
     if (has_brace) {
       Try(Tag::kComma);
@@ -2113,12 +2142,15 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
       return;
     }
 
+    // TODO ???
     if (!designated && !has_brace &&
         (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
       // put ',' back
       PutBack();
       return;
-    } else if ((designated = Try(Tag::kLeftSquare))) {
+    }
+
+    if ((designated = Try(Tag::kLeftSquare))) {
       auto expr{ParseAssignExpr()};
       if (!expr->GetType()->IsIntegerTy()) {
         Error(expr, "expect integer type");
@@ -2130,7 +2162,7 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
       if (index < 0 ||
           (type->IsComplete() &&
            static_cast<std::size_t>(index) >= type->ArrayGetNumElements())) {
-        Error(Peek(), "excess elements in array initializer");
+        Error(expr, "array designator index {} exceeds array bounds", index);
       }
     }
 
@@ -2139,6 +2171,7 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
     designated = false;
     ++index;
 
+    // int a[] = {1, 2, [5] = 3}; 这种也是合法的
     if (!type->IsComplete()) {
       type->ArraySetNumElements(std::max(static_cast<std::size_t>(index),
                                          type->ArrayGetNumElements()));
@@ -2245,17 +2278,17 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
 void Parser::ParseStructInitializer(Initializers& inits, Type* type,
                                     std::int32_t offset, bool designated) {
   auto has_brace{Try(Tag::kLeftBrace)};
-  auto member{std::begin(type->StructGetMembers())};
+  auto member_iter{std::begin(type->StructGetMembers())};
 
   while (true) {
     if (Test(Tag::kRightBrace)) {
       if (has_brace) {
         Next();
-      } else {
-        return;
       }
+      return;
     }
 
+    // TODO ???
     if (!designated && !has_brace &&
         (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
       PutBack();
@@ -2270,42 +2303,42 @@ void Parser::ParseStructInitializer(Initializers& inits, Type* type,
         Error(tok, "member '{}' not found", name);
       }
 
-      member = ParseStructDesignator(type, name);
+      member_iter = ParseStructDesignator(type, name);
     }
 
-    if (member == std::end(type->StructGetMembers())) {
+    if (member_iter == std::end(type->StructGetMembers())) {
       break;
     }
 
-    if ((*member)->IsAnonymous()) {
+    if ((*member_iter)->IsAnonymous()) {
       if (designated) {
         PutBack();
         PutBack();
       }
 
-      ParseInitializer(inits, (*member)->GetType(), offset, designated, false);
+      ParseInitializer(inits, (*member_iter)->GetType(), offset, designated,
+                       false);
     } else {
-      ParseInitializer(inits, (*member)->GetType(),
-                       offset + (*member)->GetOffset(), designated, false);
+      ParseInitializer(inits, (*member_iter)->GetType(),
+                       offset + (*member_iter)->GetOffset(), designated, false);
     }
 
     designated = false;
-    ++member;
+    ++member_iter;
 
     if (!type->IsStructTy()) {
       break;
     }
 
-    if (!has_brace && member == std::end(type->StructGetMembers())) {
+    if (!has_brace && member_iter == std::end(type->StructGetMembers())) {
       break;
     }
 
-    if (Try(Tag::kComma)) {
+    if (!Try(Tag::kComma)) {
       if (has_brace) {
         Expect(Tag::kRightBrace);
-      } else {
-        return;
       }
+      return;
     }
   }
 

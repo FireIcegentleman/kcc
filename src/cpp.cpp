@@ -20,7 +20,9 @@
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 
+#ifdef DEV
 #include "util.h"
+#endif
 
 namespace kcc {
 
