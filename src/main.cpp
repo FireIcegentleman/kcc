@@ -46,6 +46,7 @@ int main(int argc, char *argv[]) try {
 
   CommandLineCheck();
 
+  // FIXME 编译多文件时行为不正确
   for (const auto &item : InputFilePaths) {
     auto pid{fork()};
     if (pid < 0) {
@@ -64,7 +65,7 @@ int main(int argc, char *argv[]) try {
     // WEXITSTATUS 返回一个正常终止的子进程的退出状态, 只有在
     // WIFEXITED 为真时才会定义
     if (!WIFEXITED(status) || WEXITSTATUS(status)) {
-      Error("Compiler internal error");
+      Error("Compile Error");
     }
   }
 
@@ -220,6 +221,9 @@ void RunDev() {
 
   JsonGen{}.GenJson(unit, "test.html");
 
+  std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
+  std::system("./api standard.ll -o standard.cpp");
+
   if (!ParseOnly) {
     CodeGen code_gen{"test.c"};
     std::cout << "code gen ....................... ";
@@ -237,8 +241,6 @@ void RunDev() {
     std::error_code error_code;
     llvm::raw_fd_ostream ir_file{"test.ll", error_code};
     ir_file << *Module;
-
-    std::system("clang test.c -o standard.ll -std=c17 -S -emit-llvm");
 
     std::system("llc test.ll");
 

@@ -717,7 +717,7 @@ Expr* Parser::ParseIndexExpr(Expr* expr) {
   MarkLoc();
 
   auto rhs{ParseExpr()};
-  Expect(Tag::kLeftSquare);
+  Expect(Tag::kRightSquare);
 
   return MakeAstNode<UnaryOpExpr>(
       Tag::kStar, MakeAstNode<BinaryOpExpr>(Tag::kPlus, expr, rhs));
@@ -997,20 +997,20 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
   std::uint32_t type_spec{};
 
   switch (encoding) {
+    case Encoding::kUtf8:
     case Encoding::kNone:
       type_spec = kChar;
+      str.append(1, '\0');
       break;
     case Encoding::kChar16:
       type_spec = kShort | kUnsigned;
+      str.append(2, '\0');
       break;
     case Encoding::kChar32:
-      type_spec = kInt | kUnsigned;
-      break;
     case Encoding::kWchar:
       type_spec = kInt | kUnsigned;
+      str.append(4, '\0');
       break;
-    case Encoding::kUtf8:
-      Error(tok, "Can't use u8 here");
     default:
       assert(false);
   }
@@ -2051,6 +2051,10 @@ std::set<Initializer> Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
   return inits;
 }
 
+// initializer:
+//  assignment-expression
+//  { initializer-list }
+//  { initializer-list , }
 void Parser::ParseInitializer(std::set<Initializer>& inits, QualType type,
                               std::int32_t offset, bool designated,
                               bool force_brace) {
@@ -2084,6 +2088,8 @@ void Parser::ParseInitializer(std::set<Initializer>& inits, QualType type,
 
     return ParseStructInitializer(inits, type.GetType(), offset, designated);
   } else {
+    // 标量类型
+    // int a={10}; / int a={10,}; 都是合法的
     auto has_brace{Try(Tag::kLeftBrace)};
     expr = ParseAssignExpr();
 
@@ -2173,12 +2179,11 @@ bool Parser::ParseLiteralInitializer(std::set<Initializer>& inits, Type* type,
   if (!Test(Tag::kStringLiteral)) {
     if (has_brace) {
       PutBack();
-    } else {
-      return false;
     }
+    return false;
   }
 
-  auto str{ParseStringLiteral()};
+  auto str_node{ParseStringLiteral()};
 
   if (has_brace) {
     Try(Tag::kComma);
@@ -2186,47 +2191,65 @@ bool Parser::ParseLiteralInitializer(std::set<Initializer>& inits, Type* type,
   }
 
   if (!type->IsComplete()) {
-    type->ArraySetNumElements(str->GetType()->ArrayGetNumElements());
+    type->ArraySetNumElements(str_node->GetType()->ArrayGetNumElements());
     type->SetComplete(true);
   }
 
-  auto width{std::min(type->GetWidth(), str->GetType()->GetWidth())};
-  auto val{str->GetVal().c_str()};
-
-  for (; width >= 8; width -= 8) {
-    auto p = reinterpret_cast<const std::uint64_t*>(val);
-    auto t = ArithmeticType::Get(kLong | kUnsigned);
-    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
-    inits.insert({t, offset, v});
-    offset += 8;
-    val += 8;
+  if (str_node->GetType()->ArrayGetNumElements() >
+      type->ArrayGetNumElements()) {
+    Error(str_node->GetLoc(),
+          "initializer-string for char array is too long '{}' to '{}",
+          str_node->GetType()->ArrayGetNumElements(),
+          type->ArrayGetNumElements());
   }
 
-  for (; width >= 4; width -= 4) {
-    auto p = reinterpret_cast<const std::uint32_t*>(val);
-    auto t = ArithmeticType::Get(kInt | kUnsigned);
-    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
-    inits.insert({t, offset, v});
-    offset += 4;
-    val += 4;
+  if (str_node->GetType()->ArrayGetElementType()->GetWidth() !=
+      type->ArrayGetElementType()->GetWidth()) {
+    Error(str_node->GetLoc(), "Different character types '{}' vs '{}",
+          str_node->GetType()->ArrayGetElementType()->ToString(),
+          type->ArrayGetElementType()->ToString());
   }
 
-  for (; width >= 2; width -= 2) {
-    auto p = reinterpret_cast<const std::uint16_t*>(val);
-    auto t = ArithmeticType::Get(kShort | kUnsigned);
-    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
-    inits.insert({t, offset, v});
-    offset += 2;
-    val += 2;
-  }
-
-  for (; width >= 1; --width) {
-    auto p = reinterpret_cast<const std::uint8_t*>(val);
-    auto t = ArithmeticType::Get(kChar | kUnsigned);
-    auto v = ConstantExpr::Get(t, static_cast<std::uint64_t>(*p));
-    inits.insert({t, offset, v});
-    offset += 1;
-    val += 1;
+  auto width{type->ArrayGetElementType()->GetWidth()};
+  auto size{str_node->GetType()->ArrayGetNumElements()};
+  auto str{str_node->GetVal().c_str()};
+  // FIXME
+  switch (width) {
+    case 1:
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
+        auto char_type{ArithmeticType::Get(kChar | kUnsigned)};
+        auto value{
+            ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
+        inits.insert({char_type, offset, value});
+        offset += 1;
+        str += 1;
+      }
+      break;
+    case 2:
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
+        auto char_type{ArithmeticType::Get(kShort | kUnsigned)};
+        auto value{
+            ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
+        inits.insert({char_type, offset, value});
+        offset += 2;
+        str += 2;
+      }
+      break;
+    case 4:
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
+        auto char_type{ArithmeticType::Get(kInt | kUnsigned)};
+        auto value{
+            ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
+        inits.insert({char_type, offset, value});
+        offset += 4;
+        str += 4;
+      }
+      break;
+    default:
+      assert(false);
   }
 
   return true;

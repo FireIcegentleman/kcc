@@ -89,7 +89,7 @@ bool Type::IsComplete() const { return complete_; }
 void Type::SetComplete(bool complete) {
   complete_ = complete;
 
-  if (IsStructTy() || IsUnionTy()) {
+  if (IsStructOrUnionTy()) {
     StructFinish();
   }
 }

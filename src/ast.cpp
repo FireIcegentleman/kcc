@@ -677,7 +677,7 @@ bool StringLiteralExpr::IsLValue() const { return false; }
 std::string StringLiteralExpr::GetVal() const { return val_; }
 
 StringLiteralExpr::StringLiteralExpr(Type* type, const std::string& val)
-    : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth() + 1)},
+    : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth())},
       val_{val} {}
 
 /*
