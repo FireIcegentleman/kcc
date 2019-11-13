@@ -33,8 +33,15 @@
 
 # IDE files
 .idea
-cmake-build-debug
-cmake-build-release
+cmake-build-*
 build
 compile_commands.json
-test/dev/test.out
+
+# Dev files
+test/dev/standard.cpp
+*.html
+*.i
+*.txt
+*.s
+*.ll
+
