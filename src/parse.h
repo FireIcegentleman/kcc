@@ -32,7 +32,6 @@ class Parser {
 
   bool HasNext();
   Token Peek();
-  Token PeekPrev();
   Token Next();
   void PutBack();
   bool Test(Tag tag);

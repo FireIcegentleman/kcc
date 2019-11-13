@@ -20,8 +20,10 @@
 //#include <string.h>
 //#include <threads.h>
 //#include <time.h>
-#include <uchar.h>
+//#include <uchar.h>
 //#include <wchar.h>
 //#include <wctype.h>
 
-int main(void) { char32_t 你好[5] = {L"fu"}; }
+int printf(const char *s, ...);
+
+int main(void) { printf("Hello World!%d", 42); }

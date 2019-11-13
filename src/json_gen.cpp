@@ -108,7 +108,7 @@ void JsonGen::Visit(const FuncCallExpr& node) {
 }
 
 void JsonGen::Visit(const ConstantExpr& node) {
-  auto str{node.KindStr().append(' ')};
+  auto str{node.KindStr().append(": ")};
 
   if (node.GetType()->IsIntegerTy() || node.GetType()->IsFloatPointTy()) {
     str.append(QString::number(node.integer_val_));
@@ -125,7 +125,7 @@ void JsonGen::Visit(const ConstantExpr& node) {
 void JsonGen::Visit(const StringLiteralExpr& node) {
   QJsonObject root;
   root["name"] =
-      node.KindStr().append(' ').append(QString::fromStdString(node.val_));
+      node.KindStr().append(": ").append(QString::fromStdString(node.val_));
 
   result_ = root;
 }

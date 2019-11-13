@@ -30,11 +30,6 @@ bool Parser::HasNext() { return !Peek().TagIs(Tag::kEof); }
 
 Token Parser::Peek() { return tokens_[index_]; }
 
-Token Parser::PeekPrev() {
-  assert(index_ > 0);
-  return tokens_[index_ - 1];
-}
-
 Token Parser::Next() { return tokens_[index_++]; }
 
 void Parser::PutBack() {
