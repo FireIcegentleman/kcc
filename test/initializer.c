@@ -31,10 +31,6 @@ static void test_array() {
     short qe[24] = { 1, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0, 4, 5, 6 };
     short q[4][3][2] = { { 1 }, { 2, 3 }, { 4, 5, 6 } };
     verify_short(qe, q, 24);
-
-    // FIXME
-    int a[] = {{{ 3 }}};
-    expect(3, a[0]);
 }
 
 static void test_string() {
@@ -156,12 +152,11 @@ static void test_zero() {
 
 
 static void test_typedef() {
-  // FIXME
     typedef int A[];
-//    A a = { 1, 2 };
-//    A b = { 3, 4, 5 };
-//    expect(2, sizeof(a) / sizeof(*a));
-//    expect(3, sizeof(b) / sizeof(*b));
+    A a = { 1, 2 };
+    A b = { 3, 4, 5 };
+    expect(2, sizeof(a) / sizeof(*a));
+    expect(3, sizeof(b) / sizeof(*b));
 }
 
 void testmain() {

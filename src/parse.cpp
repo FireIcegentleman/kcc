@@ -1612,6 +1612,15 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
           auto ident{curr_scope_->FindNormal(tok.GetIdentifier())};
           type = ident->GetQualType();
           type_spec |= kTypedefName;
+
+          //  typedef int A[];
+          //  A a = {1, 2};
+          //  A b = {3, 4, 5};
+          // 防止类型被修改
+          if (type->IsArrayTy() && !type->IsComplete()) {
+            type = ArrayType::Get(type->ArrayGetElementType(),
+                                  type->ArrayGetNumElements());
+          }
         } else {
           goto finish;
         }
