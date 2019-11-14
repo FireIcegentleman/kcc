@@ -189,6 +189,19 @@ void JsonGen::Visit(const ObjectExpr& node) {
   result_ = root;
 }
 
+void JsonGen::Visit(const StmtExpr& node) {
+  QJsonObject root;
+  root["name"] = node.KindStr();
+
+  QJsonArray children;
+  node.block_->Accept(*this);
+  children.append(result_);
+
+  root["children"] = children;
+
+  result_ = root;
+}
+
 void JsonGen::Visit(const LabelStmt& node) {
   QJsonObject root;
   root["name"] = node.KindStr();

@@ -25,6 +25,7 @@ ACCEPT(StringLiteralExpr)
 ACCEPT(IdentifierExpr)
 ACCEPT(EnumeratorExpr)
 ACCEPT(ObjectExpr)
+ACCEPT(StmtExpr)
 
 ACCEPT(LabelStmt)
 ACCEPT(CaseStmt)
@@ -790,6 +791,35 @@ ObjectExpr::ObjectExpr(const std::string& name, QualType type,
       align_{type->GetAlign()} {}
 
 /*
+ * StmtExpr
+ */
+StmtExpr* StmtExpr::Get(CompoundStmt* block) {
+  return new (StmtExprPool.Allocate()) StmtExpr{block};
+}
+
+AstNodeType StmtExpr::Kind() const { return AstNodeType::kStmtExpr; }
+
+void StmtExpr::Check() {
+  auto stmts{block_->GetStmts()};
+
+  if (std::size(stmts) == 0 || stmts.back()->Kind() != AstNodeType::kExprStmt) {
+    Error(loc_, "The last statement must be an expression statement");
+  }
+
+  auto expr{dynamic_cast<ExprStmt*>(stmts.back())->GetExpr()};
+
+  if (!expr) {
+    Error(loc_, "The last statement cannot be an empty statement");
+  }
+
+  type_ = expr->GetQualType();
+}
+
+bool StmtExpr::IsLValue() const { return false; }
+
+StmtExpr::StmtExpr(CompoundStmt* block) : block_{block} {}
+
+/*
  * LabelStmt
  */
 LabelStmt* LabelStmt::Get(IdentifierExpr* label) {
@@ -879,6 +909,8 @@ ExprStmt* ExprStmt::Get(Expr* expr) {
 AstNodeType ExprStmt::Kind() const { return AstNodeType::kExprStmt; }
 
 void ExprStmt::Check() {}
+
+Expr* ExprStmt::GetExpr() const { return expr_; }
 
 ExprStmt::ExprStmt(Expr* expr) : expr_{expr} {}
 

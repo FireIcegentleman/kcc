@@ -1056,5 +1056,6 @@ std::string CodeGen::LLVMTypeToStr(llvm::Type* type) const {
 void CodeGen::Visit(const StringLiteralExpr& node) {
   result_ = Builder.CreateGlobalStringPtr(node.val_);
 }
+void CodeGen::Visit(const StmtExpr&) {}
 
 }  // namespace kcc

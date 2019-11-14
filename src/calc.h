@@ -34,6 +34,7 @@ class CalcExpr : public Visitor {
   virtual void Visit(const ConditionOpExpr& node) override;
   virtual void Visit(const ConstantExpr& node) override;
   virtual void Visit(const EnumeratorExpr& node) override;
+  virtual void Visit(const StmtExpr& node) override;
 
   virtual void Visit(const StringLiteralExpr& node) override;
   virtual void Visit(const FuncCallExpr& node) override;
@@ -227,6 +228,13 @@ void CalcExpr<T>::Visit(const ConstantExpr& node) {
 template <typename T>
 void CalcExpr<T>::Visit(const EnumeratorExpr& node) {
   val_ = static_cast<T>(node.GetVal());
+}
+
+template <typename T>
+void CalcExpr<T>::Visit(const StmtExpr& node) {
+  auto last{node.block_->GetStmts().back()};
+  assert(last->Kind() == AstNodeType::kExprStmt);
+  val_ = CalcExpr<T>{}.Calc(dynamic_cast<ExprStmt*>(last)->GetExpr());
 }
 
 template <typename T>

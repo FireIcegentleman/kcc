@@ -110,6 +110,7 @@ inline MemoryPool<StringLiteralExpr> StringLiteralExprPool;
 inline MemoryPool<IdentifierExpr> IdentifierExprPool;
 inline MemoryPool<EnumeratorExpr> EnumeratorExprPool;
 inline MemoryPool<ObjectExpr> ObjectExprPool;
+inline MemoryPool<StmtExpr> StmtExprPool;
 
 inline MemoryPool<LabelStmt> LabelStmtPool;
 inline MemoryPool<CaseStmt> CaseStmtPool;

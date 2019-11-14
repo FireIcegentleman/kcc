@@ -5,8 +5,7 @@
 void testmain() {
     print("statement expression");
 
-    // TODO
-//    expect(3, ({ 1; 2; 3; }));
-//    expectf(3.0, ({ 1; 2; 3.0; }));
-//    expect(5, ({ int a = 5; a; }));
+    expect(3, ({ 1; 2; 3; }));
+    expectf(3.0, ({ 1; 2; 3.0; }));
+    expect(5, ({ int a = 5; a; }));
 }

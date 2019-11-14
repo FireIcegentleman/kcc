@@ -180,6 +180,7 @@ class Parser {
   void ParseAttributeExprList();
   void TryParseAsm();
   QualType ParseTypeof();
+  Expr* ParseStmtExpr();
 
   /*
    * built in

@@ -269,6 +269,15 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
  * Expr
  */
 Expr* Parser::ParseExpr() {
+  // GNU 扩展, 语句表达式
+  if (Try(Tag::kLeftParen)) {
+    if (Test(Tag::kLeftBrace)) {
+      return ParseStmtExpr();
+    } else {
+      PutBack();
+    }
+  }
+
   auto lhs{ParseAssignExpr()};
 
   MarkLoc();
@@ -283,6 +292,15 @@ Expr* Parser::ParseExpr() {
 }
 
 Expr* Parser::ParseAssignExpr() {
+  // 因为有很多是直接调用该函数而不是 ParseExpr
+  if (Try(Tag::kLeftParen)) {
+    if (Test(Tag::kLeftBrace)) {
+      return ParseStmtExpr();
+    } else {
+      PutBack();
+    }
+  }
+
   auto lhs{ParseConditionExpr()};
   Expr* rhs;
 
@@ -753,8 +771,8 @@ Expr* Parser::ParseMemberRefExpr(Expr* expr) {
   auto member_name{member.GetIdentifier()};
 
   auto type{expr->GetType()};
-  if (!type->IsStructTy()) {
-    Error(loc_, "an struct/union expected");
+  if (!type->IsStructOrUnionTy()) {
+    Error(loc_, "an struct/union expected: '{}'", type->ToString());
   }
 
   auto rhs{type->StructGetMember(member_name)};
@@ -2495,6 +2513,12 @@ QualType Parser::ParseTypeof() {
   Expect(Tag::kRightParen);
 
   return type;
+}
+
+Expr* Parser::ParseStmtExpr() {
+  auto block{ParseCompoundStmt()};
+  Expect(Tag::kRightParen);
+  return MakeAstNode<StmtExpr>(block);
 }
 
 /*

@@ -30,6 +30,7 @@ class JsonGen : public Visitor {
   virtual void Visit(const IdentifierExpr& node) override;
   virtual void Visit(const EnumeratorExpr& node) override;
   virtual void Visit(const ObjectExpr& node) override;
+  virtual void Visit(const StmtExpr& node) override;
 
   virtual void Visit(const LabelStmt& node) override;
   virtual void Visit(const CaseStmt& node) override;

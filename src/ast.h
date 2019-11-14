@@ -23,6 +23,7 @@
 
 namespace kcc {
 
+class CompoundStmt;
 class Declaration;
 class Visitor;
 
@@ -40,6 +41,7 @@ class AstNodeTypes : public QObject {
     kIdentifierExpr,
     kEnumeratorExpr,
     kObjectExpr,
+    kStmtExpr,
 
     kLabelStmt,
     kCaseStmt,
@@ -416,6 +418,27 @@ class ObjectExpr : public IdentifierExpr {
   llvm::GlobalValue* global_ptr_{};
 };
 
+// GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式
+class StmtExpr : public Expr {
+  template <typename T>
+  friend class CalcExpr;
+  friend class JsonGen;
+  friend class CodeGen;
+
+ public:
+  static StmtExpr* Get(CompoundStmt* block);
+
+  virtual AstNodeType Kind() const override;
+  virtual void Accept(Visitor& visitor) const override;
+  virtual void Check() override;
+  virtual bool IsLValue() const override;
+
+ private:
+  StmtExpr(CompoundStmt* block);
+
+  CompoundStmt* block_;
+};
+
 class Stmt : public AstNode {};
 
 class LabelStmt : public Stmt {
@@ -510,6 +533,8 @@ class ExprStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+
+  Expr* GetExpr() const;
 
  private:
   explicit ExprStmt(Expr* expr = nullptr);

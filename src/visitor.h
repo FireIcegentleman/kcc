@@ -23,6 +23,7 @@ class Visitor {
   virtual void Visit(const IdentifierExpr &node) = 0;
   virtual void Visit(const EnumeratorExpr &node) = 0;
   virtual void Visit(const ObjectExpr &node) = 0;
+  virtual void Visit(const StmtExpr &node) = 0;
 
   virtual void Visit(const LabelStmt &node) = 0;
   virtual void Visit(const CaseStmt &node) = 0;
