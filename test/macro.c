@@ -47,13 +47,11 @@ static void include() {
 }
 
 static void predefined() {
-#ifdef __8cc__
-    expect(1, __8cc__);
     expect(1, __STDC_NO_ATOMICS__);
     expect(1, __STDC_NO_COMPLEX__);
     expect(1, __STDC_NO_THREADS__);
     expect(1, __STDC_NO_VLA__);
-#endif
+
     expect(1, __amd64);
     expect(1, __amd64__);
     expect(1, __x86_64);
@@ -82,9 +80,7 @@ static void predefined() {
     expect(8, __SIZEOF_POINTER__);
     expect(8, __SIZEOF_PTRDIFF_T__);
     expect(8, __SIZEOF_SIZE_T__);
-#ifdef __8cc__
     expect(8, __SIZEOF_LONG_DOUBLE__);
-#endif
 
     expect(sizeof(short), __SIZEOF_SHORT__);
     expect(sizeof(int), __SIZEOF_INT__);

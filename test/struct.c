@@ -299,7 +299,6 @@ static void flexible_member() {
 //    struct { int a[0]; } z;
 //    expect(0, sizeof(z));
 
-#ifdef __8cc__ // BUG
     struct t { int a, b[]; };
     struct t x2 = { 1, 2, 3 };
     struct t x3 = { 1, 2, 3, 4, 5 };
@@ -307,7 +306,6 @@ static void flexible_member() {
     expect(3, x3.b[1]);
     expect(4, x3.b[2]);
     expect(5, x3.b[3]);
-#endif
 }
 
 static void empty_struct() {

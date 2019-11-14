@@ -239,31 +239,6 @@ static void test_label() {
     expect(8, z);
 }
 
-static void test_computed_goto() {
-  // TODO
-//    struct { void *x, *y, *z, *a; } t = { &&x, &&y, &&z, &&a };
-//    int acc = 0;
-//    goto *t.x;
-//    acc = 5;
-// x: expect(0, acc);
-//
-//    int i = 0;
-//    acc = 0;
-// y: if (i > 10) goto *t.z;
-//    acc += i++;
-//    goto *t.y;
-// z: if (i > 11) goto *t.a;
-//    expect(55, acc);
-//    i++;
-//    goto *t.y;
-// a:
-//    ;
-//    static void *p = &&L;
-//    goto *p;
-// L:
-//    ;
-}
-
 static void test_logor() {
     expect(1, 0 || 3);
     expect(1, 5 || 0);
@@ -279,6 +254,5 @@ void testmain() {
     test_switch();
     test_goto();
     test_label();
-    test_computed_goto();
     test_logor();
 }

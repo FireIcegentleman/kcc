@@ -3,8 +3,6 @@
 #include <stdbool.h>
 #include "test.h"
 
-#ifdef __8cc__
-
 static void test_basic() {
     expect(1, _Generic(5, int: 1, float: 2));
     expectd(3.0, _Generic(5.0, int: 1, float: 2.0, double: 3.0));
@@ -113,11 +111,3 @@ void testmain() {
     test_struct();
     test_array();
 }
-
-#else
-
-void testmain() {
-    print("_Generic");
-}
-
-#endif

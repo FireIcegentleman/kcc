@@ -1565,7 +1565,6 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
         type_qual |= kRestrict;
         break;
       case Tag::kVolatile:
-        // TODO
         type_qual |= kVolatile;
         break;
 
@@ -1689,7 +1688,6 @@ void Parser::ParseStructDeclList(StructType* type) {
     if (Try(Tag::kStaticAssert)) {
       ParseStaticAssertDecl();
     } else {
-      // TODO
       std::int32_t align{};
       auto base_type{ParseDeclSpec(nullptr, nullptr, &align)};
 

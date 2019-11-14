@@ -94,9 +94,7 @@ static void test_typedef() {
 }
 
 static void test_align() {
-#ifdef __8cc__
     expect(8, sizeof(max_align_t));
-#endif
 }
 
 void testmain() {

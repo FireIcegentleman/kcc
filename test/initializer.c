@@ -165,10 +165,6 @@ static void test_typedef() {
 }
 
 static void test_excessive() {
-#ifdef __8cc__
-#pragma disable_warning
-#endif
-
   // TODO ???
     //char x1[3] = { 1, 2, 3, 4, 5 };
     //expect(3, sizeof(x1));
@@ -177,10 +173,6 @@ static void test_excessive() {
     //char x2[3] = "abcdefg";
     //expect(3, sizeof(x2));
     //expect(0, strncmp("abc", x2, 3));
-
-#ifdef __8cc__
-#pragma disable_warning
-#endif
 }
 
 void testmain() {

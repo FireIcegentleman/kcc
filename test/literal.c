@@ -76,11 +76,9 @@ static void test_mbstring() {
     //expect(0, memcmp("\x42\x30\0\0\x78\0\0\0\0\0\0\0", "\u3042" L"x", 12));
 
     // GCC 5 allows UTF-8 strings as identifiers.
-#ifdef __8cc__
     int 日本語 = 3;
     expect(3, 日本語);
     expect(3, 日\u672C\U00008A9E);
-#endif
 }
 
 static void test_float() {

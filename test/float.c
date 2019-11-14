@@ -61,7 +61,6 @@ void std() {
     //expectd(*(double *)&(uint64_t){1}, DBL_TRUE_MIN);
     //expect_string("0x0.0000000000001p-1022", fmtdbl(DBL_TRUE_MIN));
 
-#ifdef __8cc__
     expect_string("15", fmtint(LDBL_DIG));
     expect_string("0x1p-52", fmtdbl(LDBL_EPSILON));
     expect_string("53", fmtint(LDBL_MANT_DIG));
@@ -73,7 +72,6 @@ void std() {
     expect_string("-1021", fmtint(LDBL_MIN_EXP));
     expectd(*(double *)&(uint64_t){1}, LDBL_TRUE_MIN);
     expect_string("0x0.0000000000001p-1022", fmtdbl(LDBL_TRUE_MIN));
-#endif
 }
 
 void testmain() {

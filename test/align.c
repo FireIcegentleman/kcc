@@ -23,10 +23,8 @@ static void test_alignof() {
     expect(8, alignof(double[10]));
     expect(1, _Alignof(struct {}));
     expect(4, alignof(struct {char a; int b; }));
-#ifdef __8cc__
     expect(8, alignof(struct {int a; long double b; }));
     expect(8, alignof(long double));
-#endif
 
     // The type of the result is size_t.
     expect(1, alignof(char) - 2 > 0);

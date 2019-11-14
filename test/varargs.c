@@ -4,11 +4,9 @@
 #include "test.h"
 
 static void test_builtin() {
-#ifdef __8cc__
     expect(0, __builtin_reg_class((int *)0));
     expect(1, __builtin_reg_class((float *)0));
     expect(2, __builtin_reg_class((struct{ int x; }*)0));
-#endif
 }
 
 static void test_int(int a, ...) {
