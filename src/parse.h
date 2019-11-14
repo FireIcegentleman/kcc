@@ -186,6 +186,7 @@ class Parser {
    * built in
    */
   Expr* ParseOffsetof();
+  Expr* ParseRegClass();
 
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};

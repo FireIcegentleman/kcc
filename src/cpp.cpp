@@ -81,8 +81,11 @@ Preprocessor::Preprocessor() {
   pp_->setPredefines(
       pp_->getPredefines() +
       "#define __builtin_va_copy(dest,src) ((dest)[0]=(src)[0])\n"
-      "#define __builtin_va_arg(ap,type) "
-      "*(type*)(__builtin_reg_class(type)?__va_arg_gp(ap):__va_arg_fp(ap))\n"
+      "#define __builtin_va_arg(ap, type)          \\\n"
+      "  ({int klass = __builtin_reg_class((type *)0);  \\\n"
+      "    *(type *)(klass == 0 ? __va_arg_gp(ap)   \\\n"
+      "   : klass == 1 ? __va_arg_fp(ap) : __va_arg_mem(ap));   \\\n"
+      "  })\n"
       "#define DECIMAL_DIG 21\n"
       "#define FLT_EVAL_METHOD 0\n"
       "#define FLT_TRUE_MIN 0x1p-149\n"

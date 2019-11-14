@@ -624,6 +624,8 @@ Expr* Parser::ParseUnaryExpr() {
       return ParseAlignof();
     case Tag::kOffsetof:
       return ParseOffsetof();
+    case Tag::kRegClass:
+      return ParseRegClass();
     default:
       PutBack();
       return ParsePostfixExpr();
@@ -2539,6 +2541,28 @@ Expr* Parser::ParseOffsetof() {
   return MakeAstNode<ConstantExpr>(
       ArithmeticType::Get(kLong | kUnsigned),
       static_cast<std::uint64_t>(type->StructGetMember(name)->GetOffset()));
+}
+
+Expr* Parser::ParseRegClass() {
+  Expect(Tag::kLeftParen);
+
+  auto expr{ParseExpr()};
+  Expect(Tag::kRightParen);
+
+  assert(expr->Kind() == AstNodeType::kTypeCastExpr);
+  assert(expr->GetType()->IsPointerTy());
+
+  auto type{expr->GetType()->PointerGetElementType()};
+  if (type->IsIntegerTy() || type->IsPointerTy()) {
+    return MakeAstNode<ConstantExpr>(0);
+  } else if (type->IsFloatPointTy()) {
+    return MakeAstNode<ConstantExpr>(1);
+  } else if (type->IsStructOrUnionTy()) {
+    return MakeAstNode<ConstantExpr>(2);
+  } else {
+    assert(false);
+    return nullptr;
+  }
 }
 
 }  // namespace kcc
