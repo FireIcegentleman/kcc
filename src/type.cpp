@@ -299,6 +299,11 @@ std::int32_t Type::StructGetOffset() const {
 
 void Type::StructFinish() { dynamic_cast<StructType*>(this)->Finish(); }
 
+bool Type::StructHasFlexibleArray() const {
+  assert(IsStructTy());
+  return dynamic_cast<const StructType*>(this)->HasFlexibleArray();
+}
+
 bool Type::FuncIsVarArgs() const {
   return dynamic_cast<const FunctionType*>(this)->IsVarArgs();
 }
@@ -796,6 +801,10 @@ Scope* StructType::GetScope() { return scope_; }
 std::int32_t StructType::GetOffset() const { return offset_; }
 
 void StructType::AddMember(ObjectExpr* member) {
+  if (member->GetType()->IsArrayTy() && !member->GetType()->IsComplete()) {
+    has_flexible_array_ = true;
+  }
+
   auto offset{MakeAlign(offset_, member->GetAlign())};
   member->SetOffset(offset);
 
@@ -856,6 +865,8 @@ void StructType::Finish() {
 
   llvm::cast<llvm::StructType>(llvm_type_)->setBody(members);
 }
+
+bool StructType::HasFlexibleArray() const { return has_flexible_array_; }
 
 StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
     : Type{false},

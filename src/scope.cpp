@@ -31,7 +31,8 @@ void Scope::PrintCurrScope() const {
     std::cout << "type: " << obj->GetType()->ToString();
 
     if (obj->GetType()->IsStructOrUnionTy()) {
-      std::cout << "\t\t\tmember: " << obj->GetType()->StructGetNumMembers();
+      std::cout << "\t\t\t" << obj->GetType()->StructGetNumMembers()
+                << " members: ";
       for (const auto& item : obj->GetType()->StructGetMembers()) {
         std::cout << item->GetName() << ' ';
       }

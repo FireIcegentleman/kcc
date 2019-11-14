@@ -1760,12 +1760,12 @@ void Parser::ParseStructDeclList(StructType* type) {
             Error(Peek(), "duplicate member:{}", name);
           } else if (copy->IsArrayTy() && !copy->IsComplete()) {
             // 可能是柔性数组
+            // 若结构体定义了至少一个具名成员,
+            // 则额外声明其最后成员拥有不完整的数组类型
             if (type->IsStruct() && std::size(type->GetMembers()) > 0) {
               auto member{MakeAstNode<ObjectExpr>(name, copy)};
               type->AddMember(member);
-              // 必须是最后一个成员
               Expect(Tag::kSemicolon);
-              Expect(Tag::kRightBrace);
 
               goto finalize;
             } else {
@@ -2037,7 +2037,8 @@ std::size_t Parser::ParseArrayLength() {
   // 不支持变长数组
   auto len{CalcExpr<std::int32_t>{}.Calc(expr)};
 
-  if (len < 0) {
+  // TODO 允许分配大小为 0 的数组
+  if (len <= 0) {
     Error(expr, "Array size must be greater than 0: '{}'", len);
   }
 

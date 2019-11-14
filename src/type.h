@@ -173,7 +173,7 @@ class Type {
   void StructSetName(const std::string& name);
   std::string StructGetName() const;
   std::int32_t StructGetNumMembers() const;
-  std::vector<ObjectExpr*> &StructGetMembers();
+  std::vector<ObjectExpr*>& StructGetMembers();
   ObjectExpr* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
   Scope* StructGetScope();
@@ -181,6 +181,7 @@ class Type {
   void StructMergeAnonymous(ObjectExpr* anonymous);
   std::int32_t StructGetOffset() const;
   void StructFinish();
+  bool StructHasFlexibleArray() const;
 
   bool FuncIsVarArgs() const;
   QualType FuncGetReturnType() const;
@@ -294,7 +295,7 @@ class StructType : public Type {
   std::string GetName() const;
 
   std::int32_t GetNumMembers() const;
-  std::vector<ObjectExpr*> &GetMembers();
+  std::vector<ObjectExpr*>& GetMembers();
   ObjectExpr* GetMember(const std::string& name) const;
   QualType GetMemberType(std::int32_t i) const;
   Scope* GetScope();
@@ -303,6 +304,8 @@ class StructType : public Type {
   void AddMember(ObjectExpr* member);
   void MergeAnonymous(ObjectExpr* anonymous);
   void Finish();
+
+  bool HasFlexibleArray() const;
 
  private:
   StructType(bool is_struct, const std::string& name, Scope* parent);
@@ -318,6 +321,8 @@ class StructType : public Type {
   std::int32_t offset_{};
   std::int32_t width_{};
   std::int32_t align_{};
+
+  bool has_flexible_array_{false};
 };
 
 class FunctionType : public Type {

@@ -1123,8 +1123,13 @@ void Declaration::AddInits(const Initializers& inits) {
     }
   } else if (ident_->GetType()->IsAggregateTy()) {
     auto last{*(std::end(inits_) - 1)};
-    if (last.offset_ + last.type_->GetWidth() > ident_->GetType()->GetWidth()) {
-      Error(ident_->GetLoc(), "excess elements in array initializer");
+
+    // TODO 柔性数组怎么实现???
+    if ((last.offset_ + last.type_->GetWidth() >
+         ident_->GetType()->GetWidth()) &&
+        !(ident_->GetType()->IsStructTy() &&
+          ident_->GetType()->StructHasFlexibleArray())) {
+      Error(loc_, "excess elements in array initializer");
     }
 
     for (auto& init : inits_) {
