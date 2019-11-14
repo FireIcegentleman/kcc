@@ -109,9 +109,9 @@ static void t12() {
     expect(84, a[0].b);
     a[1].b = 85;
     expect(85, a[1].b);
-    // FIXME
-//    int *p = (int *)a;
-//    expect(85, p[3]);
+
+    int *p = (int *)a;
+    expect(85, p[3]);
 }
 
 static void t13() {
@@ -211,8 +211,8 @@ static void test_offsetof() {
 
 static void flexible_member() {
   // FIXME
-    //struct { int a, b[]; } x;
-    //expect(4, sizeof(x));
+//    struct { int a, b[]; } x;
+//    expect(4, sizeof(x));
 //    struct { int a, b[0]; } y;
 //    expect(4, sizeof(y));
 //    struct { int a[0]; } z;

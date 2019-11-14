@@ -650,7 +650,7 @@ Expr* Parser::ParseSizeof() {
     type = expr->GetType();
   }
 
-  if (!type->IsComplete() && !type->IsVoidTy()) {
+  if (!type->IsComplete() && !type->IsVoidTy() && !type->IsFunctionTy()) {
     Error(loc_, "sizeof(incomplete type)");
   }
 
@@ -1019,6 +1019,8 @@ Expr* Parser::ParseFloat() {
 StringLiteralExpr* Parser::ParseStringLiteral() {
   MarkLoc();
 
+  // 如果一个没有指定编码而另一个指定了那么可以连接
+  // 两个都指定了不能连接
   auto tok{Expect(Tag::kStringLiteral)};
   auto [str, encoding]{Scanner{tok.GetStr()}.HandleStringLiteral()};
   ConvertStringLiteral(str, encoding);
@@ -1027,6 +1029,15 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
     tok = Next();
     auto [next_str, next_encoding]{Scanner{tok.GetStr()}.HandleStringLiteral()};
     ConvertStringLiteral(next_str, next_encoding);
+
+    if (encoding == Encoding::kNone && next_encoding != Encoding::kNone) {
+      ConvertStringLiteral(str, next_encoding);
+      encoding = next_encoding;
+    } else if (encoding != Encoding::kNone &&
+               next_encoding == Encoding::kNone) {
+      ConvertStringLiteral(next_str, encoding);
+      next_encoding = encoding;
+    }
 
     if (encoding != next_encoding) {
       Error(loc_, "cannot concat literal with different encodings");

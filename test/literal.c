@@ -51,29 +51,28 @@ static void test_string() {
 static void test_mbstring() {
     expect(2, sizeof(u""));
     expect(8, sizeof(u"abc"));
-    // TODO 是否应该做转换
-//    expect(8, sizeof("ab" u"c"));
-//    expect(8, sizeof(u"ab" u"c"));
-//    expect(1, sizeof(u8""));
-//    expect(4, sizeof(u8"abc"));
-//    expect(4, sizeof("ab" u8"c"));
-//    expect(4, sizeof(u8"ab" u8"c"));
-//    expect(4, sizeof(L""));
-//    expect(16, sizeof(L"abc"));
-//    expect(16, sizeof(L"ab" L"c"));
-//    expect(4, sizeof(U""));
-//    expect(16, sizeof(U"abc"));
-//    expect(16, sizeof("ab" U"c"));
-//    expect(16, sizeof(U"ab" U"c"));
+
+    expect(8, sizeof("ab" u"c"));
+    expect(8, sizeof(u"ab" u"c"));
+    expect(1, sizeof(u8""));
+    expect(4, sizeof(u8"abc"));
+    expect(4, sizeof("ab" u8"c"));
+    expect(4, sizeof(u8"ab" u8"c"));
+    expect(4, sizeof(L""));
+    expect(16, sizeof(L"abc"));
+    expect(16, sizeof(L"ab" L"c"));
+    expect(4, sizeof(U""));
+    expect(16, sizeof(U"abc"));
+    expect(16, sizeof("ab" U"c"));
+    expect(16, sizeof(U"ab" U"c"));
     expect(0, memcmp("x\0\0\0y\0\0\0z\0\0\0\0\0\0", L"xyz", 16));
     expect(0, memcmp("x\0\0\0y\0\0\0z\0\0\0\0\0\0", U"xyz", 16));
     expect(0, memcmp("\x78\0\x79\0\x7A\0\0\0", u"xyz", 8));
 
     expect(4, sizeof("\u3042"));
     expect(0, memcmp("\xE3\x81\x82\0", "\u3042", 4));
-    // FIXME
-    //expect(12, sizeof("\u3042" L"x"));
-    //expect(0, memcmp("\x42\x30\0\0\x78\0\0\0\0\0\0\0", "\u3042" L"x", 12));
+    expect(12, sizeof("\u3042" L"x"));
+    expect(0, memcmp("\x42\x30\0\0\x78\0\0\0\0\0\0\0", "\u3042" L"x", 12));
 
     // GCC 5 allows UTF-8 strings as identifiers.
     int 日本語 = 3;

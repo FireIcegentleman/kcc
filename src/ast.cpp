@@ -250,21 +250,9 @@ TypeCastExpr* TypeCastExpr::Get(Expr* expr, QualType to) {
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
 
 void TypeCastExpr::Check() {
-  if (Type::MayCast(expr_->GetQualType())->Equal(to_.GetType())) {
+  if (Type::MayCast(expr_->GetType())->Equal(to_.GetType())) {
     type_ = to_;
     return;
-  }
-
-  if (!(to_->IsVoidTy() || to_->IsScalarTy())) {
-    Error(loc_, "Can only be converted to void or scalar type: '{};",
-          to_->ToString());
-  }
-
-  if (!to_->IsVoidTy() && !expr_->GetType()->IsScalarTy()) {
-    Error(loc_,
-          "If the conversion type is not void, the expression can only be a"
-          "scalar type: '{};",
-          expr_->GetType()->ToString());
   }
 
   if (to_->IsFloatPointTy() && expr_->GetType()->IsPointerTy()) {

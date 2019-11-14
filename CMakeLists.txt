@@ -12,7 +12,7 @@ if(CMAKE_BUILD_TYPE MATCHES "Release")
   set(sanitizer "None")
 else()
   # Address Thread Undefined None
-  set(sanitizer "None")
+  set(sanitizer "Undefined")
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")

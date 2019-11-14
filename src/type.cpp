@@ -897,8 +897,8 @@ FunctionType* FunctionType::Get(QualType return_type,
 }
 
 std::int32_t FunctionType::GetWidth() const {
-  assert(false);
-  return 0;
+  // GNU 扩展
+  return 1;
 }
 
 std::int32_t FunctionType::GetAlign() const {

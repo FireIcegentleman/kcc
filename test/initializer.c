@@ -33,8 +33,8 @@ static void test_array() {
     verify_short(qe, q, 24);
 
     // FIXME
-    //int a[] = {{{ 3 }}};
-    //expect(3, a[0]);
+    int a[] = {{{ 3 }}};
+    expect(3, a[0]);
 }
 
 static void test_string() {

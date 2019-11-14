@@ -5,8 +5,7 @@
 
 static void test_primitives() {
     expect(1, sizeof(void));
-    // FIXME 对函数类型使用
-    //expect(1, sizeof(test_primitives));
+    expect(1, sizeof(test_primitives));
     expect(1, sizeof(char));
     expect(1, sizeof(_Bool));
     expect(1, sizeof(bool));
@@ -60,8 +59,7 @@ static void test_vars() {
     expect(24, sizeof(*d));
     expect(8, sizeof(**d));
     expect(1, sizeof(***d));
-    // FIXME 可以做转换 指针-> int
-   // expect(4, sizeof((int)a));
+    expect(4, sizeof((int)a));
 }
 
 static void test_struct() {
