@@ -79,6 +79,16 @@ std::string Type::ToString() const {
   std::string s;
   llvm::raw_string_ostream rso{s};
   llvm_type_->print(rso);
+
+  if (IsLongTy()) {
+    s = "l" + s;
+  } else if (IsLongLongTy()) {
+    s = "ll" + s;
+  }
+
+  if (IsIntegerTy() && IsUnsigned()) {
+    s = "u" + s;
+  }
   return rso.str();
 }
 
@@ -348,66 +358,43 @@ VoidType::VoidType() : Type{false} { llvm_type_ = Builder.getVoidTy(); }
  * ArithmeticType
  */
 ArithmeticType* ArithmeticType::Get(std::uint32_t type_spec) {
-  static auto bool_type{new (ArithmeticTypePool.Allocate())
-                            ArithmeticType{kBool}};
-  static auto char_type{new (ArithmeticTypePool.Allocate())
-                            ArithmeticType{kChar}};
-  static auto uchar_type{new (ArithmeticTypePool.Allocate())
-                             ArithmeticType{kChar | kUnsigned}};
-  static auto short_type{new (ArithmeticTypePool.Allocate())
-                             ArithmeticType{kShort}};
-  static auto ushort_type{new (ArithmeticTypePool.Allocate())
-                              ArithmeticType{kShort | kUnsigned}};
-  static auto int_type{new (ArithmeticTypePool.Allocate())
-                           ArithmeticType{kInt}};
-  static auto uint_type{new (ArithmeticTypePool.Allocate())
-                            ArithmeticType{kInt | kUnsigned}};
-  static auto long_type{new (ArithmeticTypePool.Allocate())
-                            ArithmeticType{kLong}};
-  static auto ulong_type{new (ArithmeticTypePool.Allocate())
-                             ArithmeticType{kLong | kUnsigned}};
-  static auto long_long_type{new (ArithmeticTypePool.Allocate())
-                                 ArithmeticType{kLongLong}};
-  static auto ulong_long_type{new (ArithmeticTypePool.Allocate())
-                                  ArithmeticType{kLongLong | kUnsigned}};
-  static auto float_type{new (ArithmeticTypePool.Allocate())
-                             ArithmeticType{kFloat}};
-  static auto double_type{new (ArithmeticTypePool.Allocate())
-                              ArithmeticType{kDouble}};
-  static auto long_double_type{new (ArithmeticTypePool.Allocate())
-                                   ArithmeticType{kDouble | kLong}};
-
   type_spec = ArithmeticType::DealWithTypeSpec(type_spec);
 
   switch (type_spec) {
     case kBool:
-      return bool_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kBool};
     case kChar:
-      return char_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kChar};
     case kChar | kUnsigned:
-      return uchar_type;
+      return new (ArithmeticTypePool.Allocate())
+          ArithmeticType{kChar | kUnsigned};
     case kShort:
-      return short_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kShort};
     case kShort | kUnsigned:
-      return ushort_type;
+      return new (ArithmeticTypePool.Allocate())
+          ArithmeticType{kShort | kUnsigned};
     case kInt:
-      return int_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kInt};
     case kInt | kUnsigned:
-      return uint_type;
+      return new (ArithmeticTypePool.Allocate())
+          ArithmeticType{kInt | kUnsigned};
     case kLong:
-      return long_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kLong};
     case kLong | kUnsigned:
-      return ulong_type;
+      return new (ArithmeticTypePool.Allocate())
+          ArithmeticType{kLong | kUnsigned};
     case kLongLong:
-      return long_long_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kLongLong};
     case kLongLong | kUnsigned:
-      return ulong_long_type;
+      return new (ArithmeticTypePool.Allocate())
+          ArithmeticType{kLongLong | kUnsigned};
     case kFloat:
-      return float_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kFloat};
     case kDouble:
-      return double_type;
+      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kDouble};
     case kDouble | kLong:
-      return long_double_type;
+      return new (ArithmeticTypePool.Allocate())
+          ArithmeticType{kDouble | kLong};
     default:
       assert(false);
       return nullptr;
@@ -529,7 +516,10 @@ std::uint64_t ArithmeticType::MaxIntegerValue() const {
   }
 }
 
-void ArithmeticType::SetUnsigned() { type_spec_ |= kUnsigned; }
+void ArithmeticType::SetUnsigned() {
+  assert(!IsBoolTy() && !IsFloatPointTy());
+  type_spec_ |= kUnsigned;
+}
 
 ArithmeticType::ArithmeticType(std::uint32_t type_spec) : Type{true} {
   type_spec_ = ArithmeticType::DealWithTypeSpec(type_spec);
