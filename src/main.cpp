@@ -11,6 +11,7 @@
 #include <functional>
 #include <iostream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -40,6 +41,7 @@ int main(int argc, char *argv[]) try {
   TimingStart();
 
   InitCommandLine(argc, argv);
+  CommandLineCheck();
 
 #ifdef DEV
   if (DevMode) {
@@ -47,8 +49,6 @@ int main(int argc, char *argv[]) try {
     return EXIT_SUCCESS;
   }
 #endif
-
-  CommandLineCheck();
 
   // FIXME 编译多文件时行为不正确
   for (const auto &item : InputFilePaths) {
@@ -95,8 +95,8 @@ int main(int argc, char *argv[]) try {
   if (Timing) {
     TimingEnd("Timing:");
   }
-} catch (...) {
-  Error("Compiler internal error");
+} catch (const std::exception &error) {
+  Error("{}", error.what());
 }
 
 void RunKcc(const std::string &file_name) {
@@ -194,8 +194,6 @@ void RunKcc(const std::string &file_name) {
 void RunDev() {
   // TODO temp
   for (const auto &file : InputFilePaths) {
-    EnsureFileExists(file);
-
     Preprocessor preprocessor;
     auto preprocessed_code{preprocessor.Cpp(file)};
     std::ofstream preprocess_file{GetFileName(file, ".i")};

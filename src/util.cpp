@@ -69,15 +69,13 @@ void CommandLineCheck() {
     }
 
     if (path.filename().string() == "*.c") {
-      for (const auto &file :
-           std::filesystem::directory_iterator{path.parent_path()}) {
+      for (const auto &file : std::filesystem::directory_iterator{
+               std::filesystem::current_path()}) {
         if (file.path().filename().extension().string() == ".c") {
           files.push_back(file.path().string());
         }
       }
-    }
-
-    if (std::filesystem::exists(path)) {
+    } else if (std::filesystem::exists(path)) {
       if (path.filename().extension().string() != ".c") {
         Error("the file extension must be '.c': {}", item);
       }
