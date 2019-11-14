@@ -729,6 +729,9 @@ class Initializer {
 };
 
 class Initializers {
+  friend class JsonGen;
+  friend class CodeGen;
+
  public:
   void AddInit(const Initializer& init);
   std::size_t size() const;

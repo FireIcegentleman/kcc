@@ -320,8 +320,8 @@ QualType Type::FuncGetParamType(std::int32_t i) const {
   return dynamic_cast<const FunctionType*>(this)->GetParamType(i);
 }
 
-std::vector<ObjectExpr*> Type::FuncGetParams() const {
-  return dynamic_cast<const FunctionType*>(this)->GetParams();
+std::vector<ObjectExpr*>& Type::FuncGetParams() {
+  return dynamic_cast<FunctionType*>(this)->GetParams();
 }
 
 void Type::FuncSetFuncSpec(std::uint32_t func_spec) {
@@ -978,7 +978,7 @@ QualType FunctionType::GetParamType(std::int32_t i) const {
   return params_[i]->GetQualType();
 }
 
-std::vector<ObjectExpr*> FunctionType::GetParams() const { return params_; }
+std::vector<ObjectExpr*>& FunctionType::GetParams() { return params_; }
 
 void FunctionType::SetFuncSpec(std::uint32_t func_spec) {
   func_spec_ = func_spec;

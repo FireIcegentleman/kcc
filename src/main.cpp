@@ -192,7 +192,6 @@ void RunKcc(const std::string &file_name) {
 
 #ifdef DEV
 void RunDev() {
-  // TODO temp
   for (const auto &file : InputFilePaths) {
     Preprocessor preprocessor;
     preprocessor.SetIncludePaths(IncludePaths);
@@ -214,11 +213,8 @@ void RunDev() {
     auto unit{parser.ParseTranslationUnit()};
     JsonGen{}.GenJson(unit, GetFileName(file, ".html"));
 
-    if (StandardIR) {
-      std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm " + file};
-      std::system(cmd.c_str());
-      std::system("./api standard.ll -o standard.cpp");
-    }
+    std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm " + file};
+    std::system(cmd.c_str());
 
     if (!ParseOnly) {
       CodeGen code_gen{file};
@@ -245,8 +241,8 @@ void RunDev() {
       std::cout << "run ............................ \n";
 
       {
-        // std::string cmd{"lli " + GetFileName(file, ".ll")};
-        std::string cmd{"./" + GetFileName(file, ".out")};
+        std::string cmd{"lli " + GetFileName(file, ".ll")};
+        // std::string cmd{"./" + GetFileName(file, ".out")};
         std::system(cmd.c_str());
       }
     }

@@ -96,9 +96,6 @@ inline llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
 inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
                                      llvm::cl::cat{Category}};
 
-inline llvm::cl::opt<bool> StandardIR{"ir", llvm::cl::desc{"emit Standard IR"},
-                                      llvm::cl::cat{Category}};
-
 inline llvm::cl::opt<bool> NoBuiltin{"no-builtin", llvm::cl::desc{"No Builtin"},
                                      llvm::cl::cat{Category}};
 

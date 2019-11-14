@@ -187,7 +187,7 @@ class Type {
   QualType FuncGetReturnType() const;
   std::int32_t FuncGetNumParams() const;
   QualType FuncGetParamType(std::int32_t i) const;
-  std::vector<ObjectExpr*> FuncGetParams() const;
+  std::vector<ObjectExpr*>& FuncGetParams();
   void FuncSetFuncSpec(std::uint32_t func_spec);
   bool FuncIsInline() const;
   bool FuncIsNoreturn() const;
@@ -340,7 +340,7 @@ class FunctionType : public Type {
   QualType GetReturnType() const;
   std::int32_t GetNumParams() const;
   QualType GetParamType(std::int32_t i) const;
-  std::vector<ObjectExpr*> GetParams() const;
+  std::vector<ObjectExpr*>& GetParams();
   void SetFuncSpec(std::uint32_t func_spec);
   bool IsInline() const;
   bool IsNoreturn() const;

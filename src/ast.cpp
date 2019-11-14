@@ -334,8 +334,6 @@ bool BinaryOpExpr::IsLValue() const {
   // 在 C++ 中赋值运算符表达式是左值表达式，逗号运算符表达式可以是左值表达式
   // 而在 C 中两者都绝不是
   switch (op_) {
-    case Tag::kLeftSquare:
-      return true;
     case Tag::kPeriod:
       return lhs_->IsLValue();
     default:

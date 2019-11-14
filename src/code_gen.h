@@ -5,11 +5,17 @@
 #ifndef KCC_SRC_CODE_GEN_H_
 #define KCC_SRC_CODE_GEN_H_
 
-#include <llvm/IR/Value.h>
-
-#include <memory>
+#include <cstdint>
+#include <map>
 #include <stack>
 #include <string>
+#include <utility>
+
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/Value.h>
 
 #include "ast.h"
 #include "visitor.h"
@@ -19,7 +25,6 @@ namespace kcc {
 class CodeGen : public Visitor {
  public:
   CodeGen(const std::string &file_name);
-
   void GenCode(const TranslationUnit *root);
 
  private:
@@ -61,55 +66,62 @@ class CodeGen : public Visitor {
   llvm::Value *LogicOrOp(const BinaryOpExpr &node);
   llvm::Value *LogicAndOp(const BinaryOpExpr &node);
   llvm::Value *AssignOp(const BinaryOpExpr &node);
-  llvm::Value *GetPtr(const AstNode &node);
-  llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs);
+  std::pair<llvm::Value *, std::int32_t> GetPtr(const AstNode &node);
+  llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
+                      std::int32_t align);
   void VisitForNoInc(const ForStmt &node);
   void VisitForNoCond(const ForStmt &node);
   void VisitForNoIncCond(const ForStmt &node);
   llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
   llvm::Value *LogicNotOp(llvm::Value *value);
   std::string LLVMTypeToStr(llvm::Type *type) const;
+  llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
+  void BuiltIn();
 
   virtual void Visit(const UnaryOpExpr &node) override;
+  virtual void Visit(const TypeCastExpr &node) override;
   virtual void Visit(const BinaryOpExpr &node) override;
   virtual void Visit(const ConditionOpExpr &node) override;
-  virtual void Visit(const TypeCastExpr &node) override;
-  virtual void Visit(const ConstantExpr &node) override;
-  virtual void Visit(const EnumeratorExpr &node) override;
-  virtual void Visit(const CompoundStmt &node) override;
-  virtual void Visit(const IfStmt &node) override;
-  virtual void Visit(const ReturnStmt &node) override;
-  virtual void Visit(const LabelStmt &node) override;
   virtual void Visit(const FuncCallExpr &node) override;
+  virtual void Visit(const ConstantExpr &node) override;
+  virtual void Visit(const StringLiteralExpr &node) override;
   virtual void Visit(const IdentifierExpr &node) override;
+  virtual void Visit(const EnumeratorExpr &node) override;
   virtual void Visit(const ObjectExpr &node) override;
-  virtual void Visit(const TranslationUnit &node) override;
-  virtual void Visit(const Declaration &node) override;
-  virtual void Visit(const FuncDef &node) override;
+  virtual void Visit(const StmtExpr &node) override;
+
+  virtual void Visit(const LabelStmt &node) override;
+  virtual void Visit(const CaseStmt &node) override;
+  virtual void Visit(const DefaultStmt &node) override;
+  virtual void Visit(const CompoundStmt &node) override;
   virtual void Visit(const ExprStmt &node) override;
+  virtual void Visit(const IfStmt &node) override;
+  virtual void Visit(const SwitchStmt &node) override;
   virtual void Visit(const WhileStmt &node) override;
   virtual void Visit(const DoWhileStmt &node) override;
   virtual void Visit(const ForStmt &node) override;
-  virtual void Visit(const CaseStmt &node) override;
-  virtual void Visit(const DefaultStmt &node) override;
-  virtual void Visit(const SwitchStmt &node) override;
-  virtual void Visit(const BreakStmt &node) override;
-  virtual void Visit(const ContinueStmt &node) override;
   virtual void Visit(const GotoStmt &node) override;
-  virtual void Visit(const StringLiteralExpr &node) override;
-  virtual void Visit(const StmtExpr &node) override;
+  virtual void Visit(const ContinueStmt &node) override;
+  virtual void Visit(const BreakStmt &node) override;
+  virtual void Visit(const ReturnStmt &node) override;
+
+  virtual void Visit(const TranslationUnit &node) override;
+  virtual void Visit(const Declaration &node) override;
+  virtual void Visit(const FuncDef &node) override;
 
   void PushBlock(llvm::BasicBlock *continue_block,
                  llvm::BasicBlock *break_stack);
   void PopBlock();
   bool HasBrOrReturn() const;
+  bool HasReturn() const;
 
- private:
   llvm::Value *result_{};
 
   std::stack<llvm::BasicBlock *> continue_stack_;
   std::stack<llvm::BasicBlock *> break_stack_;
   std::stack<std::pair<bool, bool>> has_br_or_return_;
+
+  std::map<std::string, llvm::BasicBlock *> goto_label_;
 
   bool need_bool_{false};
 };
