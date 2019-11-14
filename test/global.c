@@ -2,9 +2,6 @@
 
 #include "test.h"
 
-// TODO ???
-//defaultint;
-
 int val = 21;
 int *p1 = &val;
 
@@ -21,10 +18,6 @@ int *intp = &(int){ 9 };
 
 void testmain() {
     print("global variable");
-
-  // TODO ???
-    //defaultint = 3;
-    //expect(3, defaultint);
 
     expect(21, val);
     val = 22;

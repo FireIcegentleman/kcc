@@ -113,7 +113,7 @@ void JsonGen::Visit(const ConstantExpr& node) {
   if (node.GetType()->IsIntegerTy()) {
     str.append(QString::number(node.integer_val_));
   } else if (node.GetType()->IsFloatPointTy()) {
-    str.append(QString::number(node.float_point_val_));
+    str.append(QString::fromStdString(std::to_string(node.float_point_val_)));
   } else {
     assert(false);
   }

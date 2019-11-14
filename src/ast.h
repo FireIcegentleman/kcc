@@ -262,7 +262,7 @@ class ConstantExpr : public Expr {
  public:
   static ConstantExpr* Get(std::int32_t val);
   static ConstantExpr* Get(Type* type, std::uint64_t val);
-  static ConstantExpr* Get(Type* type, double val);
+  static ConstantExpr* Get(Type* type, long double val);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -275,10 +275,10 @@ class ConstantExpr : public Expr {
  private:
   ConstantExpr(std::int32_t val);
   ConstantExpr(Type* type, std::uint64_t val);
-  ConstantExpr(Type* type, double val);
+  ConstantExpr(Type* type, long double val);
 
   std::uint64_t integer_val_{};
-  double float_point_val_{};
+  long double float_point_val_{};
 };
 
 class StringLiteralExpr : public Expr {

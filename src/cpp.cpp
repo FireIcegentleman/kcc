@@ -20,6 +20,8 @@
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 
+#include "error.h"
+
 #ifdef DEV
 #include "util.h"
 #endif
@@ -88,8 +90,8 @@ Preprocessor::Preprocessor() {
       "  })\n"
       "#define DECIMAL_DIG 21\n"
       "#define FLT_EVAL_METHOD 0\n"
-      "#define FLT_TRUE_MIN 0x1p-149\n"
-      "#define DBL_TRUE_MIN 0x0.0000000000001p-1022\n"
+      "#define FLT_TRUE_MIN 1.40129846e-45F\n"
+      "#define DBL_TRUE_MIN 4.9406564584124654e-324\n"
       "#define __STDC_VERSION__ 201710L\n");
 }
 
@@ -131,6 +133,10 @@ std::string Preprocessor::Cpp(const std::string &input_file) {
 
   clang::DoPrintPreprocessedInput(*pp_, &os, opts);
   os.flush();
+
+  if (ci_.getDiagnostics().hasErrorOccurred()) {
+    Error("Preprocess failure");
+  }
 
   ci_.getDiagnosticClient().EndSourceFile();
 

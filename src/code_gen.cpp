@@ -18,7 +18,7 @@ namespace kcc {
 CodeGen::CodeGen(const std::string& file_name) {
   Module = std::make_unique<llvm::Module>(file_name, Context);
   DataLayout = llvm::DataLayout{Module.get()};
-  
+
   // 获取当前计算机的目标三元组
   auto target_triple{llvm::sys::getDefaultTargetTriple()};
 
@@ -224,7 +224,7 @@ void CodeGen::Visit(const ConstantExpr& node) {
                              !node.GetType()->IsUnsigned()));
   } else if (type->isFloatingPointTy()) {
     result_ =
-        llvm::ConstantFP::get(Context, llvm::APFloat(node.float_point_val_));
+        llvm::ConstantFP::get(type, std::to_string(node.float_point_val_));
   } else {
     assert(false);
   }

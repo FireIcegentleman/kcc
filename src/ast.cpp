@@ -635,7 +635,7 @@ ConstantExpr* ConstantExpr::Get(Type* type, std::uint64_t val) {
   return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
 }
 
-ConstantExpr* ConstantExpr::Get(Type* type, double val) {
+ConstantExpr* ConstantExpr::Get(Type* type, long double val) {
   return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
 }
 
@@ -655,7 +655,7 @@ ConstantExpr::ConstantExpr(std::int32_t val)
 ConstantExpr::ConstantExpr(Type* type, std::uint64_t val)
     : Expr(type), integer_val_(val) {}
 
-ConstantExpr::ConstantExpr(Type* type, double val)
+ConstantExpr::ConstantExpr(Type* type, long double val)
     : Expr(type), float_point_val_(val) {}
 
 /*

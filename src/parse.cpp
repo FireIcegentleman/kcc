@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 
 #include "calc.h"
@@ -975,13 +976,20 @@ Expr* Parser::ParseFloat() {
 
   auto tok{Next()};
   auto str{tok.GetStr()};
-  double val;
+  long double val;
   std::size_t end;
 
   try {
-    val = std::stod(str, &end);
+    val = std::stold(str, &end);
   } catch (const std::out_of_range& err) {
-    Error(tok, "float point out of range");
+    std::istringstream iss{str};
+    iss >> val;
+    end = iss.tellg();
+
+    // 当值过小时是可以的
+    if (std::abs(val) > 1.0) {
+      Error(tok, "float point out of range");
+    }
   }
 
   auto backup{end};

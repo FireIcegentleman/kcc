@@ -57,9 +57,8 @@ void std() {
     expect_string("0x1p-1022", fmtdbl(DBL_MIN));
     expect_string("-307", fmtint(DBL_MIN_10_EXP));
     expect_string("-1021", fmtint(DBL_MIN_EXP));
-    // FIXME
-    //expectd(*(double *)&(uint64_t){1}, DBL_TRUE_MIN);
-    //expect_string("0x0.0000000000001p-1022", fmtdbl(DBL_TRUE_MIN));
+    expectd(*(double *)&(uint64_t){1}, DBL_TRUE_MIN);
+    expect_string("0x0.0000000000001p-1022", fmtdbl(DBL_TRUE_MIN));
 
     expect_string("15", fmtint(LDBL_DIG));
     expect_string("0x1p-52", fmtdbl(LDBL_EPSILON));
@@ -83,7 +82,7 @@ void testmain() {
     float v2 = v1;
     expectf(10.0, v1);
     expectf(10.0, v2);
-    return;
+
     double v3 = 20.0;
     double v4 = v3;
     expectd(20.0, v3);
