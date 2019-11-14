@@ -42,13 +42,15 @@ Preprocessor::Preprocessor() {
   auto pti{clang::TargetInfo::CreateTargetInfo(ci_.getDiagnostics(), pto)};
   ci_.setTarget(pti);
 
-  clang::LangOptions lang_options;
-  lang_options.C17 = true;
-  lang_options.Trigraphs = true;
-
   ci_.getInvocation().setLangDefaults(
-      lang_options, clang::InputKind::C, llvm::Triple{pto->Triple},
+      ci_.getLangOpts(), clang::InputKind::C, llvm::Triple{pto->Triple},
       ci_.getPreprocessorOpts(), clang::LangStandard::lang_c17);
+
+  ci_.getLangOpts().C17 = true;
+  ci_.getLangOpts().Digraphs = true;
+  ci_.getLangOpts().Trigraphs = true;
+  ci_.getLangOpts().GNUMode = true;
+  ci_.getLangOpts().GNUKeywords = true;
 
   ci_.createFileManager();
   ci_.createSourceManager(ci_.getFileManager());
@@ -88,11 +90,10 @@ Preprocessor::Preprocessor() {
       "    *(type *)(klass == 0 ? __va_arg_gp(ap)   \\\n"
       "   : klass == 1 ? __va_arg_fp(ap) : __va_arg_mem(ap));   \\\n"
       "  })\n"
-      "#define DECIMAL_DIG 21\n"
-      "#define FLT_EVAL_METHOD 0\n"
-      "#define FLT_TRUE_MIN 1.40129846e-45F\n"
-      "#define DBL_TRUE_MIN 4.9406564584124654e-324\n"
-      "#define __STDC_VERSION__ 201710L\n");
+      "#define __STDC_NO_ATOMICS__ 1\n"
+      "#define __STDC_NO_COMPLEX__ 1\n"
+      "#define __STDC_NO_THREADS__ 1\n"
+      "#define __STDC_NO_VLA__ 1\n");
 }
 
 void Preprocessor::SetIncludePaths(
