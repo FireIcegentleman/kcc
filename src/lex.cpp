@@ -476,6 +476,8 @@ Token Scanner::SkipNumber() {
 
       if ((ch == 'p' || ch == 'P') && saw_hex_prefix) {
         tag = Tag::kFloatingConstant;
+      } else if (ch == 'e' || ch == 'E') {
+        tag = Tag::kFloatingConstant;
       }
     } else if (IsUCN(ch)) {
       HandleEscape();

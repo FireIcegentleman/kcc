@@ -28,13 +28,6 @@ static void escape() {
     int value = 10;
     expect(10, val\
 ue);
-    // TODO ???
-    //expect_string("a   bc", "a\   bc");
-}
-
-static void whitespace() {
-  // TODO ???
-  //  expect_string("x y", stringify(xy));
 }
 
 static void newline() {
@@ -56,7 +49,6 @@ void testmain() {
     print("lexer");
     digraph();
     escape();
-    whitespace();
     newline();
     dollar();
 }

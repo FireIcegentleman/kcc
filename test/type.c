@@ -44,10 +44,6 @@ static void test_unsigned() {
 }
 
 static void test_storage_class() {
-  // TODO ???
-//    static a;
-//    auto b;
-//    register c;
     static int d;
     auto int e;
     register int f;

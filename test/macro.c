@@ -401,13 +401,13 @@ static void funclike() {
     expect(8, 1 m8(<, <) 3);
     expectf(.123, m8(., 123));
     expect('a', m8(L, 'a'));
-  // TODO ???
-    //expect('a', m8(U, 'a'));
-    //expect('a', m8(u, 'a'));
-    //expect_string(L"abc", m8(L, "abc"));
-    //expect_string(U"abc", m8(U, "abc"));
-    //expect_string(u"abc", m8(u, "abc"));
-    //expect_string(u8"abc", m8(u8, "abc"));
+
+    expect('a', m8(U, 'a'));
+    expect('a', m8(u, 'a'));
+    expect_string(L"abc", m8(L, "abc"));
+    expect_string(U"abc", m8(U, "abc"));
+    expect_string(u"abc", m8(u, "abc"));
+    expect_string(u8"abc", m8(u8, "abc"));
 
 #define m9(x, y, z) x y + z
     expect(8, m9(1,, 7));
@@ -481,8 +481,8 @@ static void gnuext() {
     expect_string("(1, 2)", m12(1, 2));
 
 #define m13(x, y) stringify([x y])
-    // TODO ???
-//#define m14 1
+
+#define m14 1
     expect_string("[2 2]", m13(m14,
 #undef m14
 #define m14 2

@@ -22,6 +22,7 @@ static void t3() {
     expect(256, x.b);
 }
 
+// FIXME
 //static test_sizeof() {
 //    expect(4, sizeof(union { char a; int b; }));
 //    expect(8, sizeof(union { double a; int b; }));

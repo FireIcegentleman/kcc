@@ -109,7 +109,7 @@ static void t12() {
     expect(84, a[0].b);
     a[1].b = 85;
     expect(85, a[1].b);
-    // TODO
+    // FIXME
 //    int *p = (int *)a;
 //    expect(85, p[3]);
 }
@@ -199,77 +199,6 @@ static void incomplete() {
     expect(3, v2.p->x);
 }
 
-static void bitfield_basic() {
-  // TODO
-//    union {
-//        int i;
-//        struct { int a:5; int b:5; };
-//    } x;
-//    x.i = 0;
-//    x.a = 10;
-//    x.b = 11;
-//    expect(10, x.a);
-//    expect(11, x.b);
-//    expect(362, x.i); // 11 << 5 + 10 == 362
-}
-
-static void bitfield_mix() {
-  // TODO
-//    union {
-//        int i;
-//        struct { char a:5; int b:5; };
-//    } x;
-//    x.a = 10;
-//    x.b = 11;
-//    expect(10, x.a);
-//    expect(11, x.b);
-//    expect(362, x.i);
-}
-
-static void bitfield_union() {
-  // TODO
-//    union { int a : 10; char b: 5; char c: 5; } x;
-//    x.a = 2;
-//    expect(2, x.a);
-//    expect(2, x.b);
-//    expect(2, x.c);
-}
-
-static void bitfield_unnamed() {
-  // TODO
-//    union {
-//        int i;
-//        struct { char a:4; char b:4; char : 8; };
-//    } x = { 0 };
-//    x.i = 0;
-//    x.a = 2;
-//    x.b = 4;
-//    expect(2, x.a);
-//    expect(4, x.b);
-//    expect(66, x.i);
-//
-//    union {
-//        int i;
-//        struct { char a:4; char :0; char b:4; };
-//    } y = { 0 };
-//    y.a = 2;
-//    y.b = 4;
-//    expect(2, y.a);
-//    expect(4, y.b);
-//    expect(1026, y.i);
-}
-
-//struct { char a:4; char b:4; } inittest = { 2, 4 };
-
-static void bitfield_initializer() {
-//    expect(2, inittest.a);
-//    expect(4, inittest.b);
-//
-//    struct { char a:4; char b:4; } x = { 2, 4 };
-//    expect(2, x.a);
-//    expect(4, x.b);
-}
-
 static void test_offsetof() {
     struct tag10 { int a, b; };
     expect(0, offsetof(struct tag10, a));
@@ -278,16 +207,6 @@ static void test_offsetof() {
     expect(4, sizeof(x) / sizeof(x[0]));
 
     expect(4, offsetof(struct { char a; struct { int b; }; }, b));
-    // TODO
-    //expect(6, offsetof(struct { char a[3]; int : 10; char c; }, c));
-    //expect(6, offsetof(struct { char a[3]; int : 16; char c; }, c));
-    //expect(7, offsetof(struct { char a[3]; int : 17; char c; }, c));
-    //expect(2, offsetof(struct { char : 7; int : 7; char a; }, a));
-   // expect(0, offsetof(struct { char : 0; char a; }, a));
-
-   // expect(1, _Alignof(struct { int : 32; }));
-   // expect(2, _Alignof(struct { int : 32; short x; }));
-   // expect(4, _Alignof(struct { int x; int : 32; }));
 }
 
 static void flexible_member() {
@@ -356,11 +275,6 @@ void testmain() {
     assign();
     arrow();
     incomplete();
-    bitfield_basic();
-    bitfield_mix();
-    bitfield_union();
-    bitfield_unnamed();
-    bitfield_initializer();
     test_offsetof();
     flexible_member();
     empty_struct();

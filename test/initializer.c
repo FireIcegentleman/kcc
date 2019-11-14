@@ -164,17 +164,6 @@ static void test_typedef() {
 //    expect(3, sizeof(b) / sizeof(*b));
 }
 
-static void test_excessive() {
-  // TODO ???
-    //char x1[3] = { 1, 2, 3, 4, 5 };
-    //expect(3, sizeof(x1));
-
-  // TODO ???
-    //char x2[3] = "abcdefg";
-    //expect(3, sizeof(x2));
-    //expect(0, strncmp("abc", x2, 3));
-}
-
 void testmain() {
     print("initializer");
 
@@ -188,5 +177,4 @@ void testmain() {
     test_complex_designator();
     test_zero();
     test_typedef();
-    test_excessive();
 }

@@ -872,8 +872,15 @@ Expr* Parser::ParseInteger() {
   std::size_t end;
 
   try {
-    // 当 base 为 0 时，自动检测进制
-    val = std::stoull(str, &end, 0);
+    // GNU 扩展, 也可以有后缀
+    if (std::size(str) >= 3 &&
+        (str.substr(0, 2) == "0b" || str.substr(0, 2) == "0B")) {
+      val = std::stoull(str.substr(2), &end, 2);
+      end += 2;
+    } else {
+      // 当 base 为 0 时，自动检测进制
+      val = std::stoull(str, &end, 0);
+    }
   } catch (const std::out_of_range& error) {
     Error(tok, "integer out of range");
   }
