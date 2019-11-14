@@ -1410,7 +1410,13 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
 
 #define ERROR Error(tok, "two or more data types in declaration specifiers");
 
+#define TypeofCheck                                               \
+  if (has_typeof) {                                               \
+    Error(tok, "It is not allowed to use type specifiers here."); \
+  }
+
   std::uint32_t type_spec{}, type_qual{};
+  bool has_typeof{false};
 
   Token tok;
   QualType type;
@@ -1422,9 +1428,12 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
       // GNU 扩展
       case Tag::kExtension:
         break;
-      // TODO check
       case Tag::kTypeof:
+        if (type_spec != 0) {
+          Error(tok, "It is not allowed to use typeof here.");
+        }
         type = ParseTypeof();
+        has_typeof = true;
         break;
 
         // Storage Class Specifier, 至多有一个
@@ -1446,35 +1455,35 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
         if (type_spec) {
           ERROR
         }
-        type_spec |= kVoid;
+        TypeofCheck type_spec |= kVoid;
         break;
       case Tag::kChar:
         if (type_spec & ~kCompChar) {
           ERROR
         }
-        type_spec |= kChar;
+        TypeofCheck type_spec |= kChar;
         break;
       case Tag::kShort:
         if (type_spec & ~kCompShort) {
           ERROR
         }
-        type_spec |= kShort;
+        TypeofCheck type_spec |= kShort;
         break;
       case Tag::kInt:
         if (type_spec & ~kCompInt) {
           ERROR
         }
-        type_spec |= kInt;
+        TypeofCheck type_spec |= kInt;
         break;
       case Tag::kLong:
         if (type_spec & ~kCompLong) {
           ERROR
         }
-
-        if (type_spec & kLong) {
+        TypeofCheck if (type_spec & kLong) {
           type_spec &= ~kLong;
           type_spec |= kLongLong;
-        } else {
+        }
+        else {
           type_spec |= kLong;
         }
         break;
@@ -1482,51 +1491,51 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
         if (type_spec) {
           ERROR
         }
-        type_spec |= kFloat;
+        TypeofCheck type_spec |= kFloat;
         break;
       case Tag::kDouble:
         if (type_spec & ~kCompDouble) {
           ERROR
         }
-        type_spec |= kDouble;
+        TypeofCheck type_spec |= kDouble;
         break;
       case Tag::kSigned:
         if (type_spec & ~kCompSigned) {
           ERROR
         }
-        type_spec |= kSigned;
+        TypeofCheck type_spec |= kSigned;
         break;
       case Tag::kUnsigned:
         if (type_spec & ~kCompUnsigned) {
           ERROR
         }
-        type_spec |= kUnsigned;
+        TypeofCheck type_spec |= kUnsigned;
         break;
       case Tag::kBool:
         if (type_spec) {
           ERROR
         }
-        type_spec |= kBool;
+        TypeofCheck type_spec |= kBool;
         break;
       case Tag::kStruct:
       case Tag::kUnion:
         if (type_spec) {
           ERROR
         }
-        type = ParseStructUnionSpec(tok.GetTag() == Tag::kStruct);
+        TypeofCheck type = ParseStructUnionSpec(tok.GetTag() == Tag::kStruct);
         type_spec |= kStructUnionSpec;
         break;
       case Tag::kEnum:
         if (type_spec) {
           ERROR
         }
-        type = ParseEnumSpec();
+        TypeofCheck type = ParseEnumSpec();
         type_spec |= kEnumSpec;
         break;
       case Tag::kComplex:
-        Error(tok, "Does not support _Complex");
+        TypeofCheck Error(tok, "Does not support _Complex");
       case Tag::kAtomic:
-        Error(tok, "Does not support _Atomic");
+        TypeofCheck Error(tok, "Does not support _Atomic");
 
         // Type qualifier
       case Tag::kConst:
@@ -1572,7 +1581,10 @@ finish:
 
   switch (type_spec) {
     case 0:
-      Error(tok, "type specifier missing: {}", tok.GetStr());
+      if (!has_typeof) {
+        Error(tok, "type specifier missing: {}", tok.GetStr());
+      }
+      break;
     case kVoid:
       type = VoidType::Get();
       break;
@@ -1589,6 +1601,7 @@ finish:
 #undef CheckAndSetStorageClassSpec
 #undef CheckAndSetFuncSpec
 #undef ERROR
+#undef TypeofCheck
 }
 
 Type* Parser::ParseStructUnionSpec(bool is_struct) {
@@ -2470,10 +2483,15 @@ void Parser::TryParseAsm() {
 QualType Parser::ParseTypeof() {
   Expect(Tag::kLeftParen);
 
+  QualType type;
+
   if (!IsTypeName(Peek())) {
-    Error(loc_, "expect type name");
+    auto expr{ParseExpr()};
+    type = expr->GetQualType();
+  } else {
+    type = ParseTypeName();
   }
-  auto type{ParseTypeName()};
+
   Expect(Tag::kRightParen);
 
   return type;

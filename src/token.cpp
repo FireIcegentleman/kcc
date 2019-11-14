@@ -76,7 +76,7 @@ bool Token::IsTypeSpecQual() const {
          tag_ == Tag::kComplex || tag_ == Tag::kAtomic ||
          tag_ == Tag::kStruct || tag_ == Tag::kUnion || tag_ == Tag::kEnum ||
          tag_ == Tag::kConst || tag_ == Tag::kRestrict ||
-         tag_ == Tag::kVolatile || tag_ == Tag::kAtomic;
+         tag_ == Tag::kVolatile || tag_ == Tag::kAtomic || tag_ == Tag::kTypeof;
 }
 
 bool Token::IsDecl() const {
