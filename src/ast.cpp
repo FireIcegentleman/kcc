@@ -427,9 +427,9 @@ void BinaryOpExpr::MultiOpCheck() {
 void BinaryOpExpr::BitwiseOpCheck() {
   if (!lhs_->GetQualType()->IsIntegerTy() ||
       !rhs_->GetQualType()->IsIntegerTy()) {
-    Error(loc_,
-          "'&' / '|' / '^': the operand should be arithmetic type '{}' vs '{}'",
-          lhs_->GetQualType()->ToString(), rhs_->GetQualType()->ToString());
+    Error(loc_, "'{}': the operand should be Integer type '{}' vs '{}'",
+          TokenTag::ToString(op_), lhs_->GetType()->ToString(),
+          rhs_->GetType()->ToString());
   }
 
   type_ = Expr::Convert(lhs_, rhs_);
@@ -790,17 +790,16 @@ AstNodeType StmtExpr::Kind() const { return AstNodeType::kStmtExpr; }
 void StmtExpr::Check() {
   auto stmts{block_->GetStmts()};
 
-  if (std::size(stmts) == 0 || stmts.back()->Kind() != AstNodeType::kExprStmt) {
-    Error(loc_, "The last statement must be an expression statement");
+  if (std::size(stmts) > 0 && stmts.back()->Kind() == AstNodeType::kExprStmt) {
+    auto expr{dynamic_cast<ExprStmt*>(stmts.back())->GetExpr()};
+
+    if (expr) {
+      type_ = expr->GetQualType();
+      return;
+    }
   }
 
-  auto expr{dynamic_cast<ExprStmt*>(stmts.back())->GetExpr()};
-
-  if (!expr) {
-    Error(loc_, "The last statement cannot be an empty statement");
-  }
-
-  type_ = expr->GetQualType();
+  type_ = VoidType::Get();
 }
 
 bool StmtExpr::IsLValue() const { return false; }
@@ -1108,7 +1107,9 @@ bool Declaration::HasInit() const { return std::size(inits_); }
 
 void Declaration::AddInits(const Initializers& inits) {
   if (std::size(inits) == 0) {
-    Error(loc_, "empty initializer");
+    // GNU 扩展
+    value_init_ = true;
+    return;
   }
 
   inits_ = inits;

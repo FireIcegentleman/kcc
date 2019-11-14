@@ -195,6 +195,9 @@ void RunDev() {
   // TODO temp
   for (const auto &file : InputFilePaths) {
     Preprocessor preprocessor;
+    preprocessor.SetIncludePaths(IncludePaths);
+    preprocessor.SetMacroDefinitions(MacroDefines);
+
     auto preprocessed_code{preprocessor.Cpp(file)};
     std::ofstream preprocess_file{GetFileName(file, ".i")};
     preprocess_file << preprocessed_code << std::flush;

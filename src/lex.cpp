@@ -469,6 +469,7 @@ Token Scanner::SkipNumber() {
 
   auto ch{buffer_.front()};
   while (ch == '.' || std::isalnum(ch) || ch == '_' || IsUCN(ch)) {
+    // 注意有 e 不一定是浮点数
     if (ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') {
       if (!Try('-')) {
         Try('+');
@@ -476,7 +477,8 @@ Token Scanner::SkipNumber() {
 
       if ((ch == 'p' || ch == 'P') && saw_hex_prefix) {
         tag = Tag::kFloatingConstant;
-      } else if (ch == 'e' || ch == 'E') {
+      }
+      if ((ch == 'e' || ch == 'E') && !saw_hex_prefix) {
         tag = Tag::kFloatingConstant;
       }
     } else if (IsUCN(ch)) {

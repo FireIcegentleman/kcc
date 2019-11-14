@@ -133,11 +133,12 @@ class TokenTag : public QObject {
     kSharp,
     kSharpSharp,
 
-    kFuncName,
-    kExtension,  // __extension__
-    kTypeof,     // typeof
-    kOffsetof,   // __builtin_offsetof
-    kRegClass,   // __builtin_reg_class
+    kFuncName,       // __func__ / __FUNCTION__
+    kFuncSignature,  // __PRETTY_FUNCTION__
+    kExtension,      // __extension__
+    kTypeof,         // typeof
+    kOffsetof,       // __builtin_offsetof
+    kRegClass,       // __builtin_reg_class
 
     kNone,
     kEof

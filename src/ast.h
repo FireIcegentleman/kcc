@@ -765,6 +765,7 @@ class Declaration : public Stmt {
 
   IdentifierExpr* ident_;
   Initializers inits_;
+  bool value_init_{false};
 };
 
 class FuncDef : public ExtDecl {

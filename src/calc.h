@@ -232,9 +232,13 @@ void CalcExpr<T>::Visit(const EnumeratorExpr& node) {
 
 template <typename T>
 void CalcExpr<T>::Visit(const StmtExpr& node) {
-  auto last{node.block_->GetStmts().back()};
-  assert(last->Kind() == AstNodeType::kExprStmt);
-  val_ = CalcExpr<T>{}.Calc(dynamic_cast<ExprStmt*>(last)->GetExpr());
+  if (!node.GetType()->IsVoidTy()) {
+    auto last{node.block_->GetStmts().back()};
+    assert(last->Kind() == AstNodeType::kExprStmt);
+    val_ = CalcExpr<T>{}.Calc(dynamic_cast<ExprStmt*>(last)->GetExpr());
+  } else {
+    Error(node.GetLoc(), "expect constant expression");
+  }
 }
 
 template <typename T>

@@ -270,6 +270,8 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
  * Expr
  */
 Expr* Parser::ParseExpr() {
+  Try(Tag::kExtension);
+
   // GNU 扩展, 语句表达式
   if (Try(Tag::kLeftParen)) {
     if (Test(Tag::kLeftBrace)) {
@@ -293,6 +295,8 @@ Expr* Parser::ParseExpr() {
 }
 
 Expr* Parser::ParseAssignExpr() {
+  Try(Tag::kExtension);
+
   // 因为有很多是直接调用该函数而不是 ParseExpr
   if (Try(Tag::kLeftParen)) {
     if (Test(Tag::kLeftBrace)) {
@@ -810,7 +814,16 @@ Expr* Parser::ParsePrimaryExpr() {
   } else if (Try(Tag::kGeneric)) {
     return ParseGenericSelection();
   } else if (Try(Tag::kFuncName)) {
+    if (curr_func_def_ == nullptr) {
+      Error(loc_, "Not allowed to use __func__ or __FUNCTION__ here");
+    }
     return MakeAstNode<StringLiteralExpr>(curr_func_def_->GetName());
+  } else if (Try(Tag::kFuncSignature)) {
+    if (curr_func_def_ == nullptr) {
+      Error(loc_, "Not allowed to use __PRETTY_FUNCTION__ here");
+    }
+    return MakeAstNode<StringLiteralExpr>(
+        curr_func_def_->GetFuncType()->ToString());
   } else {
     Error(loc_, "{} unexpected", Peek().GetStr());
   }
@@ -1187,10 +1200,10 @@ Stmt* Parser::ParseCaseStmt() {
   if (!expr->GetType()->IsIntegerTy()) {
     Error(expr, "expect integer");
   }
-  auto val{CalcExpr<std::uint64_t>{}.Calc(expr)};
+  auto val{CalcExpr<std::int64_t>{}.Calc(expr)};
 
-  if (val >
-      static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max())) {
+  if (val > std::numeric_limits<std::int32_t>::max() ||
+      val < std::numeric_limits<std::int32_t>::min()) {
     Error(loc_, "case range exceed range of int");
   }
 
@@ -1202,9 +1215,9 @@ Stmt* Parser::ParseCaseStmt() {
     if (!expr2->GetType()->IsIntegerTy()) {
       Error(expr2, "expect integer");
     }
-    auto val2{CalcExpr<std::uint64_t>{}.Calc(expr)};
-    if (val >
-        static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max())) {
+    auto val2{CalcExpr<std::int64_t>{}.Calc(expr)};
+    if (val2 > std::numeric_limits<std::int32_t>::max() ||
+        val2 < std::numeric_limits<std::int32_t>::min()) {
       Error(loc_, "case range exceed range of int");
     }
 
@@ -1905,6 +1918,7 @@ CompoundStmt* Parser::ParseInitDeclaratorList(QualType& base_type,
     auto copy{base_type};
     stmts->AddStmt(
         ParseInitDeclarator(copy, storage_class_spec, func_spec, align));
+    TryParseAttributeSpec();
   } while (Try(Tag::kComma));
 
   return stmts;
