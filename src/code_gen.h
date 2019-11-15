@@ -75,6 +75,7 @@ class CodeGen : public Visitor {
   llvm::Value *LogicNotOp(llvm::Value *value);
   std::string LLVMTypeToStr(llvm::Type *type) const;
   llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
+  bool IsArrCastToPtr(llvm::Value *value, llvm::Type *type);
   // void BuiltIn();
   void EnterFunc();
   void ExitFunc();

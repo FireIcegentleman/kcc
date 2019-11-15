@@ -334,9 +334,17 @@ void CodeGen::Visit(const EnumeratorExpr& node) {
 
 void CodeGen::Visit(const ObjectExpr& node) {
   if (!node.InGlobal()) {
-    result_ = Builder.CreateAlignedLoad(node.local_ptr_, node.GetAlign());
+    if (node.GetType()->IsArrayTy()) {
+      result_ = node.local_ptr_;
+    } else {
+      result_ = Builder.CreateAlignedLoad(node.local_ptr_, node.GetAlign());
+    }
   } else {
-    result_ = Builder.CreateAlignedLoad(node.global_ptr_, node.GetAlign());
+    if (node.GetType()->IsArrayTy()) {
+      result_ = node.global_ptr_;
+    } else {
+      result_ = Builder.CreateAlignedLoad(node.global_ptr_, node.GetAlign());
+    }
   }
 }
 
@@ -782,8 +790,7 @@ llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
   } else if (to->isVoidTy() || value->getType() == to) {
     // TODO 这里直接 == 可以吗
     return value;
-  } else if (value->getType()->isArrayTy() && to->isPointerTy() &&
-             value->getType()->getArrayElementType()->getPointerTo() == to) {
+  } else if (IsArrCastToPtr(value, to)) {
     return llvm::GetElementPtrInst::CreateInBounds(
         value, {Builder.getInt64(0), Builder.getInt64(0)}, "",
         Builder.GetInsertBlock());
@@ -1265,6 +1272,17 @@ void CodeGen::EnterFunc() { PushBlock(nullptr, nullptr); }
 void CodeGen::ExitFunc() {
   PopBlock();
   alloc_count_ = 0;
+}
+
+bool CodeGen::IsArrCastToPtr(llvm::Value* value, llvm::Type* type) {
+  auto value_type{value->getType()};
+
+  return value_type->isPointerTy() &&
+         value_type->getPointerElementType()->isArrayTy() &&
+         type->isPointerTy() &&
+         value_type->getPointerElementType()
+                 ->getArrayElementType()
+                 ->getPointerTo() == type;
 }
 
 }  // namespace kcc
