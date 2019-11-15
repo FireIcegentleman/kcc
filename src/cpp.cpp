@@ -28,6 +28,7 @@
 
 namespace kcc {
 
+// TODO 禁用警告
 Preprocessor::Preprocessor() {
   // 初始化
   llvm::InitializeAllTargetInfos();
