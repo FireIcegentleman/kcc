@@ -65,7 +65,7 @@ class CodeGen : public Visitor {
   llvm::Value *LogicOrOp(const BinaryOpExpr &node);
   llvm::Value *LogicAndOp(const BinaryOpExpr &node);
   llvm::Value *AssignOp(const BinaryOpExpr &node);
-  llvm::Value * GetPtr(const AstNode &node);
+  llvm::Value *GetPtr(const AstNode &node);
   llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
                       std::int32_t align);
   void VisitForNoInc(const ForStmt &node);
@@ -75,7 +75,7 @@ class CodeGen : public Visitor {
   llvm::Value *LogicNotOp(llvm::Value *value);
   std::string LLVMTypeToStr(llvm::Type *type) const;
   llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
-  void BuiltIn();
+  // void BuiltIn();
   void EnterFunc();
   void ExitFunc();
 

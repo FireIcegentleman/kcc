@@ -611,7 +611,6 @@ void CodeGen::Visit(const FuncDef& node) {
 
   auto iter{std::begin(type->FuncGetParams())};
   for (auto&& arg : func->args()) {
-    arg.setName((*iter)->GetName());
     auto ptr{CreateEntryBlockAlloca(func, arg.getType(), (*iter)->GetAlign())};
     // 将参数的值保存到分配的内存中
     Builder.CreateAlignedStore(&arg, ptr, (*iter)->GetAlign());
@@ -1054,15 +1053,25 @@ llvm::Value* CodeGen::GetPtr(const AstNode& node) {
   } else if (node.Kind() == AstNodeType::kUnaryOpExpr) {
     auto p{dynamic_cast<const UnaryOpExpr&>(node)};
     assert(p.op_ == Tag::kStar);
-    return GetPtr(*p.expr_);
+    auto ptr{GetPtr(*p.expr_)};
+    return Builder.CreateAlignedLoad(ptr, align_);
   } else if (node.Kind() == AstNodeType::kBinaryOpExpr) {
     auto p{dynamic_cast<const BinaryOpExpr&>(node)};
-    assert(p.op_ == Tag::kPeriod);
-    auto lhs_ptr{GetPtr(*p.lhs_)};
-    return Builder.CreateStructGEP(lhs_ptr->getType()->getPointerElementType(),
-                                   lhs_ptr, 0);
+    if (p.op_ == Tag::kPlus) {
+      p.lhs_->Accept(*this);
+      auto lhs{result_};
+      p.rhs_->Accept(*this);
+      return Builder.CreateInBoundsGEP(lhs, {result_});
+    } else if (p.op_ == Tag::kPeriod) {
+      auto lhs_ptr{GetPtr(*p.lhs_)};
+      return Builder.CreateStructGEP(
+          lhs_ptr->getType()->getPointerElementType(), lhs_ptr, 0);
+    } else {
+      assert(false);
+    }
   } else {
     assert(false);
+    return nullptr;
   }
 }
 
@@ -1224,30 +1233,30 @@ llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
   return is_postfix ? lhs_value : rhs_value;
 }
 
-void CodeGen::BuiltIn() {
-  auto FuncTy1 = llvm::FunctionType::get(Builder.getVoidTy(),
-                                         {Builder.getInt8PtrTy()}, false);
-  llvm::Function* FuncLLVMVaStart{};
-  llvm::Function* FuncLLVMVaEnd{};
-
-  auto func1{Module->getFunction("llvm.va_start")};
-  if (!func1) {
-    FuncLLVMVaStart =
-        llvm::Function::Create(FuncTy1, llvm::GlobalValue::ExternalLinkage,
-                               "llvm.va_start", Module.get());
-  } else {
-    FuncLLVMVaStart = func1;
-  }
-
-  auto func2{Module->getFunction("llvm.va_end")};
-  if (!func2) {
-    FuncLLVMVaEnd =
-        llvm::Function::Create(FuncTy1, llvm::GlobalValue::ExternalLinkage,
-                               "llvm.va_end", Module.get());
-  } else {
-    FuncLLVMVaEnd = func2;
-  }
-}
+// void CodeGen::BuiltIn() {
+//  auto FuncTy1 = llvm::FunctionType::get(Builder.getVoidTy(),
+//                                         {Builder.getInt8PtrTy()}, false);
+//  llvm::Function* FuncLLVMVaStart{};
+//  llvm::Function* FuncLLVMVaEnd{};
+//
+//  auto func1{Module->getFunction("llvm.va_start")};
+//  if (!func1) {
+//    FuncLLVMVaStart =
+//        llvm::Function::Create(FuncTy1, llvm::GlobalValue::ExternalLinkage,
+//                               "llvm.va_start", Module.get());
+//  } else {
+//    FuncLLVMVaStart = func1;
+//  }
+//
+//  auto func2{Module->getFunction("llvm.va_end")};
+//  if (!func2) {
+//    FuncLLVMVaEnd =
+//        llvm::Function::Create(FuncTy1, llvm::GlobalValue::ExternalLinkage,
+//                               "llvm.va_end", Module.get());
+//  } else {
+//    FuncLLVMVaEnd = func2;
+//  }
+//}
 
 bool CodeGen::HasReturn() const { return has_br_or_return_.top().second; }
 

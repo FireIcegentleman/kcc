@@ -1,13 +1,8 @@
 int printf(const char *s, ...);
 
 int main(void) {
-  int a = 10;
-  int *p = &a;
-  printf("%d\n", a);
-  *p = 33;
-  printf("%d\n", a);
-  a = 3;
-  printf("%d\n", a);
-  ++a;
-  --a;
+  int a[2] = {1};
+  a + 2;
+  // printf("%d\n", a[0]);
+  //  printf("%d\n", a[1]);
 }
