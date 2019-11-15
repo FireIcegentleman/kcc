@@ -366,8 +366,8 @@ void BinaryOpExpr::AssignOpCheck() {
 }
 
 void BinaryOpExpr::AddOpCheck() {
-  auto lhs_type{lhs_->GetQualType()};
-  auto rhs_type{rhs_->GetQualType()};
+  auto lhs_type{lhs_->GetType()};
+  auto rhs_type{rhs_->GetType()};
 
   if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     type_ = Expr::Convert(lhs_, rhs_);
@@ -436,8 +436,8 @@ void BinaryOpExpr::BitwiseOpCheck() {
 }
 
 void BinaryOpExpr::ShiftOpCheck() {
-  auto lhs_type{lhs_->GetQualType()};
-  auto rhs_type{rhs_->GetQualType()};
+  auto lhs_type{lhs_->GetType()};
+  auto rhs_type{rhs_->GetType()};
 
   if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
     Error(loc_,
@@ -445,13 +445,12 @@ void BinaryOpExpr::ShiftOpCheck() {
           lhs_type->ToString(), rhs_type->ToString());
   }
 
-  lhs_ =
-      Expr::MayCastTo(lhs_, ArithmeticType::IntegerPromote(lhs_type.GetType()));
-  rhs_ =
-      Expr::MayCastTo(rhs_, ArithmeticType::IntegerPromote(rhs_type.GetType()));
+  lhs_ = Expr::MayCastTo(lhs_, ArithmeticType::IntegerPromote(lhs_type));
+  rhs_ = Expr::MayCastTo(rhs_, ArithmeticType::IntegerPromote(rhs_type));
 
   // LLVM 指令要求类型一致
-  Convert(lhs_, rhs_);
+  // TODO 更正确的形式
+  rhs_ = Expr::MayCastTo(rhs_, lhs_->GetType());
 
   type_ = lhs_->GetQualType();
 }

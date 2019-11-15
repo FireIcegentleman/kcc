@@ -27,3 +27,7 @@
 #include <uchar.h>
 #include <wchar.h>
 #include <wctype.h>
+
+#include "test.h"
+
+void testmain() { print("header"); }

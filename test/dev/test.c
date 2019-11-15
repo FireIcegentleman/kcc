@@ -1,5 +1,3 @@
 int printf(const char *s, ...);
 
-void fuckl(int a) { printf("%d\n", a); }
-
-int main(void) { fuckl(_Alignof(char) - 2 > 0); }
+int main(void) { printf("%s", typeid((_Bool)0 + (_Bool)0)); }

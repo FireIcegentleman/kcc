@@ -63,6 +63,7 @@ int t7(int a, int b) {
 
 int t8(int a, ...) {
     expect(23, a);
+    return 0;
 }
 
 static void t9() {

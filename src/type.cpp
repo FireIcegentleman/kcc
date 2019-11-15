@@ -419,7 +419,7 @@ ArithmeticType* ArithmeticType::Get(std::uint32_t type_spec) {
 }
 
 Type* ArithmeticType::IntegerPromote(Type* type) {
-  assert(type->IsIntegerTy());
+  assert(type->IsIntegerTy() || type->IsBoolTy());
 
   static auto int_type{ArithmeticType::Get(kInt)};
   if (type->ArithmeticRank() < int_type->Rank()) {
@@ -432,7 +432,8 @@ Type* ArithmeticType::IntegerPromote(Type* type) {
 Type* ArithmeticType::MaxType(Type* lhs, Type* rhs) {
   assert(lhs->IsArithmeticTy() && rhs->IsArithmeticTy());
 
-  if (!lhs->IsIntegerTy() || !rhs->IsIntegerTy()) {
+  if ((!lhs->IsIntegerTy() || !rhs->IsIntegerTy()) &&
+      (!lhs->IsBoolTy() && !rhs->IsBoolTy())) {
     return lhs->ArithmeticRank() >= rhs->ArithmeticRank() ? lhs : rhs;
   } else {
     lhs = ArithmeticType::IntegerPromote(lhs);

@@ -47,10 +47,11 @@ int main(int argc, char *argv[]) try {
 #ifdef DEV
   if (TestMode) {
     RunTest();
+    return EXIT_SUCCESS;
   } else if (DevMode) {
     RunDev();
+    return EXIT_SUCCESS;
   }
-  return EXIT_SUCCESS;
 #endif
 
   // FIXME 编译多文件时行为不正确

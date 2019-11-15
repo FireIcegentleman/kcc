@@ -633,6 +633,8 @@ Expr* Parser::ParseUnaryExpr() {
       return ParseOffsetof();
     case Tag::kRegClass:
       return ParseRegClass();
+    case Tag::kTypeid:
+      return ParseTypeid();
     default:
       PutBack();
       return ParsePostfixExpr();
@@ -2573,6 +2575,14 @@ Expr* Parser::ParseStmtExpr() {
   auto block{ParseCompoundStmt()};
   Expect(Tag::kRightParen);
   return MakeAstNode<StmtExpr>(block);
+}
+
+Expr* Parser::ParseTypeid() {
+  Expect(Tag::kLeftParen);
+  auto expr{ParseExpr()};
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<StringLiteralExpr>(expr->GetType()->ToString());
 }
 
 /*

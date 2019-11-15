@@ -181,6 +181,7 @@ class Parser {
   void TryParseAsm();
   QualType ParseTypeof();
   Expr* ParseStmtExpr();
+  Expr* ParseTypeid();
 
   /*
    * built in

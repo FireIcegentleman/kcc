@@ -72,6 +72,7 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"__builtin_offsetof", Tag::kOffsetof});
   keywords_.insert({"__builtin_reg_class", Tag::kRegClass});
   keywords_.insert({"__PRETTY_FUNCTION__", Tag::kFuncSignature});
+  keywords_.insert({"typeid", Tag::kTypeid});
 }
 
 Tag KeywordsDictionary::Find(const std::string& name) const {

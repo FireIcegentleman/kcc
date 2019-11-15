@@ -18,13 +18,13 @@ static char *get_timestamp() {
 }
 
 static void special() {
-    expect_string("test/macro.c", __FILE__);
+    expect_string("macro.c", __FILE__);
     expect(22, __LINE__);
     expect(11, strlen(__DATE__));
     expect(8, strlen(__TIME__));
     expect(24, strlen(__TIMESTAMP__));
     expect(0, __INCLUDE_LEVEL__);
-    expect_string("test/macro.c", __BASE_FILE__);
+    expect_string("macro.c", __BASE_FILE__);
     expect_string(get_timestamp(), __TIMESTAMP__);
 }
 
@@ -69,7 +69,7 @@ static void predefined() {
     expect(1, __STDC_HOSTED__);
     expect(1, __STDC_UTF_16__);
     expect(1, __STDC_UTF_32__);
-    expect(201112, __STDC_VERSION__);
+    expect(201710, __STDC_VERSION__);
 
     expect(2, __SIZEOF_SHORT__);
     expect(4, __SIZEOF_INT__);
@@ -80,7 +80,7 @@ static void predefined() {
     expect(8, __SIZEOF_POINTER__);
     expect(8, __SIZEOF_PTRDIFF_T__);
     expect(8, __SIZEOF_SIZE_T__);
-    expect(8, __SIZEOF_LONG_DOUBLE__);
+    expect(16, __SIZEOF_LONG_DOUBLE__);
 
     expect(sizeof(short), __SIZEOF_SHORT__);
     expect(sizeof(int), __SIZEOF_INT__);

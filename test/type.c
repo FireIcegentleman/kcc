@@ -90,7 +90,7 @@ static void test_typedef() {
 }
 
 static void test_align() {
-    expect(8, sizeof(max_align_t));
+    expect(32, sizeof(max_align_t));
 }
 
 void testmain() {
