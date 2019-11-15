@@ -340,6 +340,14 @@ bool Type::FuncIsNoreturn() const {
   return dynamic_cast<const FunctionType*>(this)->IsNoreturn();
 }
 
+void Type::FuncSetName(const std::string& name) {
+  dynamic_cast<FunctionType*>(this)->SetName(name);
+}
+
+std::string Type::FuncGetName() const {
+  return dynamic_cast<const FunctionType*>(this)->GetName();
+}
+
 Type::Type(bool complete) : complete_{complete} {}
 
 /*
@@ -779,7 +787,11 @@ bool StructType::IsStruct() const { return is_struct_; }
 
 bool StructType::HasName() const { return !std::empty(name_); }
 
-void StructType::SetName(const std::string& name) { name_ = name; }
+void StructType::SetName(const std::string& name) {
+  name_ = name;
+  std::string pre{is_struct_ ? "struct." : "union."};
+  llvm::cast<llvm::StructType>(llvm_type_)->setName(pre + name);
+}
 
 std::string StructType::GetName() const { return name_; }
 
@@ -813,7 +825,9 @@ void StructType::AddMember(ObjectExpr* member) {
   member->SetOffset(offset);
 
   members_.push_back(member);
+
   scope_->InsertNormal(member->GetName(), member);
+  member->SetIndex(index_++);
 
   align_ = std::max(align_, member->GetAlign());
 
@@ -834,6 +848,7 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 
   auto offset{MakeAlign(offset_, anonymous->GetAlign())};
   anonymous->SetOffset(offset);
+
   members_.push_back(anonymous);
 
   for (auto& [name, obj] : *annoy_type->scope_) {
@@ -845,7 +860,9 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
       }
 
       member->SetOffset(offset + member->GetOffset());
+
       scope_->InsertNormal(name, member);
+      member->SetOffset(index_++);
     }
   }
 
@@ -877,15 +894,16 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
       is_struct_{is_struct},
       name_{name},
       scope_{Scope::Get(parent, kBlock)} {
+  std::string pre{is_struct ? "struct." : "union."};
   if (HasName()) {
     for (const auto& item : Module->getIdentifiedStructTypes()) {
-      if (item->getName() == name) {
+      if (item->getName() == pre + name) {
         llvm_type_ = item;
         return;
       }
     }
 
-    llvm_type_ = llvm::StructType::create(Context, name);
+    llvm_type_ = llvm::StructType::create(Context, pre + name);
   } else {
     llvm_type_ = llvm::StructType::create(Context);
   }
@@ -991,6 +1009,10 @@ void FunctionType::SetFuncSpec(std::uint32_t func_spec) {
 bool FunctionType::IsInline() const { return func_spec_ & kInline; }
 
 bool FunctionType::IsNoreturn() const { return func_spec_ & kNoreturn; }
+
+void FunctionType::SetName(const std::string& name) { name_ = name; }
+
+std::string FunctionType::GetName() const { return name_; }
 
 FunctionType::FunctionType(QualType return_type, std::vector<ObjectExpr*> param,
                            bool is_var_args)

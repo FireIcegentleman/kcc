@@ -621,6 +621,7 @@ void CodeGen::Visit(const FuncDef& node) {
   for (auto&& arg : func->args()) {
     auto ptr{CreateEntryBlockAlloca(func, arg.getType(), (*iter)->GetAlign())};
     // 将参数的值保存到分配的内存中
+    (*iter)->local_ptr_ = ptr;
     Builder.CreateAlignedStore(&arg, ptr, (*iter)->GetAlign());
   }
 
@@ -632,7 +633,11 @@ void CodeGen::Visit(const FuncDef& node) {
       Builder.CreateRet(
           llvm::ConstantInt::get(Context, llvm::APInt(32, 0, true)));
     } else {
-      Builder.CreateRetVoid();
+      if (!Builder.getCurrentFunctionReturnType()->isVoidTy()) {
+        Error(node.ident_->GetLoc(), "miss return");
+      } else {
+        Builder.CreateRetVoid();
+      }
     }
   }
   PopBlock();
@@ -794,6 +799,8 @@ llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
     return llvm::GetElementPtrInst::CreateInBounds(
         value, {Builder.getInt64(0), Builder.getInt64(0)}, "",
         Builder.GetInsertBlock());
+  } else if (IsPointerTy(value) && to->isPointerTy()) {
+    return Builder.CreatePointerCast(value, to);
   } else {
     Error("{} to {}", LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
   }
@@ -1071,10 +1078,13 @@ llvm::Value* CodeGen::GetPtr(const AstNode& node) {
       return Builder.CreateInBoundsGEP(lhs, {result_});
     } else if (p.op_ == Tag::kPeriod) {
       auto lhs_ptr{GetPtr(*p.lhs_)};
+      assert(p.rhs_->Kind() == AstNodeType::kObjectExpr);
       return Builder.CreateStructGEP(
-          lhs_ptr->getType()->getPointerElementType(), lhs_ptr, 0);
+          lhs_ptr->getType()->getPointerElementType(), lhs_ptr,
+          dynamic_cast<ObjectExpr*>(p.rhs_)->index_);
     } else {
       assert(false);
+      return nullptr;
     }
   } else {
     assert(false);

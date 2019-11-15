@@ -372,10 +372,12 @@ void BinaryOpExpr::AddOpCheck() {
   if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     type_ = Expr::Convert(lhs_, rhs_);
   } else if (lhs_type->IsIntegerTy() && rhs_type->IsPointerTy()) {
+    lhs_ = Expr::MayCastTo(lhs_, ArithmeticType::Get(kLong | kUnsigned));
     type_ = rhs_type;
     // 保持 lhs 是指针
     std::swap(lhs_, rhs_);
   } else if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
+    rhs_ = Expr::MayCastTo(rhs_, ArithmeticType::Get(kLong | kUnsigned));
     type_ = lhs_type;
   } else {
     Error(loc_,
@@ -767,6 +769,8 @@ bool ObjectExpr::HasInit() const { return decl_->HasInit(); }
 bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
 bool ObjectExpr::InGlobal() const { return linkage_ != kNone; }
+
+void ObjectExpr::SetIndex(std::int32_t index) { index_ = index; }
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
                        std::uint32_t storage_class_spec, enum Linkage linkage,

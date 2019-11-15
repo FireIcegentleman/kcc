@@ -191,6 +191,8 @@ class Type {
   void FuncSetFuncSpec(std::uint32_t func_spec);
   bool FuncIsInline() const;
   bool FuncIsNoreturn() const;
+  void FuncSetName(const std::string& name);
+  std::string FuncGetName() const;
 
  protected:
   explicit Type(bool complete);
@@ -323,6 +325,7 @@ class StructType : public Type {
   std::int32_t align_{};
 
   bool has_flexible_array_{false};
+  std::int32_t index_{};
 };
 
 class FunctionType : public Type {
@@ -344,11 +347,14 @@ class FunctionType : public Type {
   void SetFuncSpec(std::uint32_t func_spec);
   bool IsInline() const;
   bool IsNoreturn() const;
+  void SetName(const std::string& name);
+  std::string GetName() const;
 
  private:
   FunctionType(QualType return_type, std::vector<ObjectExpr*> param,
                bool is_var_args);
 
+  std::string name_;
   bool is_var_args_;
   std::uint32_t func_spec_{};
   QualType return_type_;

@@ -137,7 +137,9 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     } else {
       curr_scope_->InsertNormal(
           name, MakeAstNode<IdentifierExpr>(name, type, kNone, true));
-
+      if (type->IsStructOrUnionTy()) {
+        type->StructSetName(name);
+      }
       return nullptr;
     }
   } else if (storage_class_spec & kRegister) {

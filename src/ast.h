@@ -402,6 +402,7 @@ class ObjectExpr : public IdentifierExpr {
   bool HasInit() const;
   bool IsAnonymous() const;
   bool InGlobal() const;
+  void SetIndex(std::int32_t index);
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -416,6 +417,8 @@ class ObjectExpr : public IdentifierExpr {
 
   llvm::AllocaInst* local_ptr_{};
   llvm::GlobalValue* global_ptr_{};
+
+  std::int32_t index_{};
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式

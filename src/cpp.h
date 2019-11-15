@@ -47,7 +47,7 @@ class Preprocessor {
       "}\n"
       "\n"
       "static void *__va_arg_mem(__va_elem *ap) {\n"
-      "  1 / 0;\n"  //未实现
+      "  return (void*)0;\n"  //未实现
       "}\n"
       "\n"
       "void __builtin_va_start(__builtin_va_list, int);\n"
