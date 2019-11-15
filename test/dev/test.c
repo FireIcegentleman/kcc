@@ -1,3 +1,14 @@
 int printf(const char *s, ...);
 
-int main(void) { printf("%s", typeid((_Bool)0 + (_Bool)0)); }
+struct A {
+  int a;
+  struct {
+    int b;
+  };
+};
+
+int main(void) {
+  struct A aaa;
+  aaa.b = 2;
+  printf("%d\n", aaa.b);
+}

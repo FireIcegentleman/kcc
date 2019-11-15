@@ -97,9 +97,44 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
       node.expr_->Accept(*this);
       result_ = LogicNotOp(result_);
       break;
-    case Tag::kStar:
-      result_ = Builder.CreateAlignedLoad(GetPtr(*node.expr_), align_);
-      break;
+    case Tag::kStar: {
+      if (node.expr_->Kind() == AstNodeType::kObjectExpr) {
+        auto p{dynamic_cast<const ObjectExpr&>(*node.expr_)};
+        assert(p.GetType()->IsPointerTy());
+        align_ = DataLayout.getABITypeAlignment(p.GetType()->GetLLVMType());
+        result_ = Builder.CreateAlignedLoad(p.local_ptr_, align_);
+        result_ = Builder.CreateAlignedLoad(result_, align_);
+      } else if (node.expr_->Kind() == AstNodeType::kUnaryOpExpr) {
+        node.expr_->Accept(*this);
+        result_ = Builder.CreateAlignedLoad(result_, align_);
+      } else if (node.expr_->Kind() == AstNodeType::kBinaryOpExpr) {
+        auto p{dynamic_cast<const BinaryOpExpr&>(*node.expr_)};
+        if (p.op_ == Tag::kPlus) {
+          p.lhs_->Accept(*this);
+          auto lhs{result_};
+          p.rhs_->Accept(*this);
+          result_ = Builder.CreateInBoundsGEP(lhs, {result_});
+          if (!lhs->getType()->getPointerElementType()->isArrayTy()) {
+            result_ = Builder.CreateAlignedLoad(result_, align_);
+          }
+        } else if (p.op_ == Tag::kPeriod) {
+          p.lhs_->Accept(*this);
+          auto lhs_ptr{result_};
+          assert(p.rhs_->Kind() == AstNodeType::kObjectExpr);
+          result_ = Builder.CreateAlignedLoad(
+              Builder.CreateInBoundsGEP(
+                  Builder.CreateStructGEP(
+                      lhs_ptr->getType()->getPointerElementType(), lhs_ptr,
+                      dynamic_cast<ObjectExpr*>(p.rhs_)->index_),
+                  {result_}),
+              align_);
+        } else {
+          assert(false);
+        }
+      } else {
+        assert(false);
+      }
+    } break;
     case Tag::kAmp:
       result_ = GetPtr(*node.expr_);
       break;
@@ -551,6 +586,8 @@ void CodeGen::Visit(const ReturnStmt& node) {
 }
 
 void CodeGen::Visit(const TranslationUnit& node) {
+  CreateLLVMFunc();
+
   PushBlock(nullptr, nullptr);
   for (auto& item : node.ext_decls_) {
     item->Accept(*this);
@@ -561,41 +598,10 @@ void CodeGen::Visit(const TranslationUnit& node) {
 void CodeGen::Visit(const Declaration& node) {
   if (node.IsObj()) {
     auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
-    auto type{node.ident_->GetType()};
-
     if (!obj->InGlobal()) {
-      obj->local_ptr_ =
-          CreateEntryBlockAlloca(Builder.GetInsertBlock()->getParent(),
-                                 type->GetLLVMType(), obj->GetAlign());
-
-      if (node.HasInit()) {
-        if (obj->GetType()->IsScalarTy()) {
-          auto init{node.inits_.inits_.front()};
-          init.expr_->Accept(*this);
-          Builder.CreateAlignedStore(result_, obj->local_ptr_, obj->GetAlign());
-        } else if (obj->GetType()->IsArrayTy()) {
-          // TODO 使用 llvm.memcpy
-          auto width{obj->GetType()->ArrayGetElementType()->GetWidth()};
-
-          for (const auto& item : node.inits_.inits_) {
-            item.expr_->Accept(*this);
-            Builder.CreateAlignedStore(
-                result_,
-                llvm::GetElementPtrInst::CreateInBounds(
-                    obj->local_ptr_,
-                    {Builder.getInt64(0),
-                     Builder.getInt64(item.offset_ / width)},
-                    "", Builder.GetInsertBlock()),
-                obj->GetAlign());
-          }
-        } else if (obj->GetType()->IsStructOrUnionTy()) {
-        } else {
-          assert(false);
-        }
-      }
+      DealWithLocalDecl(node);
     } else {
-      Module->getOrInsertGlobal(obj->GetName(), obj->GetType()->GetLLVMType());
-      obj->global_ptr_ = Module->getNamedGlobal(obj->GetName());
+      DealWithGlobalDecl(node);
     }
   }
 }
@@ -616,11 +622,14 @@ void CodeGen::Visit(const FuncDef& node) {
 
   // TODO 用法
   func->setDSOLocal(true);
-  func->addFnAttr(llvm::Attribute::NoInline);
   func->addFnAttr(llvm::Attribute::NoUnwind);
-  func->addFnAttr(llvm::Attribute::OptimizeNone);
   func->addFnAttr(llvm::Attribute::StackProtectStrong);
   func->addFnAttr(llvm::Attribute::UWTable);
+
+  if (OptimizationLevel == OptLevel::kO0) {
+    func->addFnAttr(llvm::Attribute::NoInline);
+    func->addFnAttr(llvm::Attribute::OptimizeNone);
+  }
 
   auto entry{llvm::BasicBlock::Create(Context, "", func)};
   Builder.SetInsertPoint(entry);
@@ -634,7 +643,7 @@ void CodeGen::Visit(const FuncDef& node) {
     ++iter;
   }
 
-  PushBlock(nullptr, nullptr);
+  EnterFunc();
   node.body_->Accept(*this);
 
   if (!HasReturn()) {
@@ -649,7 +658,7 @@ void CodeGen::Visit(const FuncDef& node) {
       }
     }
   }
-  PopBlock();
+  ExitFunc();
 
   // 验证生成的代码, 检查一致性
   llvm::verifyFunction(*func);
@@ -1064,7 +1073,8 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
 
 llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
   node.rhs_->Accept(*this);
-  return Assign(GetPtr(*node.lhs_), result_, align_);
+  auto rhs{result_};
+  return Assign(GetPtr(*node.lhs_), rhs, align_);
 }
 
 // * / .(maybe) / obj
@@ -1077,7 +1087,8 @@ llvm::Value* CodeGen::GetPtr(const AstNode& node) {
     auto p{dynamic_cast<const UnaryOpExpr&>(node)};
     assert(p.op_ == Tag::kStar);
     auto ptr{GetPtr(*p.expr_)};
-    return Builder.CreateAlignedLoad(ptr, align_);
+    return ptr;
+    // return Builder.CreateAlignedLoad(ptr, align_);
   } else if (node.Kind() == AstNodeType::kBinaryOpExpr) {
     auto p{dynamic_cast<const BinaryOpExpr&>(node)};
     if (p.op_ == Tag::kPlus) {
@@ -1087,7 +1098,9 @@ llvm::Value* CodeGen::GetPtr(const AstNode& node) {
       return Builder.CreateInBoundsGEP(lhs, {result_});
     } else if (p.op_ == Tag::kPeriod) {
       auto lhs_ptr{GetPtr(*p.lhs_)};
+      lhs_ptr = Builder.CreateAlignedLoad(lhs_ptr, align_);
       assert(p.rhs_->Kind() == AstNodeType::kObjectExpr);
+
       return Builder.CreateStructGEP(
           lhs_ptr->getType()->getPointerElementType(), lhs_ptr,
           dynamic_cast<ObjectExpr*>(p.rhs_)->index_);
@@ -1259,31 +1272,6 @@ llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
   return is_postfix ? lhs_value : rhs_value;
 }
 
-// void CodeGen::BuiltIn() {
-//  auto FuncTy1 = llvm::FunctionType::get(Builder.getVoidTy(),
-//                                         {Builder.getInt8PtrTy()}, false);
-//  llvm::Function* FuncLLVMVaStart{};
-//  llvm::Function* FuncLLVMVaEnd{};
-//
-//  auto func1{Module->getFunction("llvm.va_start")};
-//  if (!func1) {
-//    FuncLLVMVaStart =
-//        llvm::Function::Create(FuncTy1, llvm::GlobalValue::ExternalLinkage,
-//                               "llvm.va_start", Module.get());
-//  } else {
-//    FuncLLVMVaStart = func1;
-//  }
-//
-//  auto func2{Module->getFunction("llvm.va_end")};
-//  if (!func2) {
-//    FuncLLVMVaEnd =
-//        llvm::Function::Create(FuncTy1, llvm::GlobalValue::ExternalLinkage,
-//                               "llvm.va_end", Module.get());
-//  } else {
-//    FuncLLVMVaEnd = func2;
-//  }
-//}
-
 bool CodeGen::HasReturn() const { return has_br_or_return_.top().second; }
 
 void CodeGen::EnterFunc() { PushBlock(nullptr, nullptr); }
@@ -1302,6 +1290,106 @@ bool CodeGen::IsArrCastToPtr(llvm::Value* value, llvm::Type* type) {
          value_type->getPointerElementType()
                  ->getArrayElementType()
                  ->getPointerTo() == type;
+}
+
+void CodeGen::CreateLLVMFunc() {
+  auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
+                                         {Builder.getInt8PtrTy()}, false)};
+  va_start_ = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                     "llvm.va_start", Module.get());
+  va_end_ = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                   "llvm.va_end", Module.get());
+}
+
+void CodeGen::DealWithLocalDecl(const Declaration& node) {
+  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
+  auto type{node.ident_->GetType()};
+
+  obj->local_ptr_ =
+      CreateEntryBlockAlloca(Builder.GetInsertBlock()->getParent(),
+                             type->GetLLVMType(), obj->GetAlign());
+
+  if (node.HasInit()) {
+    if (obj->GetType()->IsScalarTy()) {
+      auto init{node.inits_.inits_.front()};
+      init.expr_->Accept(*this);
+      Builder.CreateAlignedStore(result_, obj->local_ptr_, obj->GetAlign());
+    } else if (obj->GetType()->IsArrayTy()) {
+      InitLocalArr(node);
+    } else if (obj->GetType()->IsStructOrUnionTy()) {
+      InitLocalStruct(node);
+    } else {
+      assert(false);
+    }
+  }
+}
+
+void CodeGen::DealWithGlobalDecl(const Declaration& node) {
+  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
+
+  Module->getOrInsertGlobal(obj->GetName(), obj->GetType()->GetLLVMType());
+  obj->global_ptr_ = Module->getNamedGlobal(obj->GetName());
+
+  if (node.HasInit()) {
+    if (obj->GetType()->IsScalarTy()) {
+      auto init{node.inits_.inits_.front()};
+      init.expr_->Accept(*this);
+      Builder.CreateAlignedStore(result_, obj->global_ptr_, obj->GetAlign());
+    } else if (obj->GetType()->IsArrayTy()) {
+      InitLocalArr(node);
+    } else if (obj->GetType()->IsStructOrUnionTy()) {
+      InitLocalStruct(node);
+    } else {
+      assert(false);
+    }
+  }
+}
+
+void CodeGen::InitLocalArr(const Declaration& node) {
+  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
+  auto type{obj->GetType()};
+  auto size{type->ArrayGetNumElements()};
+  auto width{type->ArrayGetElementType()->GetWidth()};
+
+  Builder.CreateMemSet(
+      Builder.CreateBitCast(obj->local_ptr_, Builder.getInt8PtrTy()),
+      Builder.getInt8(0), size * width, obj->GetAlign());
+
+  if (node.value_init_) {
+    return;
+  }
+
+  if (type->ArrayGetElementType()->IsScalarTy()) {
+    for (const auto& item : node.inits_.inits_) {
+      item.expr_->Accept(*this);
+      Builder.CreateAlignedStore(
+          result_,
+          Builder.CreateInBoundsGEP(
+              obj->local_ptr_,
+              {Builder.getInt64(0), Builder.getInt64(item.offset_ / width)}),
+          obj->GetAlign());
+    }
+  } else if (type->ArrayGetElementType()->IsArrayTy()) {
+    Error("init:not support Two or more dimensional array");
+  } else if (type->ArrayGetElementType()->IsStructTy()) {
+    Error("init:Does not support elements in an array as a struct");
+  } else {
+    assert(false);
+  }
+}
+
+void CodeGen::InitLocalStruct(const Declaration& node) {
+  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
+  auto type{obj->GetType()};
+  auto width{type->GetWidth()};
+
+  Builder.CreateMemSet(
+      Builder.CreateBitCast(obj->local_ptr_, Builder.getInt8PtrTy()),
+      Builder.getInt8(0), width, obj->GetAlign());
+
+  if (node.value_init_) {
+    return;
+  }
 }
 
 }  // namespace kcc

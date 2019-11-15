@@ -1124,7 +1124,7 @@ AstNodeType Declaration::Kind() const { return AstNodeType::kDeclaration; }
 
 void Declaration::Check() {}
 
-bool Declaration::HasInit() const { return std::size(inits_); }
+bool Declaration::HasInit() const { return std::size(inits_) || value_init_; }
 
 void Declaration::AddInits(const Initializers& inits) {
   if (std::size(inits) == 0) {

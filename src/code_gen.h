@@ -76,7 +76,6 @@ class CodeGen : public Visitor {
   std::string LLVMTypeToStr(llvm::Type *type) const;
   llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
   bool IsArrCastToPtr(llvm::Value *value, llvm::Type *type);
-  // void BuiltIn();
   void EnterFunc();
   void ExitFunc();
 
@@ -111,11 +110,21 @@ class CodeGen : public Visitor {
   virtual void Visit(const Declaration &node) override;
   virtual void Visit(const FuncDef &node) override;
 
+  void DealWithLocalDecl(const Declaration &node);
+  void InitLocalArr(const Declaration &node);
+  void InitLocalStruct(const Declaration &node);
+
+  void DealWithGlobalDecl(const Declaration &node);
+  void InitGlobalArr(const Declaration &node);
+  void InitGlobalStruct(const Declaration &node);
+
   void PushBlock(llvm::BasicBlock *continue_block,
                  llvm::BasicBlock *break_stack);
   void PopBlock();
   bool HasBrOrReturn() const;
   bool HasReturn() const;
+
+  void CreateLLVMFunc();
 
   llvm::Value *result_{};
   std::int32_t align_{};
@@ -131,6 +140,11 @@ class CodeGen : public Visitor {
   bool need_bool_{false};
 
   std::int32_t alloc_count_{};
+
+  llvm::Function *memcpy_{};
+  llvm::Function *memset_{};
+  llvm::Function *va_start_{};
+  llvm::Function *va_end_{};
 };
 
 }  // namespace kcc
