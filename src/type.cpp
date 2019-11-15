@@ -728,9 +728,21 @@ StructType* StructType::Get(bool is_struct, const std::string& name,
   return new (StructTypePool.Allocate()) StructType{is_struct, name, parent};
 }
 
-std::int32_t StructType::GetWidth() const { return width_; }
+std::int32_t StructType::GetWidth() const {
+  if (std::size(members_) == 0) {
+    return 1;
+  } else {
+    return width_;
+  }
+}
 
-std::int32_t StructType::GetAlign() const { return align_; }
+std::int32_t StructType::GetAlign() const {
+  if (std::size(members_) == 0) {
+    return 1;
+  } else {
+    return align_;
+  }
+}
 
 // 若一者以标签声明, 则另一者必须以同一标签声明。
 // 若它们都是完整类型, 则其成员必须在数量上准确对应, 以兼容类型声明,
@@ -862,7 +874,7 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
       member->SetOffset(offset + member->GetOffset());
 
       scope_->InsertNormal(name, member);
-      member->SetOffset(index_++);
+      member->SetIndex(index_++);
     }
   }
 

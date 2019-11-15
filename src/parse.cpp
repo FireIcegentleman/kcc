@@ -678,7 +678,9 @@ Expr* Parser::ParseAlignof() {
   type = ParseTypeName();
   Expect(Tag::kRightParen);
 
-  return MakeAstNode<ConstantExpr>(type->GetAlign());
+  return MakeAstNode<ConstantExpr>(
+      ArithmeticType::Get(kLong | kUnsigned),
+      static_cast<std::uint64_t>(type->GetAlign()));
 }
 
 Expr* Parser::ParsePostfixExpr() {

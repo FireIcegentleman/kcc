@@ -219,7 +219,7 @@ void UnaryOpExpr::LogicNotOpCheck() {
           expr_->GetQualType()->ToString());
   }
 
-  type_ = ArithmeticType::Get(32);
+  type_ = ArithmeticType::Get(kInt);
 }
 
 void UnaryOpExpr::DerefOpCheck() {
@@ -396,7 +396,7 @@ void BinaryOpExpr::SubOpCheck() {
     type_ = lhs_type;
   } else if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
     // ptrdiff_t
-    type_ = QualType{ArithmeticType::Get(64)};
+    type_ = QualType{ArithmeticType::Get(kLong)};
   } else {
     Error(loc_,
           "'-' the operand should be integer or pointer type '{}' vs '{}'",
@@ -450,43 +450,62 @@ void BinaryOpExpr::ShiftOpCheck() {
   rhs_ =
       Expr::MayCastTo(rhs_, ArithmeticType::IntegerPromote(rhs_type.GetType()));
 
+  // LLVM 指令要求类型一致
+  Convert(lhs_, rhs_);
+
   type_ = lhs_->GetQualType();
 }
 
 void BinaryOpExpr::LogicalOpCheck() {
+  std::uint32_t is_unsigned{};
+
   if (!lhs_->GetQualType()->IsScalarTy() ||
       !rhs_->GetQualType()->IsScalarTy()) {
     Error(loc_, "'&&' or '||': the operand should be scalar type '{}' vs '{}'",
           lhs_->GetQualType()->ToString(), rhs_->GetQualType()->ToString());
   }
 
-  type_ = ArithmeticType::Get(32);
+  is_unsigned = (lhs_->GetType()->IsUnsigned() || rhs_->GetType()->IsUnsigned())
+                    ? kUnsigned
+                    : 0;
+
+  type_ = ArithmeticType::Get(kInt | is_unsigned);
 }
 
 void BinaryOpExpr::EqualityOpCheck() {
   auto lhs_type{lhs_->GetQualType()};
   auto rhs_type{rhs_->GetQualType()};
+  std::uint32_t is_unsigned{};
 
   if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
     EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
   } else if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     Expr::Convert(lhs_, rhs_);
+    is_unsigned =
+        (lhs_->GetType()->IsUnsigned() || rhs_->GetType()->IsUnsigned())
+            ? kUnsigned
+            : 0;
   } else {
     Error(loc_, "'==' or '!=': the operand should be integer type '{}' vs '{}'",
           lhs_type->ToString(), rhs_type->ToString());
   }
 
-  type_ = ArithmeticType::Get(32);
+  type_ = ArithmeticType::Get(kInt | is_unsigned);
 }
 
 void BinaryOpExpr::RelationalOpCheck() {
   auto lhs_type{lhs_->GetQualType()};
   auto rhs_type{rhs_->GetQualType()};
+  std::uint32_t is_unsigned{};
 
   if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
     EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
   } else if (lhs_type->IsRealTy() && rhs_type->IsRealTy()) {
     Expr::Convert(lhs_, rhs_);
+    is_unsigned =
+        (lhs_->GetType()->IsUnsigned() || rhs_->GetType()->IsUnsigned())
+            ? kUnsigned
+            : 0;
   } else {
     Error(loc_,
           "'<' / '>' / '<=' / '>=': the operand should be integer type '{}' vs "
@@ -494,7 +513,7 @@ void BinaryOpExpr::RelationalOpCheck() {
           lhs_type->ToString(), rhs_type->ToString());
   }
 
-  type_ = ArithmeticType::Get(32);
+  type_ = ArithmeticType::Get(kInt | is_unsigned);
 }
 
 void BinaryOpExpr::MemberRefOpCheck() { type_ = rhs_->GetQualType(); }
@@ -638,7 +657,7 @@ long ConstantExpr::GetIntegerVal() const { return integer_val_; }
 double ConstantExpr::GetFloatPointVal() const { return float_point_val_; }
 
 ConstantExpr::ConstantExpr(std::int32_t val)
-    : Expr(ArithmeticType::Get(32)), integer_val_(val) {}
+    : Expr(ArithmeticType::Get(kInt)), integer_val_(val) {}
 
 ConstantExpr::ConstantExpr(Type* type, std::uint64_t val)
     : Expr(type), integer_val_(val) {}
@@ -724,7 +743,8 @@ bool EnumeratorExpr::IsLValue() const { return false; }
 std::int32_t EnumeratorExpr::GetVal() const { return val_; }
 
 EnumeratorExpr::EnumeratorExpr(const std::string& name, std::int32_t val)
-    : IdentifierExpr{name, ArithmeticType::Get(32), kNone, false}, val_{val} {}
+    : IdentifierExpr{name, ArithmeticType::Get(kInt), kNone, false},
+      val_{val} {}
 
 /*
  * Object

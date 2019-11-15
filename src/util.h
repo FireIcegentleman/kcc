@@ -90,6 +90,9 @@ inline llvm::cl::opt<bool> Timing{"t", llvm::cl::desc{"Timing"},
                                   llvm::cl::cat{Category}};
 
 #ifdef DEV
+inline llvm::cl::opt<bool> TestMode{"test", llvm::cl::desc{"Test Mode"},
+                                    llvm::cl::cat{Category}};
+
 inline llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
                                    llvm::cl::cat{Category}};
 
@@ -99,9 +102,11 @@ inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
 inline llvm::cl::opt<bool> NoBuiltin{"no-builtin", llvm::cl::desc{"No Builtin"},
                                      llvm::cl::cat{Category}};
 
-inline llvm::cl::opt<bool> SymbolTable{"symbol",
-                                       llvm::cl::desc{"Print symbol table"},
-                                       llvm::cl::cat{Category}};
+inline llvm::cl::opt<bool> SymbolTable{
+    "symbol", llvm::cl::desc{"Print symbol table"}, llvm::cl::cat{Category}};
+
+inline llvm::cl::opt<bool> StandardIR{"ir", llvm::cl::desc{"emit Standard IR"},
+                                      llvm::cl::cat{Category}};
 #endif
 
 std::string GetPath();

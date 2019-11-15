@@ -334,12 +334,14 @@ void CodeGen::Visit(const EnumeratorExpr& node) {
 
 void CodeGen::Visit(const ObjectExpr& node) {
   if (!node.InGlobal()) {
+    assert(node.local_ptr_ != nullptr);
     if (node.GetType()->IsArrayTy()) {
       result_ = node.local_ptr_;
     } else {
       result_ = Builder.CreateAlignedLoad(node.local_ptr_, node.GetAlign());
     }
   } else {
+    assert(node.global_ptr_ != nullptr);
     if (node.GetType()->IsArrayTy()) {
       result_ = node.global_ptr_;
     } else {
@@ -389,18 +391,24 @@ void CodeGen::Visit(const IfStmt& node) {
   }
 
   Builder.SetInsertPoint(then_block);
+
+  PushBlock(nullptr, nullptr);
   node.then_block_->Accept(*this);
+  // 注意如果已经有一个无条件跳转指令了, 则不能再有一个
   if (!HasBrOrReturn()) {
     Builder.CreateBr(after_block);
   }
+  PopBlock();
 
   if (node.else_block_) {
     Builder.SetInsertPoint(else_block);
-    node.else_block_->Accept(*this);
 
+    PushBlock(nullptr, nullptr);
+    node.else_block_->Accept(*this);
     if (!HasBrOrReturn()) {
       Builder.CreateBr(after_block);
     }
+    PopBlock();
   }
 
   Builder.SetInsertPoint(after_block);
@@ -623,6 +631,7 @@ void CodeGen::Visit(const FuncDef& node) {
     // 将参数的值保存到分配的内存中
     (*iter)->local_ptr_ = ptr;
     Builder.CreateAlignedStore(&arg, ptr, (*iter)->GetAlign());
+    ++iter;
   }
 
   PushBlock(nullptr, nullptr);

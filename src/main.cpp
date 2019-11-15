@@ -34,6 +34,7 @@ using namespace kcc;
 
 void RunKcc(const std::string &file_name);
 #ifdef DEV
+void RunTest();
 void RunDev();
 #endif
 
@@ -44,10 +45,12 @@ int main(int argc, char *argv[]) try {
   CommandLineCheck();
 
 #ifdef DEV
-  if (DevMode) {
+  if (TestMode) {
+    RunTest();
+  } else if (DevMode) {
     RunDev();
-    return EXIT_SUCCESS;
   }
+  return EXIT_SUCCESS;
 #endif
 
   // FIXME 编译多文件时行为不正确
@@ -191,63 +194,77 @@ void RunKcc(const std::string &file_name) {
 }
 
 #ifdef DEV
-void RunDev() {
-  for (const auto &file : InputFilePaths) {
-    Preprocessor preprocessor;
-    preprocessor.SetIncludePaths(IncludePaths);
-    preprocessor.SetMacroDefinitions(MacroDefines);
+void Run(const std::string &file) {
+  Preprocessor preprocessor;
+  preprocessor.SetIncludePaths(IncludePaths);
+  preprocessor.SetMacroDefinitions(MacroDefines);
 
-    auto preprocessed_code{preprocessor.Cpp(file)};
-    std::ofstream preprocess_file{GetFileName(file, ".i")};
-    preprocess_file << preprocessed_code << std::flush;
+  auto preprocessed_code{preprocessor.Cpp(file)};
+  std::ofstream preprocess_file{GetFileName(file, ".i")};
+  preprocess_file << preprocessed_code << std::flush;
 
-    Scanner scanner{std::move(preprocessed_code)};
-    auto tokens{scanner.Tokenize()};
-    std::ofstream tokens_file{GetFileName(file, ".txt")};
-    std::transform(std::begin(tokens), std::end(tokens),
-                   std::ostream_iterator<std::string>{tokens_file, "\n"},
-                   std::mem_fn(&Token::ToString));
-    tokens_file << std::flush;
+  Scanner scanner{std::move(preprocessed_code)};
+  auto tokens{scanner.Tokenize()};
+  std::ofstream tokens_file{GetFileName(file, ".txt")};
+  std::transform(std::begin(tokens), std::end(tokens),
+                 std::ostream_iterator<std::string>{tokens_file, "\n"},
+                 std::mem_fn(&Token::ToString));
+  tokens_file << std::flush;
 
-    Parser parser{std::move(tokens)};
-    auto unit{parser.ParseTranslationUnit()};
-    JsonGen{}.GenJson(unit, GetFileName(file, ".html"));
+  Parser parser{std::move(tokens)};
+  auto unit{parser.ParseTranslationUnit()};
+  JsonGen{}.GenJson(unit, GetFileName(file, ".html"));
 
+  if (StandardIR) {
     std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm -O0 " + file};
     std::system(cmd.c_str());
+  }
+
+  if (!ParseOnly) {
+    CodeGen code_gen{file};
+    code_gen.GenCode(unit);
+
+    Optimization(OptimizationLevel);
+
+    std::error_code error_code;
+    llvm::raw_fd_ostream ir_file{GetFileName(file, ".ll"), error_code};
+    ir_file << *Module;
+
+    std::string cmd{"llc " + GetFileName(file, ".ll")};
+    std::system(cmd.c_str());
+
+    ObjGen(GetFileName(file, ".o"));
+  }
+}
+
+void RunTest() {
+  Run("testmain.c");
+  InputFilePaths.erase(std::remove(std::begin(InputFilePaths),
+                                   std::end(InputFilePaths), "testmain.c"),
+                       std::end(InputFilePaths));
+
+  for (const auto &file : InputFilePaths) {
+    Run(file);
 
     if (!ParseOnly) {
-      CodeGen code_gen{file};
-      code_gen.GenCode(unit);
-
-      Optimization(OptimizationLevel);
-
-      std::error_code error_code;
-      llvm::raw_fd_ostream ir_file{GetFileName(file, ".ll"), error_code};
-      ir_file << *Module;
-
-      {
-        std::string cmd{"llc " + GetFileName(file, ".ll")};
-        std::system(cmd.c_str());
-      }
-
-      ObjGen(GetFileName(file, ".o"));
-
-      if (!Link({GetFileName(file, ".o")}, OptimizationLevel,
+      if (!Link({GetFileName(file, ".o"), "testmain.o"}, OptimizationLevel,
                 GetFileName(file, ".out"))) {
         Error("link fail");
       }
 
-      std::cout << "run ............................ \n";
-
-      {
-        std::string cmd{"lli " + GetFileName(file, ".ll")};
-        // std::string cmd{"./" + GetFileName(file, ".out")};
-        std::system(cmd.c_str());
-      }
+      std::string cmd{"./" + GetFileName(file, ".out")};
+      std::system(cmd.c_str());
     }
   }
 
   PrintWarnings();
+}
+
+void RunDev() {
+  auto file{InputFilePaths.front()};
+  Run(file);
+
+  std::string cmd{"lli " + GetFileName(file, ".ll")};
+  std::system(cmd.c_str());
 }
 #endif
