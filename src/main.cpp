@@ -5,12 +5,9 @@
 #include <unistd.h>
 #include <wait.h>
 
-#include <algorithm>
 #include <cstdlib>
 #include <fstream>
-#include <functional>
 #include <iostream>
-#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -125,16 +122,16 @@ void RunKcc(const std::string &file_name) {
 
   if (EmitTokens) {
     if (std::empty(OutputFilePath)) {
-      std::transform(std::begin(tokens), std::end(tokens),
-                     std::ostream_iterator<std::string>{std::cout, "\n"},
-                     std::mem_fn(&Token::ToString));
+      for (const auto &tok : tokens) {
+        std::cout << tok.ToString() << '\n';
+      }
       std::cout << std::endl;
     } else {
       std::ofstream ofs{OutputFilePath};
-      std::transform(std::begin(tokens), std::end(tokens),
-                     std::ostream_iterator<std::string>{ofs, "\n"},
-                     std::mem_fn(&Token::ToString));
-      ofs << std::flush;
+      for (const auto &tok : tokens) {
+        std::cout << tok.ToString() << '\n';
+      }
+      std::cout << std::endl;
     }
     return;
   }

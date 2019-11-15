@@ -918,7 +918,7 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
 
     llvm_type_ = llvm::StructType::create(Context, pre + name);
   } else {
-    llvm_type_ = llvm::StructType::create(Context);
+    llvm_type_ = llvm::StructType::create(Context, pre + "anon");
   }
 }
 

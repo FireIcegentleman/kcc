@@ -3,12 +3,14 @@ int printf(const char *s, ...);
 struct A {
   int a;
   struct {
-    int b;
+    int b[3];
+    struct {
+      int c[3];
+    };
   };
 };
 
 int main(void) {
   struct A aaa;
-  aaa.b = 2;
-  printf("%d\n", aaa.b);
+  //aaa.c[1] = 2;
 }
