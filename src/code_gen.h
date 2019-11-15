@@ -29,10 +29,9 @@ class CodeGen : public Visitor {
 
  private:
   // 在栈上分配内存
-  static llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *parent,
-                                                  llvm::Type *type,
-                                                  std::int32_t align,
-                                                  const std::string &name);
+  llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *parent,
+                                           llvm::Type *type,
+                                           std::int32_t align);
   llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
   llvm::Value *SubOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
   llvm::Value *MulOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
@@ -66,7 +65,7 @@ class CodeGen : public Visitor {
   llvm::Value *LogicOrOp(const BinaryOpExpr &node);
   llvm::Value *LogicAndOp(const BinaryOpExpr &node);
   llvm::Value *AssignOp(const BinaryOpExpr &node);
-  std::pair<llvm::Value *, std::int32_t> GetPtr(const AstNode &node);
+  llvm::Value * GetPtr(const AstNode &node);
   llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
                       std::int32_t align);
   void VisitForNoInc(const ForStmt &node);
@@ -77,6 +76,8 @@ class CodeGen : public Visitor {
   std::string LLVMTypeToStr(llvm::Type *type) const;
   llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
   void BuiltIn();
+  void EnterFunc();
+  void ExitFunc();
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
@@ -116,6 +117,7 @@ class CodeGen : public Visitor {
   bool HasReturn() const;
 
   llvm::Value *result_{};
+  std::int32_t align_{};
 
   std::stack<llvm::BasicBlock *> continue_stack_;
   std::stack<llvm::BasicBlock *> break_stack_;
@@ -123,7 +125,11 @@ class CodeGen : public Visitor {
 
   std::map<std::string, llvm::BasicBlock *> goto_label_;
 
+  std::map<llvm::Constant *, llvm::Constant *> strings_;
+
   bool need_bool_{false};
+
+  std::int32_t alloc_count_{};
 };
 
 }  // namespace kcc

@@ -11,6 +11,7 @@
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/Optional.h>
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -97,11 +98,10 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
       result_ = LogicNotOp(result_);
       break;
     case Tag::kStar:
-      node.expr_->Accept(*this);
-      result_ = Builder.CreateAlignedLoad(result_, node.GetType()->GetAlign());
+      result_ = Builder.CreateAlignedLoad(GetPtr(*node.expr_), align_);
       break;
     case Tag::kAmp:
-      result_ = GetPtr(*node.expr_).first;
+      result_ = GetPtr(*node.expr_);
       break;
     default:
       assert(false);
@@ -110,8 +110,7 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
 
 void CodeGen::Visit(const TypeCastExpr& node) {
   node.expr_->Accept(*this);
-  result_ = CastTo(result_, node.to_->GetLLVMType(),
-                   node.to_->IsIntegerTy() ? node.to_->IsUnsigned() : false);
+  result_ = CastTo(result_, node.to_->GetLLVMType(), node.to_->IsUnsigned());
 }
 
 /*
@@ -133,11 +132,9 @@ void CodeGen::Visit(const BinaryOpExpr& node) {
     case Tag::kEqual:
       result_ = AssignOp(node);
       return;
-    case Tag::kPeriod: {
-      auto [ptr, align]{GetPtr(node)};
-      result_ = Builder.CreateLoad(ptr, align);
+    case Tag::kPeriod:
+      result_ = Builder.CreateAlignedLoad(GetPtr(node), align_);
       return;
-    }
     default:
       break;
   }
@@ -223,6 +220,11 @@ void CodeGen::Visit(const FuncCallExpr& node) {
   node.callee_->Accept(*this);
   auto callee{result_};
 
+  // TODO 是否一定要检查
+  if (!callee->getType()->getPointerElementType()->isFunctionTy()) {
+    Error(node.GetLoc(), "need a func: {}", LLVMTypeToStr(callee->getType()));
+  }
+
   std::vector<llvm::Value*> values;
   for (auto& item : node.args_) {
     item->Accept(*this);
@@ -252,54 +254,62 @@ void CodeGen::Visit(const ConstantExpr& node) {
 // 1 / 2 / 4
 // 注意已经添加空字符了
 void CodeGen::Visit(const StringLiteralExpr& node) {
-  std::vector<llvm::Constant*> arr_values;
-
   auto width{node.GetType()->ArrayGetElementType()->GetWidth()};
   auto size{node.GetType()->ArrayGetNumElements()};
   auto str{node.val_.c_str()};
+  llvm::Constant* arr{};
 
   switch (width) {
-    case 1:
+    case 1: {
+      std::vector<std::uint8_t> values;
       for (std::size_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
-        auto char_type{Builder.getInt8Ty()};
-        auto value{llvm::ConstantInt::get(char_type,
-                                          static_cast<std::uint64_t>(*ptr))};
-        arr_values.push_back(value);
+        values.push_back(static_cast<std::uint64_t>(*ptr));
         str += 1;
       }
-      break;
-    case 2:
+      arr = llvm::ConstantDataArray::get(Context, values);
+    } break;
+    case 2: {
+      std::vector<std::uint16_t> values;
       for (std::size_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
-        auto char_type{Builder.getInt16Ty()};
-        auto value{llvm::ConstantInt::get(char_type,
-                                          static_cast<std::uint64_t>(*ptr))};
-        arr_values.push_back(value);
+        values.push_back(static_cast<std::uint64_t>(*ptr));
         str += 2;
       }
-      break;
-    case 4:
+      arr = llvm::ConstantDataArray::get(Context, values);
+    } break;
+    case 4: {
+      std::vector<std::uint32_t> values;
       for (std::size_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
-        auto char_type{Builder.getInt32Ty()};
-        auto value{llvm::ConstantInt::get(char_type,
-                                          static_cast<std::uint64_t>(*ptr))};
-        arr_values.push_back(value);
+        values.push_back(static_cast<std::uint64_t>(*ptr));
         str += 4;
       }
-      break;
+      arr = llvm::ConstantDataArray::get(Context, values);
+    } break;
     default:
       assert(false);
   }
 
-  auto arr{llvm::ConstantDataArray::get(Context, arr_values)};
-  auto* global_var = new llvm::GlobalVariable(
-      *Module, arr->getType(), true, llvm::GlobalValue::PrivateLinkage, arr);
+  if (auto iter{strings_.find(arr)}; iter != std::end(strings_)) {
+    result_ = iter->second;
+    return;
+  }
+
+  auto global_var{new llvm::GlobalVariable(*Module, arr->getType(), true,
+                                           llvm::GlobalValue::PrivateLinkage,
+                                           arr, ".str")};
   global_var->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   global_var->setAlignment(width);
 
-  result_ = global_var;
+  auto zero{llvm::ConstantInt::get(llvm::Type::getInt64Ty(Context), 0)};
+
+  auto ptr{llvm::ConstantExpr::getInBoundsGetElementPtr(
+      global_var->getValueType(), global_var,
+      llvm::ArrayRef<llvm::Constant*>{zero, zero})};
+
+  result_ = ptr;
+  strings_[arr] = ptr;
 }
 
 void CodeGen::Visit(const IdentifierExpr& node) {
@@ -520,14 +530,16 @@ void CodeGen::Visit(const ReturnStmt& node) {
     Builder.CreateRet(result_);
   } else {
     Builder.CreateRetVoid();
-    has_br_or_return_.top().second = true;
   }
+  has_br_or_return_.top().second = true;
 }
 
 void CodeGen::Visit(const TranslationUnit& node) {
+  PushBlock(nullptr, nullptr);
   for (auto& item : node.ext_decls_) {
     item->Accept(*this);
   }
+  PopBlock();
 }
 
 void CodeGen::Visit(const Declaration& node) {
@@ -536,9 +548,9 @@ void CodeGen::Visit(const Declaration& node) {
     auto type{node.ident_->GetType()};
 
     if (!obj->InGlobal()) {
-      obj->local_ptr_ = CreateEntryBlockAlloca(
-          Builder.GetInsertBlock()->getParent(), type->GetLLVMType(),
-          obj->GetAlign(), obj->GetName());
+      obj->local_ptr_ =
+          CreateEntryBlockAlloca(Builder.GetInsertBlock()->getParent(),
+                                 type->GetLLVMType(), obj->GetAlign());
 
       if (node.HasInit()) {
         if (obj->GetType()->IsScalarTy()) {
@@ -586,18 +598,26 @@ void CodeGen::Visit(const FuncDef& node) {
         node.GetIdent()->GetName(), Module.get());
   }
 
+  // TODO 用法
+  func->setDSOLocal(true);
+  func->addFnAttr(llvm::Attribute::NoInline);
+  func->addFnAttr(llvm::Attribute::NoUnwind);
+  func->addFnAttr(llvm::Attribute::OptimizeNone);
+  func->addFnAttr(llvm::Attribute::StackProtectStrong);
+  func->addFnAttr(llvm::Attribute::UWTable);
+
   auto entry{llvm::BasicBlock::Create(Context, "", func)};
   Builder.SetInsertPoint(entry);
 
   auto iter{std::begin(type->FuncGetParams())};
   for (auto&& arg : func->args()) {
     arg.setName((*iter)->GetName());
-    auto ptr{CreateEntryBlockAlloca(func, arg.getType(), (*iter)->GetAlign(),
-                                    arg.getName())};
+    auto ptr{CreateEntryBlockAlloca(func, arg.getType(), (*iter)->GetAlign())};
     // 将参数的值保存到分配的内存中
     Builder.CreateAlignedStore(&arg, ptr, (*iter)->GetAlign());
   }
 
+  PushBlock(nullptr, nullptr);
   node.body_->Accept(*this);
 
   if (!HasReturn()) {
@@ -608,6 +628,7 @@ void CodeGen::Visit(const FuncDef& node) {
       Builder.CreateRetVoid();
     }
   }
+  PopBlock();
 
   // 验证生成的代码, 检查一致性
   llvm::verifyFunction(*func);
@@ -615,14 +636,17 @@ void CodeGen::Visit(const FuncDef& node) {
 
 llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Function* parent,
                                                   llvm::Type* type,
-                                                  std::int32_t align,
-                                                  const std::string& name) {
-  // 指向入口块开始的位置
-  llvm::IRBuilder<> temp{&parent->getEntryBlock(),
-                         parent->getEntryBlock().begin()};
+                                                  std::int32_t align) {
+  auto begin{parent->getEntryBlock().begin()};
+  for (std::int32_t i{0}; i < alloc_count_; ++i) {
+    ++begin;
+  }
 
-  auto ptr{temp.CreateAlloca(type, nullptr, name)};
+  llvm::IRBuilder<> temp{&parent->getEntryBlock(), begin};
+
+  auto ptr{temp.CreateAlloca(type, nullptr)};
   ptr->setAlignment(align);
+  ++alloc_count_;
 
   return ptr;
 }
@@ -639,8 +663,7 @@ llvm::Value* CodeGen::AddOp(llvm::Value* lhs, llvm::Value* rhs,
     return Builder.CreateFAdd(lhs, rhs);
   } else if (IsPointerTy(lhs)) {
     // 进行地址计算, 第二个参数是偏移量列表
-    return llvm::GetElementPtrInst::CreateInBounds(lhs, {rhs}, "",
-                                                   Builder.GetInsertBlock());
+    return Builder.CreateInBoundsGEP(lhs, {rhs});
   } else {
     assert(false);
     return nullptr;
@@ -727,8 +750,6 @@ llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
                              bool is_unsigned) {
   if (to->isIntegerTy(1)) {
     return CastToBool(value);
-  } else if (value->getType()->isIntegerTy(1) && to->isIntegerTy()) {
-    return Builder.CreateZExtOrTrunc(value, to);
   }
 
   if (IsIntegerTy(value) && to->isIntegerTy()) {
@@ -755,13 +776,22 @@ llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
     } else {
       return Builder.CreateFPExt(value, to);
     }
-  } else if (to->isVoidTy()) {
+  } else if (IsPointerTy(value) && to->isIntegerTy()) {
+    return Builder.CreatePtrToInt(value, to);
+  } else if (IsIntegerTy(value) && to->isPointerTy()) {
+    return Builder.CreateIntToPtr(value, to);
+  } else if (to->isVoidTy() || value->getType() == to) {
+    // TODO 这里直接 == 可以吗
     return value;
-  } else if (value->getType() == to) {
-    return value;
+  } else if (value->getType()->isArrayTy() && to->isPointerTy() &&
+             value->getType()->getArrayElementType()->getPointerTo() == to) {
+    return llvm::GetElementPtrInst::CreateInBounds(
+        value, {Builder.getInt64(0), Builder.getInt64(0)}, "",
+        Builder.GetInsertBlock());
   } else {
     Error("{} to {}", LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
   }
+  // TODO func -> func ptr
 }
 
 llvm::Value* CodeGen::ModOp(llvm::Value* lhs, llvm::Value* rhs,
@@ -803,17 +833,17 @@ llvm::Value* CodeGen::LessEqualOp(llvm::Value* lhs, llvm::Value* rhs,
   if (IsIntegerTy(lhs)) {
     if (is_unsigned) {
       auto value{Builder.CreateICmpULE(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     } else {
       auto value{Builder.CreateICmpSLE(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     }
   } else if (IsFloatingPointTy(lhs)) {
     auto value{Builder.CreateFCmpOLE(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else if (IsPointerTy(lhs)) {
     auto value{Builder.CreateICmpULE(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else {
     assert(false);
     return nullptr;
@@ -825,17 +855,17 @@ llvm::Value* CodeGen::LessOp(llvm::Value* lhs, llvm::Value* rhs,
   if (IsIntegerTy(lhs)) {
     if (is_unsigned) {
       auto value{Builder.CreateICmpULT(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     } else {
       auto value{Builder.CreateICmpSLT(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     }
   } else if (IsFloatingPointTy(lhs)) {
     auto value{Builder.CreateFCmpOLT(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else if (IsPointerTy(lhs)) {
     auto value{Builder.CreateICmpULT(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else {
     assert(false);
     return nullptr;
@@ -847,17 +877,17 @@ llvm::Value* CodeGen::GreaterEqualOp(llvm::Value* lhs, llvm::Value* rhs,
   if (IsIntegerTy(lhs)) {
     if (is_unsigned) {
       auto value{Builder.CreateICmpUGE(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     } else {
       auto value{Builder.CreateICmpSGE(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     }
   } else if (IsFloatingPointTy(lhs)) {
     auto value{Builder.CreateFCmpOGE(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else if (IsPointerTy(lhs)) {
     auto value{Builder.CreateICmpUGE(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else {
     assert(false);
     return nullptr;
@@ -869,17 +899,17 @@ llvm::Value* CodeGen::GreaterOp(llvm::Value* lhs, llvm::Value* rhs,
   if (IsIntegerTy(lhs)) {
     if (is_unsigned) {
       auto value{Builder.CreateICmpUGT(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     } else {
       auto value{Builder.CreateICmpSGT(lhs, rhs)};
-      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+      return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
     }
   } else if (IsFloatingPointTy(lhs)) {
     auto value{Builder.CreateFCmpOGT(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else if (IsPointerTy(lhs)) {
     auto value{Builder.CreateICmpUGT(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else {
     assert(false);
     return nullptr;
@@ -889,10 +919,10 @@ llvm::Value* CodeGen::GreaterOp(llvm::Value* lhs, llvm::Value* rhs,
 llvm::Value* CodeGen::EqualOp(llvm::Value* lhs, llvm::Value* rhs) {
   if (IsIntegerTy(lhs) || IsPointerTy(lhs)) {
     auto value{Builder.CreateICmpEQ(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else if (IsFloatingPointTy(lhs)) {
     auto value{Builder.CreateFCmpOEQ(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else {
     assert(false);
     return nullptr;
@@ -902,10 +932,10 @@ llvm::Value* CodeGen::EqualOp(llvm::Value* lhs, llvm::Value* rhs) {
 llvm::Value* CodeGen::NotEqualOp(llvm::Value* lhs, llvm::Value* rhs) {
   if (IsIntegerTy(lhs) || IsPointerTy(lhs)) {
     auto value{Builder.CreateICmpNE(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else if (IsFloatingPointTy(lhs)) {
     auto value{Builder.CreateFCmpONE(lhs, rhs)};
-    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+    return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
   } else {
     assert(false);
     return nullptr;
@@ -940,15 +970,9 @@ bool CodeGen::IsLongDoubleTy(llvm::Value* value) const {
 
 llvm::Value* CodeGen::GetZero(llvm::Type* type) {
   if (type->isIntegerTy()) {
-    return llvm::ConstantInt::get(Context,
-                                  llvm::APInt(type->getIntegerBitWidth(), 0));
-  } else if (type->isFloatTy()) {
-    return llvm::ConstantFP::get(Context, llvm::APFloat(0.0f));
-  } else if (type->isDoubleTy()) {
-    return llvm::ConstantFP::get(Context, llvm::APFloat(0.0));
-  } else if (type->isX86_FP80Ty()) {
-    return llvm::ConstantFP::get(llvm::Type::getX86_FP80Ty(Context),
-                                 llvm::APFloat(0.0));
+    return llvm::ConstantInt::get(type, 0);
+  } else if (type->isFloatingPointTy()) {
+    return llvm::ConstantFP::get(type, 0.0);
   } else if (type->isPointerTy()) {
     return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
   } else {
@@ -990,7 +1014,7 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
   phi->addIncoming(Builder.getTrue(), block);
   phi->addIncoming(result_, rhs_block);
 
-  return need_bool_ ? phi : CastTo(phi, Builder.getInt32Ty(), false);
+  return need_bool_ ? phi : CastTo(phi, Builder.getInt32Ty(), true);
 }
 
 llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
@@ -1013,20 +1037,20 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
   phi->addIncoming(Builder.getFalse(), block);
   phi->addIncoming(result_, rhs_block);
 
-  return need_bool_ ? phi : CastTo(phi, Builder.getInt32Ty(), false);
+  return need_bool_ ? phi : CastTo(phi, Builder.getInt32Ty(), true);
 }
 
 llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
-  auto [lhs_ptr, align]{GetPtr(*node.lhs_)};
   node.rhs_->Accept(*this);
-  return Assign(lhs_ptr, result_, align);
+  return Assign(GetPtr(*node.lhs_), result_, align_);
 }
 
 // * / .(maybe) / obj
-std::pair<llvm::Value*, std::int32_t> CodeGen::GetPtr(const AstNode& node) {
+llvm::Value* CodeGen::GetPtr(const AstNode& node) {
   if (node.Kind() == AstNodeType::kObjectExpr) {
     auto p{dynamic_cast<const ObjectExpr&>(node)};
-    return {p.local_ptr_, p.GetAlign()};
+    align_ = p.GetAlign();
+    return p.local_ptr_;
   } else if (node.Kind() == AstNodeType::kUnaryOpExpr) {
     auto p{dynamic_cast<const UnaryOpExpr&>(node)};
     assert(p.op_ == Tag::kStar);
@@ -1034,10 +1058,9 @@ std::pair<llvm::Value*, std::int32_t> CodeGen::GetPtr(const AstNode& node) {
   } else if (node.Kind() == AstNodeType::kBinaryOpExpr) {
     auto p{dynamic_cast<const BinaryOpExpr&>(node)};
     assert(p.op_ == Tag::kPeriod);
-    auto [lhs_ptr, align]{GetPtr(*p.lhs_)};
-    return {Builder.CreateStructGEP(lhs_ptr->getType()->getPointerElementType(),
-                                    lhs_ptr, 0),
-            align};
+    auto lhs_ptr{GetPtr(*p.lhs_)};
+    return Builder.CreateStructGEP(lhs_ptr->getType()->getPointerElementType(),
+                                   lhs_ptr, 0);
   } else {
     assert(false);
   }
@@ -1137,12 +1160,8 @@ void CodeGen::PopBlock() {
 }
 
 bool CodeGen::HasBrOrReturn() const {
-  if (std::empty(has_br_or_return_)) {
-    return false;
-  } else {
-    auto [br, ret]{has_br_or_return_.top()};
-    return br || ret;
-  }
+  auto [br, ret]{has_br_or_return_.top()};
+  return br || ret;
 }
 
 llvm::Value* CodeGen::NegOp(llvm::Value* value, bool is_unsigned) {
@@ -1164,7 +1183,7 @@ llvm::Value* CodeGen::LogicNotOp(llvm::Value* value) {
   value = CastToBool(value);
   value = Builder.CreateXor(value, Builder.getTrue());
 
-  return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), false);
+  return need_bool_ ? value : CastTo(value, Builder.getInt32Ty(), true);
 }
 
 std::string CodeGen::LLVMTypeToStr(llvm::Type* type) const {
@@ -1176,8 +1195,9 @@ std::string CodeGen::LLVMTypeToStr(llvm::Type* type) const {
 
 llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
   auto is_unsigned{expr.GetType()->IsUnsigned()};
-  auto [lhs_ptr, align]{GetPtr(expr)};
-  auto lhs_value{Builder.CreateAlignedLoad(lhs_ptr, align)};
+  auto lhs_ptr{GetPtr(expr)};
+
+  auto lhs_value{Builder.CreateAlignedLoad(lhs_ptr, align_)};
   llvm::Value* rhs_value{};
 
   llvm::Value* one_value{};
@@ -1188,7 +1208,7 @@ llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
   } else if (type->isFloatingPointTy()) {
     one_value = llvm::ConstantFP::get(type, 1.0);
   } else if (type->isPointerTy()) {
-    Builder.getInt32(1);
+    one_value = Builder.getInt32(1);
   } else {
     assert(false);
   }
@@ -1196,12 +1216,12 @@ llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
   if (is_inc) {
     rhs_value = AddOp(lhs_value, one_value, is_unsigned);
   } else {
-    rhs_value = SubOp(lhs_value, one_value, is_unsigned);
+    rhs_value = AddOp(lhs_value, NegOp(one_value, false), is_unsigned);
   }
 
-  auto prefix_ret{Assign(lhs_ptr, rhs_value, align)};
+  Assign(lhs_ptr, rhs_value, align_);
 
-  return is_postfix ? rhs_value : prefix_ret;
+  return is_postfix ? lhs_value : rhs_value;
 }
 
 void CodeGen::BuiltIn() {
@@ -1229,12 +1249,13 @@ void CodeGen::BuiltIn() {
   }
 }
 
-bool CodeGen::HasReturn() const {
-  if (std::empty(has_br_or_return_)) {
-    return false;
-  } else {
-    return has_br_or_return_.top().second;
-  }
+bool CodeGen::HasReturn() const { return has_br_or_return_.top().second; }
+
+void CodeGen::EnterFunc() { PushBlock(nullptr, nullptr); }
+
+void CodeGen::ExitFunc() {
+  PopBlock();
+  alloc_count_ = 0;
 }
 
 }  // namespace kcc

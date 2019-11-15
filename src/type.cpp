@@ -108,10 +108,12 @@ void Type::SetComplete(bool complete) {
 }
 
 bool Type::IsUnsigned() const {
-  assert(IsIntegerTy());
-
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kUnsigned);
+  if (!IsIntegerTy()) {
+    return false;
+  } else {
+    auto p{dynamic_cast<const ArithmeticType*>(this)};
+    return p->type_spec_ & kUnsigned;
+  }
 }
 
 bool Type::IsVoidTy() const { return dynamic_cast<const VoidType*>(this); }
@@ -196,13 +198,15 @@ bool Type::IsCharacterTy() const {
 }
 
 bool Type::IsIntegerTy() const {
-  // TODO 是否包括 bool
-  return dynamic_cast<const ArithmeticType*>(this) && !IsFloatPointTy();
+  return dynamic_cast<const ArithmeticType*>(this) && !IsFloatPointTy() &&
+         !IsBoolTy();
 }
 
 bool Type::IsRealTy() const { return IsIntegerTy() || IsRealFloatPointTy(); }
 
-bool Type::IsArithmeticTy() const { return IsIntegerTy() || IsFloatPointTy(); }
+bool Type::IsArithmeticTy() const {
+  return IsBoolTy() || IsIntegerTy() || IsFloatPointTy();
+}
 
 bool Type::IsScalarTy() const { return IsArithmeticTy() || IsPointerTy(); }
 

@@ -337,7 +337,7 @@ Token Scanner::Scan() {
     case 'Y':
     case 'Z':
     case '_':
-      // TODO 是扩展吗？
+      // 扩展
     case '$':
       return SkipIdentifier();
     case '\0':

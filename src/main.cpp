@@ -213,7 +213,7 @@ void RunDev() {
     auto unit{parser.ParseTranslationUnit()};
     JsonGen{}.GenJson(unit, GetFileName(file, ".html"));
 
-    std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm " + file};
+    std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm -O0 " + file};
     std::system(cmd.c_str());
 
     if (!ParseOnly) {
