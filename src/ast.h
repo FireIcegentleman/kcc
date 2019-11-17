@@ -6,6 +6,7 @@
 #define KCC_SRC_AST_H_
 
 #include <cstdint>
+#include <list>
 #include <set>
 #include <string>
 #include <utility>
@@ -391,6 +392,7 @@ class ObjectExpr : public IdentifierExpr {
   virtual void Check() override;
 
   bool IsStatic() const;
+  bool IsExtern() const;
   void SetStorageClassSpec(std::uint32_t storage_class_spec);
   std::uint32_t GetStorageClassSpec();
   std::int32_t GetAlign() const;
@@ -402,7 +404,9 @@ class ObjectExpr : public IdentifierExpr {
   bool HasInit() const;
   bool IsAnonymous() const;
   bool InGlobal() const;
-  void SetIndex(std::int32_t index);
+  llvm::Value* GetPtr();
+
+  std::list<std::pair<Type*, std::int32_t>> indexs_;
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -417,8 +421,6 @@ class ObjectExpr : public IdentifierExpr {
 
   llvm::AllocaInst* local_ptr_{};
   llvm::GlobalValue* global_ptr_{};
-
-  std::int32_t index_{};
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式
@@ -720,20 +722,25 @@ class Initializer {
   friend class Initializers;
   friend class JsonGen;
   friend class CodeGen;
+
   friend bool operator<(const Initializer& lhs, const Initializer& rhs);
 
  public:
-  Initializer(Type* type, std::int32_t offset, Expr* expr);
+  Initializer(Type* type, std::int32_t offset, Expr* expr,
+              const std::list<std::pair<Type*, std::int32_t>>& indexs);
 
  private:
   Type* type_;
   std::int32_t offset_;
   Expr* expr_;
+
+  std::list<std::pair<Type*, std::int32_t>> indexs_;
 };
 
 class Initializers {
   friend class JsonGen;
   friend class CodeGen;
+  friend class Declaration;
 
  public:
   void AddInit(const Initializer& init);

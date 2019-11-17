@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <list>
 #include <string>
 #include <vector>
 
@@ -308,6 +309,7 @@ class StructType : public Type {
   void Finish();
 
   bool HasFlexibleArray() const;
+  std::list<std::pair<Type*, std::int32_t>> OffsetToIndexs(std::int32_t offset);
 
  private:
   StructType(bool is_struct, const std::string& name, Scope* parent);

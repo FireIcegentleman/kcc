@@ -218,7 +218,7 @@ template <typename T>
 void CalcExpr<T>::Visit(const ConstantExpr& node) {
   if (node.GetType()->IsIntegerTy()) {
     val_ = static_cast<T>(node.GetIntegerVal());
-  } else if (node.GetType()->IsFloatTy()) {
+  } else if (node.GetType()->IsFloatPointTy()) {
     val_ = static_cast<T>(node.GetFloatPointVal());
   } else {
     assert(false);

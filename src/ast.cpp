@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "calc.h"
 #include "error.h"
 #include "memory_pool.h"
 #include "visitor.h"
@@ -341,8 +342,15 @@ bool BinaryOpExpr::IsLValue() const {
   }
 }
 
-BinaryOpExpr::BinaryOpExpr(Tag tag, Expr* lhs, Expr* rhs)
-    : op_(tag), lhs_(MayCast(lhs)), rhs_(MayCast(rhs)) {}
+BinaryOpExpr::BinaryOpExpr(Tag tag, Expr* lhs, Expr* rhs) : op_(tag) {
+  if (tag != Tag::kPeriod) {
+    lhs_ = MayCast(lhs);
+    rhs_ = MayCast(rhs);
+  } else {
+    lhs_ = lhs;
+    rhs_ = rhs;
+  }
+}
 
 void BinaryOpExpr::AssignOpCheck() {
   auto lhs_type{lhs_->GetQualType()};
@@ -761,9 +769,9 @@ void ObjectExpr::Check() {}
 
 bool ObjectExpr::IsLValue() const { return true; }
 
-bool ObjectExpr::IsStatic() const {
-  return storage_class_spec_ & kStatic || GetLinkage() != kNone;
-}
+bool ObjectExpr::IsStatic() const { return storage_class_spec_ & kStatic; }
+
+bool ObjectExpr::IsExtern() const { return storage_class_spec_ & kExtern; }
 
 void ObjectExpr::SetStorageClassSpec(std::uint32_t storage_class_spec) {
   storage_class_spec_ = storage_class_spec;
@@ -789,7 +797,15 @@ bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
 bool ObjectExpr::InGlobal() const { return linkage_ != kNone; }
 
-void ObjectExpr::SetIndex(std::int32_t index) { index_ = index; }
+llvm::Value* ObjectExpr::GetPtr() {
+  assert((local_ptr_ == nullptr) != (global_ptr_ == nullptr));
+
+  if (local_ptr_) {
+    return local_ptr_;
+  } else {
+    return global_ptr_;
+  }
+}
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
                        std::uint32_t storage_class_spec, enum Linkage linkage,
@@ -1090,8 +1106,10 @@ void TranslationUnit::AddExtDecl(ExtDecl* ext_decl) {
 /*
  * Initializer
  */
-Initializer::Initializer(Type* type, std::int32_t offset, Expr* expr)
-    : type_(type), offset_(offset), expr_(expr) {}
+Initializer::Initializer(
+    Type* type, std::int32_t offset, Expr* expr,
+    const std::list<std::pair<Type*, std::int32_t>>& indexs)
+    : type_(type), offset_(offset), expr_(expr), indexs_{indexs} {}
 
 bool operator<(const Initializer& lhs, const Initializer& rhs) {
   return lhs.offset_ < rhs.offset_;
@@ -1136,6 +1154,23 @@ void Declaration::AddInits(const Initializers& inits) {
   inits_ = inits;
 
   std::sort(std::begin(inits_), std::end(inits_));
+
+  // 必须用常量表达式初始化
+  if (ident_->GetLinkage() != kNone) {
+    for (auto&& item : inits_.inits_) {
+      if (item.expr_->GetType()->IsIntegerTy()) {
+        auto val{CalcExpr<std::uint64_t>{}.Calc(item.expr_)};
+        item.expr_ = MakeNode<ConstantExpr>(item.expr_->GetLoc(),
+                                            item.expr_->GetType(), val);
+      } else if (item.expr_->GetType()->IsFloatPointTy()) {
+        auto val{CalcExpr<long double>{}.Calc(item.expr_)};
+        item.expr_ = MakeNode<ConstantExpr>(item.expr_->GetLoc(),
+                                            item.expr_->GetType(), val);
+      } else {
+        assert(false);
+      }
+    }
+  }
 
   if (ident_->GetType()->IsScalarTy()) {
     assert(std::size(inits_) == 1);

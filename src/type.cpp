@@ -210,7 +210,7 @@ bool Type::IsArithmeticTy() const {
 
 bool Type::IsScalarTy() const { return IsArithmeticTy() || IsPointerTy(); }
 
-bool Type::IsAggregateTy() const { return IsArrayTy() || IsStructTy(); }
+bool Type::IsAggregateTy() const { return IsArrayTy() || IsStructOrUnionTy(); }
 
 bool Type::IsDerivedTy() const {
   return IsArrayTy() || IsFunctionTy() || IsPointerTy();
@@ -840,7 +840,7 @@ void StructType::AddMember(ObjectExpr* member) {
   members_.push_back(member);
 
   scope_->InsertNormal(member->GetName(), member);
-  member->SetIndex(index_++);
+  member->indexs_.push_front({this, index_++});
 
   align_ = std::max(align_, member->GetAlign());
 
@@ -861,6 +861,7 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 
   auto offset{MakeAlign(offset_, anonymous->GetAlign())};
   anonymous->SetOffset(offset);
+  anonymous->indexs_.push_front({this, index_});
 
   members_.push_back(anonymous);
 
@@ -875,10 +876,11 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
       member->SetOffset(offset + member->GetOffset());
 
       scope_->InsertNormal(name, member);
-      member->SetIndex(index_++);
+      member->indexs_.push_front({this, index_});
     }
   }
 
+  ++index_;
   align_ = std::max(align_, anonymous->GetAlign());
 
   if (is_struct_) {
@@ -901,6 +903,21 @@ void StructType::Finish() {
 }
 
 bool StructType::HasFlexibleArray() const { return has_flexible_array_; }
+
+std::list<std::pair<Type*, std::int32_t>> StructType::OffsetToIndexs(
+    std::int32_t offset) {
+  for (const auto& [name, obj] : *scope_) {
+    auto p{dynamic_cast<ObjectExpr*>(obj)};
+    assert(p != nullptr);
+
+    if (p->GetOffset() == offset) {
+      return p->indexs_;
+    }
+  }
+
+  assert(false);
+  return {};
+}
 
 StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
     : Type{false},

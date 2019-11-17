@@ -51,6 +51,9 @@ class CodeGen : public Visitor {
   llvm::Value *EqualOp(llvm::Value *lhs, llvm::Value *rhs);
   llvm::Value *NotEqualOp(llvm::Value *lhs, llvm::Value *rhs);
 
+  llvm::Value *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
+                              bool is_unsigned);
+  llvm::Value *ConstantCastToBool(llvm::Constant *value);
   llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned);
   llvm::Value *CastToBool(llvm::Value *value);
   bool IsArithmeticTy(llvm::Value *value) const;
@@ -110,13 +113,11 @@ class CodeGen : public Visitor {
   virtual void Visit(const Declaration &node) override;
   virtual void Visit(const FuncDef &node) override;
 
-  void DealWithLocalDecl(const Declaration &node);
-  void InitLocalArr(const Declaration &node);
-  void InitLocalStruct(const Declaration &node);
-
-  void DealWithGlobalDecl(const Declaration &node);
-  void InitGlobalArr(const Declaration &node);
-  void InitGlobalStruct(const Declaration &node);
+  void DealGlobalDecl(const Declaration &node);
+  void DealLocaleDecl(const Declaration &node);
+  void InitAggregateTy(const Declaration &node);
+  llvm::Constant *MakeConstAggregate(llvm::Type *type,
+                                     const Initializers &inits);
 
   void PushBlock(llvm::BasicBlock *continue_block,
                  llvm::BasicBlock *break_stack);
@@ -133,16 +134,10 @@ class CodeGen : public Visitor {
   std::stack<llvm::BasicBlock *> break_stack_;
   std::stack<std::pair<bool, bool>> has_br_or_return_;
 
-  std::map<std::string, llvm::BasicBlock *> goto_label_;
-
   std::map<llvm::Constant *, llvm::Constant *> strings_;
 
   bool need_bool_{false};
 
-  std::int32_t alloc_count_{};
-
-  llvm::Function *memcpy_{};
-  llvm::Function *memset_{};
   llvm::Function *va_start_{};
   llvm::Function *va_end_{};
 };

@@ -204,9 +204,9 @@ void Run(const std::string &file) {
   Scanner scanner{std::move(preprocessed_code)};
   auto tokens{scanner.Tokenize()};
   std::ofstream tokens_file{GetFileName(file, ".txt")};
-  std::transform(std::begin(tokens), std::end(tokens),
-                 std::ostream_iterator<std::string>{tokens_file, "\n"},
-                 std::mem_fn(&Token::ToString));
+  for (const auto &tok : tokens) {
+    tokens_file << tok.ToString() << '\n';
+  }
   tokens_file << std::flush;
 
   Parser parser{std::move(tokens)};

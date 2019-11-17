@@ -196,7 +196,7 @@ class Parser {
 
   FuncDef* curr_func_def_{};
   Scope* curr_scope_{Scope::Get(nullptr, kFile)};
-  std::map<std::string, LabelStmt*> curr_labels_;
+  std::list<std::pair<Type*, std::int32_t>> indexs_;
 
   TranslationUnit* unit_{MakeAstNode<TranslationUnit>()};
 };

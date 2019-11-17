@@ -28,9 +28,11 @@ TranslationUnit* Parser::ParseTranslationUnit() {
     unit_->AddExtDecl(ParseExternalDecl());
   }
 
+#ifdef DEV
   if (SymbolTable) {
     curr_scope_->PrintCurrScope();
   }
+#endif
 
   return unit_;
 }
@@ -2203,7 +2205,7 @@ void Parser::ParseInitializer(Initializers& inits, QualType type,
       auto begin{index_};
       auto expr{ParseAssignExpr()};
       if (type->Compatible(expr->GetType())) {
-        inits.AddInit({type.GetType(), offset, expr});
+        inits.AddInit({type.GetType(), offset, expr, indexs_});
         return;
       } else {
         index_ = begin;
@@ -2222,7 +2224,7 @@ void Parser::ParseInitializer(Initializers& inits, QualType type,
       Expect(Tag::kRightBrace);
     }
 
-    inits.AddInit({type.GetType(), offset, expr});
+    inits.AddInit({type.GetType(), offset, expr, indexs_});
   }
 }
 
@@ -2265,8 +2267,10 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
       }
     }
 
+    indexs_.push_back({type, index});
     ParseInitializer(inits, type->ArrayGetElementType(), offset + index * width,
                      designated, false);
+    indexs_.pop_back();
     designated = false;
     ++index;
 
@@ -2340,7 +2344,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
         auto char_type{ArithmeticType::Get(kChar | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value});
+        inits.AddInit({char_type, offset, value, indexs_});
         offset += 1;
         str += 1;
       }
@@ -2351,7 +2355,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
         auto char_type{ArithmeticType::Get(kShort | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value});
+        inits.AddInit({char_type, offset, value, indexs_});
         offset += 2;
         str += 2;
       }
@@ -2362,7 +2366,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
         auto char_type{ArithmeticType::Get(kInt | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value});
+        inits.AddInit({char_type, offset, value, indexs_});
         offset += 4;
         str += 4;
       }
@@ -2415,11 +2419,17 @@ void Parser::ParseStructInitializer(Initializers& inits, Type* type,
         PutBack();
       }
 
+      indexs_.push_back(
+          {type, member_iter - std::begin(type->StructGetMembers())});
       ParseInitializer(inits, (*member_iter)->GetType(), offset, designated,
                        false);
+      indexs_.pop_back();
     } else {
+      indexs_.push_back(
+          {type, member_iter - std::begin(type->StructGetMembers())});
       ParseInitializer(inits, (*member_iter)->GetType(),
                        offset + (*member_iter)->GetOffset(), designated, false);
+      indexs_.pop_back();
     }
 
     designated = false;

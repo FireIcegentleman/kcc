@@ -119,15 +119,16 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
           }
         } else if (p.op_ == Tag::kPeriod) {
           p.lhs_->Accept(*this);
-          auto lhs_ptr{result_};
+          // auto lhs_ptr{result_};
           assert(p.rhs_->Kind() == AstNodeType::kObjectExpr);
-          result_ = Builder.CreateAlignedLoad(
-              Builder.CreateInBoundsGEP(
-                  Builder.CreateStructGEP(
-                      lhs_ptr->getType()->getPointerElementType(), lhs_ptr,
-                      dynamic_cast<ObjectExpr*>(p.rhs_)->index_),
-                  {result_}),
-              align_);
+          //          result_ = Builder.CreateAlignedLoad(
+          //              Builder.CreateInBoundsGEP(
+          //                  Builder.CreateStructGEP(
+          //                      lhs_ptr->getType()->getPointerElementType(),
+          //                      lhs_ptr,
+          //                      dynamic_cast<ObjectExpr*>(p.rhs_)->index_),
+          //                  {result_}),
+          //              align_);
         } else {
           assert(false);
         }
@@ -596,13 +597,15 @@ void CodeGen::Visit(const TranslationUnit& node) {
 }
 
 void CodeGen::Visit(const Declaration& node) {
-  if (node.IsObj()) {
-    auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
-    if (!obj->InGlobal()) {
-      DealWithLocalDecl(node);
-    } else {
-      DealWithGlobalDecl(node);
-    }
+  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
+  if (!obj) {
+    return;
+  }
+
+  if (obj->InGlobal()) {
+    DealGlobalDecl(node);
+  } else {
+    DealLocaleDecl(node);
   }
 }
 
@@ -614,14 +617,16 @@ void CodeGen::Visit(const FuncDef& node) {
   if (!func) {
     func = llvm::Function::Create(
         llvm::cast<llvm::FunctionType>(type->GetLLVMType()),
-        node.GetIdent()->GetLinkage() == kInternal
-            ? llvm::Function::InternalLinkage
-            : llvm::Function::ExternalLinkage,
-        node.GetIdent()->GetName(), Module.get());
+        node.GetLinkage() == kInternal ? llvm::Function::InternalLinkage
+                                       : llvm::Function::ExternalLinkage,
+        func_name, Module.get());
   }
 
   // TODO 用法
-  func->setDSOLocal(true);
+  if (node.GetLinkage() != kInternal) {
+    func->setDSOLocal(true);
+  }
+
   func->addFnAttr(llvm::Attribute::NoUnwind);
   func->addFnAttr(llvm::Attribute::StackProtectStrong);
   func->addFnAttr(llvm::Attribute::UWTable);
@@ -633,23 +638,23 @@ void CodeGen::Visit(const FuncDef& node) {
 
   auto entry{llvm::BasicBlock::Create(Context, "", func)};
   Builder.SetInsertPoint(entry);
+  EnterFunc();
 
   auto iter{std::begin(type->FuncGetParams())};
   for (auto&& arg : func->args()) {
     auto ptr{CreateEntryBlockAlloca(func, arg.getType(), (*iter)->GetAlign())};
-    // 将参数的值保存到分配的内存中
     (*iter)->local_ptr_ = ptr;
+
+    // 将参数的值保存到分配的内存中
     Builder.CreateAlignedStore(&arg, ptr, (*iter)->GetAlign());
     ++iter;
   }
 
-  EnterFunc();
   node.body_->Accept(*this);
 
   if (!HasReturn()) {
     if (func_name == "main") {
-      Builder.CreateRet(
-          llvm::ConstantInt::get(Context, llvm::APInt(32, 0, true)));
+      Builder.CreateRet(Builder.getInt32(0));
     } else {
       if (!Builder.getCurrentFunctionReturnType()->isVoidTy()) {
         Error(node.ident_->GetLoc(), "miss return");
@@ -667,16 +672,10 @@ void CodeGen::Visit(const FuncDef& node) {
 llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Function* parent,
                                                   llvm::Type* type,
                                                   std::int32_t align) {
-  auto begin{parent->getEntryBlock().begin()};
-  for (std::int32_t i{0}; i < alloc_count_; ++i) {
-    ++begin;
-  }
-
-  llvm::IRBuilder<> temp{&parent->getEntryBlock(), begin};
-
+  llvm::IRBuilder<> temp{&parent->getEntryBlock(),
+                         parent->getEntryBlock().begin()};
   auto ptr{temp.CreateAlloca(type, nullptr)};
   ptr->setAlignment(align);
-  ++alloc_count_;
 
   return ptr;
 }
@@ -1101,9 +1100,12 @@ llvm::Value* CodeGen::GetPtr(const AstNode& node) {
       lhs_ptr = Builder.CreateAlignedLoad(lhs_ptr, align_);
       assert(p.rhs_->Kind() == AstNodeType::kObjectExpr);
 
-      return Builder.CreateStructGEP(
-          lhs_ptr->getType()->getPointerElementType(), lhs_ptr,
-          dynamic_cast<ObjectExpr*>(p.rhs_)->index_);
+      for (const auto& [type, index] :
+           dynamic_cast<ObjectExpr*>(p.rhs_)->indexs_) {
+        lhs_ptr = Builder.CreateStructGEP(lhs_ptr, index);
+      }
+
+      return lhs_ptr;
     } else {
       assert(false);
       return nullptr;
@@ -1276,10 +1278,7 @@ bool CodeGen::HasReturn() const { return has_br_or_return_.top().second; }
 
 void CodeGen::EnterFunc() { PushBlock(nullptr, nullptr); }
 
-void CodeGen::ExitFunc() {
-  PopBlock();
-  alloc_count_ = 0;
-}
+void CodeGen::ExitFunc() { PopBlock(); }
 
 bool CodeGen::IsArrCastToPtr(llvm::Value* value, llvm::Type* type) {
   auto value_type{value->getType()};
@@ -1293,102 +1292,199 @@ bool CodeGen::IsArrCastToPtr(llvm::Value* value, llvm::Type* type) {
 }
 
 void CodeGen::CreateLLVMFunc() {
-  auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
-                                         {Builder.getInt8PtrTy()}, false)};
-  va_start_ = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
-                                     "llvm.va_start", Module.get());
-  va_end_ = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
-                                   "llvm.va_end", Module.get());
+  assert((va_start_ == nullptr) == (va_end_ == nullptr));
+
+  if (!va_start_) {
+    auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
+                                           {Builder.getInt8PtrTy()}, false)};
+    va_start_ =
+        llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                               "llvm.va_start", Module.get());
+    va_end_ = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                     "llvm.va_end", Module.get());
+  }
 }
 
-void CodeGen::DealWithLocalDecl(const Declaration& node) {
+void CodeGen::InitAggregateTy(const Declaration& node) {
   auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
-  auto type{node.ident_->GetType()};
+  auto width{obj->GetType()->GetWidth()};
+
+  Builder.CreateMemSet(
+      Builder.CreateBitCast(obj->GetPtr(), Builder.getInt8PtrTy()),
+      Builder.getInt8(0), width, obj->GetAlign());
+
+  if (node.value_init_) {
+    return;
+  }
+
+  for (const auto& item : node.inits_.inits_) {
+    item.expr_->Accept(*this);
+    auto value{result_};
+
+    llvm::Value* ptr{obj->GetPtr()};
+    for (const auto& [type, index] : item.indexs_) {
+      if (type->IsArrayTy()) {
+        ptr = Builder.CreateInBoundsGEP(
+            ptr, {Builder.getInt64(0), Builder.getInt64(index)});
+      } else if (type->IsStructOrUnionTy()) {
+        ptr = Builder.CreateStructGEP(ptr, index);
+      } else {
+        break;
+      }
+    }
+
+    result_ = Builder.CreateAlignedStore(value, ptr, item.type_->GetAlign());
+  }
+}
+
+void CodeGen::DealGlobalDecl(const Declaration& node) {
+  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
+  auto type{obj->GetType()};
+  // 在符号表中查找指定的全局变量.如果不存在则添加并返回它;如果存在且类型
+  // 一致则直接返回;如果存在且类型不一致, 则返回一个转换为一致类型的常量
+  Module->getOrInsertGlobal(obj->GetName(), type->GetLLVMType());
+  auto var{Module->getNamedGlobal(obj->GetName())};
+  obj->global_ptr_ = var;
+
+  var->setAlignment(obj->GetAlign());
+  if (obj->IsStatic()) {
+    var->setLinkage(llvm::GlobalVariable::InternalLinkage);
+  } else if (obj->IsExtern()) {
+    var->setLinkage(llvm::GlobalVariable::ExternalLinkage);
+  } else {
+    if (!node.HasInit()) {
+      var->setLinkage(llvm::GlobalVariable::CommonLinkage);
+    }
+    var->setDSOLocal(true);
+  }
+
+  if (node.HasInit()) {
+    if (type->IsAggregateTy()) {
+      // TODO
+      // var->setInitializer(MakeConstAggregate(type->GetLLVMType(),
+      // node.inits_));
+      var->setInitializer(
+          llvm::ConstantAggregateZero::get(obj->GetType()->GetLLVMType()));
+    } else {
+      auto init{dynamic_cast<ConstantExpr*>(node.inits_.inits_.front().expr_)};
+      if (type->IsIntegerTy()) {
+        var->setInitializer(llvm::ConstantInt::get(
+            obj->GetType()->GetLLVMType(), init->integer_val_));
+      } else if (type->IsFloatPointTy()) {
+        var->setInitializer(llvm::ConstantFP::get(obj->GetType()->GetLLVMType(),
+                                                  init->float_point_val_));
+      } else {
+        assert(false);
+      }
+    }
+  } else {
+    if (!obj->IsExtern()) {
+      if (type->IsAggregateTy()) {
+        var->setInitializer(
+            llvm::ConstantAggregateZero::get(obj->GetType()->GetLLVMType()));
+      } else {
+        if (type->IsIntegerTy()) {
+          var->setInitializer(
+              llvm::ConstantInt::get(obj->GetType()->GetLLVMType(), 0));
+        } else if (type->IsFloatPointTy()) {
+          var->setInitializer(
+              llvm::ConstantFP::get(obj->GetType()->GetLLVMType(), 0));
+        } else {
+          assert(false);
+        }
+      }
+    }
+  }
+}
+
+void CodeGen::DealLocaleDecl(const Declaration& node) {
+  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
+  auto type{obj->GetType()};
 
   obj->local_ptr_ =
       CreateEntryBlockAlloca(Builder.GetInsertBlock()->getParent(),
                              type->GetLLVMType(), obj->GetAlign());
 
   if (node.HasInit()) {
-    if (obj->GetType()->IsScalarTy()) {
+    if (type->IsScalarTy()) {
+      assert(std::size(node.inits_.inits_) == 1);
       auto init{node.inits_.inits_.front()};
       init.expr_->Accept(*this);
-      Builder.CreateAlignedStore(result_, obj->local_ptr_, obj->GetAlign());
-    } else if (obj->GetType()->IsArrayTy()) {
-      InitLocalArr(node);
-    } else if (obj->GetType()->IsStructOrUnionTy()) {
-      InitLocalStruct(node);
+      Builder.CreateAlignedStore(result_, obj->GetPtr(), obj->GetAlign());
+    } else if (type->IsAggregateTy()) {
+      InitAggregateTy(node);
     } else {
       assert(false);
     }
   }
 }
 
-void CodeGen::DealWithGlobalDecl(const Declaration& node) {
-  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
-
-  Module->getOrInsertGlobal(obj->GetName(), obj->GetType()->GetLLVMType());
-  obj->global_ptr_ = Module->getNamedGlobal(obj->GetName());
-
-  if (node.HasInit()) {
-    if (obj->GetType()->IsScalarTy()) {
-      auto init{node.inits_.inits_.front()};
-      init.expr_->Accept(*this);
-      Builder.CreateAlignedStore(result_, obj->global_ptr_, obj->GetAlign());
-    } else if (obj->GetType()->IsArrayTy()) {
-      InitLocalArr(node);
-    } else if (obj->GetType()->IsStructOrUnionTy()) {
-      InitLocalStruct(node);
-    } else {
-      assert(false);
-    }
-  }
+llvm::Constant* CodeGen::MakeConstAggregate(llvm::Type* type,
+                                            const Initializers& inits) {
+  (void)type;
+  (void)inits;
+  return nullptr;
 }
 
-void CodeGen::InitLocalArr(const Declaration& node) {
-  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
-  auto type{obj->GetType()};
-  auto size{type->ArrayGetNumElements()};
-  auto width{type->ArrayGetElementType()->GetWidth()};
-
-  Builder.CreateMemSet(
-      Builder.CreateBitCast(obj->local_ptr_, Builder.getInt8PtrTy()),
-      Builder.getInt8(0), size * width, obj->GetAlign());
-
-  if (node.value_init_) {
-    return;
+llvm::Value* CodeGen::ConstantCastTo(llvm::Constant* value, llvm::Type* to,
+                                     bool is_unsigned) {
+  if (to->isIntegerTy(1)) {
+    return ConstantCastToBool(value);
   }
 
-  if (type->ArrayGetElementType()->IsScalarTy()) {
-    for (const auto& item : node.inits_.inits_) {
-      item.expr_->Accept(*this);
-      Builder.CreateAlignedStore(
-          result_,
-          Builder.CreateInBoundsGEP(
-              obj->local_ptr_,
-              {Builder.getInt64(0), Builder.getInt64(item.offset_ / width)}),
-          obj->GetAlign());
+  if (IsIntegerTy(value) && to->isIntegerTy()) {
+    if (is_unsigned) {
+      return Builder.CreateZExtOrTrunc(value, to);
+    } else {
+      return Builder.CreateSExtOrTrunc(value, to);
     }
-  } else if (type->ArrayGetElementType()->IsArrayTy()) {
-    Error("init:not support Two or more dimensional array");
-  } else if (type->ArrayGetElementType()->IsStructTy()) {
-    Error("init:Does not support elements in an array as a struct");
+  } else if (IsIntegerTy(value) && to->isFloatingPointTy()) {
+    if (is_unsigned) {
+      return llvm::ConstantExpr::getUIToFP(value, to);
+    } else {
+      return Builder.CreateSIToFP(value, to);
+    }
+  } else if (IsFloatingPointTy(value) && to->isIntegerTy()) {
+    if (is_unsigned) {
+      return Builder.CreateFPToUI(value, to);
+    } else {
+      return Builder.CreateFPToSI(value, to);
+    }
+  } else if (IsFloatingPointTy(value) && to->isFloatingPointTy()) {
+    if (FloatPointRank(value->getType()) > FloatPointRank(to)) {
+      return Builder.CreateFPTrunc(value, to);
+    } else {
+      return Builder.CreateFPExt(value, to);
+    }
+  } else if (IsPointerTy(value) && to->isIntegerTy()) {
+    return Builder.CreatePtrToInt(value, to);
+  } else if (IsIntegerTy(value) && to->isPointerTy()) {
+    return Builder.CreateIntToPtr(value, to);
+  } else if (to->isVoidTy() || value->getType() == to) {
+    // TODO 这里直接 == 可以吗
+    return value;
+  } else if (IsArrCastToPtr(value, to)) {
+    return llvm::GetElementPtrInst::CreateInBounds(
+        value, {Builder.getInt64(0), Builder.getInt64(0)}, "",
+        Builder.GetInsertBlock());
+  } else if (IsPointerTy(value) && to->isPointerTy()) {
+    return Builder.CreatePointerCast(value, to);
   } else {
-    assert(false);
+    Error("{} to {}", LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
   }
 }
 
-void CodeGen::InitLocalStruct(const Declaration& node) {
-  auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
-  auto type{obj->GetType()};
-  auto width{type->GetWidth()};
+llvm::Value* CodeGen::ConstantCastToBool(llvm::Constant* value) {
+  if (value->getType()->isIntegerTy(1)) {
+    return value;
+  }
 
-  Builder.CreateMemSet(
-      Builder.CreateBitCast(obj->local_ptr_, Builder.getInt8PtrTy()),
-      Builder.getInt8(0), width, obj->GetAlign());
-
-  if (node.value_init_) {
-    return;
+  if (IsIntegerTy(value) || IsPointerTy(value)) {
+    return Builder.CreateICmpNE(value, GetZero(value->getType()));
+  } else if (IsFloatingPointTy(value)) {
+    return Builder.CreateFCmpONE(value, GetZero(value->getType()));
+  } else {
+    Error("{}", LLVMTypeToStr(value->getType()));
   }
 }
 
