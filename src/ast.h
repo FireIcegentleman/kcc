@@ -782,6 +782,7 @@ class Declaration : public Stmt {
   IdentifierExpr* GetIdent() const;
   bool IsObj() const;
   void SetConstant(llvm::Constant* constant);
+  llvm::Constant* GetConstant() const;
 
  private:
   explicit Declaration(IdentifierExpr* ident);

@@ -1339,11 +1339,17 @@ void CodeGen::InitAggregateTy(const Declaration& node) {
 void CodeGen::DealGlobalDecl(const Declaration& node) {
   auto obj{dynamic_cast<ObjectExpr*>(node.ident_)};
   auto type{obj->GetType()};
-  // 在符号表中查找指定的全局变量.如果不存在则添加并返回它;如果存在且类型
-  // 一致则直接返回;如果存在且类型不一致, 则返回一个转换为一致类型的常量
-  Module->getOrInsertGlobal(obj->GetName(), type->GetLLVMType());
-  auto var{Module->getNamedGlobal(obj->GetName())};
-  obj->global_ptr_ = var;
+
+  llvm::GlobalVariable* var;
+  if (!obj->global_ptr_) {
+    // 在符号表中查找指定的全局变量.如果不存在则添加并返回它;如果存在且类型
+    // 一致则直接返回;如果存在且类型不一致, 则返回一个转换为一致类型的常量
+    Module->getOrInsertGlobal(obj->GetName(), type->GetLLVMType());
+    var = Module->getNamedGlobal(obj->GetName());
+    obj->global_ptr_ = var;
+  } else {
+    var = llvm::cast<llvm::GlobalVariable>(obj->global_ptr_);
+  }
 
   var->setAlignment(obj->GetAlign());
   if (obj->IsStatic()) {

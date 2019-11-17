@@ -10,6 +10,7 @@ namespace kcc {
 
 llvm::Constant* ConstantInitExpr::Calc(Expr* expr) {
   expr->Accept(*this);
+  assert(val_ != nullptr);
   return val_;
 }
 

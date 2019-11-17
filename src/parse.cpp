@@ -719,8 +719,23 @@ Expr* Parser::ParseCompoundLiteral(QualType type) {
   auto obj{MakeAstNode<ObjectExpr>("", type, 0, linkage, true)};
   auto decl{MakeAstNode<Declaration>(obj)};
 
-  decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
-  unit_->AddExtDecl(decl);
+  if (curr_func_def_ != nullptr) {
+    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
+  } else {
+    decl->SetConstant(
+        ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
+  }
+
+  if (curr_func_def_ == nullptr) {
+    assert(decl->GetConstant() != nullptr);
+    auto global_var{
+        new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(), false,
+                                 llvm::GlobalValue::InternalLinkage,
+                                 decl->GetConstant(), ".compoundliteral")};
+    global_var->setAlignment(obj->GetAlign());
+
+    obj->global_ptr_ = global_var;
+  }
 
   return obj;
 }
@@ -2817,35 +2832,38 @@ llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
   auto width{type->ArrayGetElementType()->GetWidth()};
   auto size{str_node->GetType()->ArrayGetNumElements()};
   auto str{str_node->GetVal().c_str()};
-  std::vector<llvm::Constant*> val;
 
   switch (width) {
-    case 1:
+    case 1: {
+      std::vector<std::uint8_t> val;
       for (std::size_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
-        val.push_back(llvm::ConstantInt::get(Builder.getInt8Ty(), *ptr));
+        val.push_back(*ptr);
         str += 1;
       }
-      break;
-    case 2:
+      return llvm::ConstantDataArray::get(Context, val);
+    } break;
+    case 2: {
+      std::vector<std::uint16_t> val;
       for (std::size_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
-        val.push_back(llvm::ConstantInt::get(Builder.getInt16Ty(), *ptr));
+        val.push_back(*ptr);
         str += 2;
       }
-      break;
-    case 4:
+      return llvm::ConstantDataArray::get(Context, val);
+    } break;
+    case 4: {
+      std::vector<std::uint32_t> val;
       for (std::size_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
-        val.push_back(llvm::ConstantInt::get(Builder.getInt32Ty(), *ptr));
+        val.push_back(*ptr);
         str += 4;
       }
-      break;
+      return llvm::ConstantDataArray::get(Context, val);
+    } break;
     default:
       assert(false);
   }
-
-  return llvm::ConstantDataArray::get(Context, val);
 }
 
 llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,

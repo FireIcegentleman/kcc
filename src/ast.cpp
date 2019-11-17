@@ -1207,6 +1207,8 @@ void Declaration::SetConstant(llvm::Constant* constant) {
   constant_ = constant;
 }
 
+llvm::Constant* Declaration::GetConstant() const { return constant_; }
+
 Declaration::Declaration(IdentifierExpr* ident) : ident_{ident} {}
 
 /*
