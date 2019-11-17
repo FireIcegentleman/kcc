@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include <llvm/IR/Constants.h>
+
 #include "ast.h"
 #include "location.h"
 #include "scope.h"
@@ -169,6 +171,16 @@ class Parser {
                               std::int32_t offset, bool designated);
   static auto ParseStructDesignator(Type* type, const std::string& name)
       -> decltype(std::begin(type->StructGetMembers()));
+
+  /*
+   * ConstantInit
+   */
+  llvm::Constant* ParseConstantInitializer(QualType type, bool designated,
+                                           bool force_brace);
+  llvm::Constant* ParseConstantArrayInitializer(Type* type,
+                                                std::int32_t designated);
+  llvm::Constant* ParseConstantLiteralInitializer(Type* type);
+  llvm::Constant* ParseConstantStructInitializer(Type* type, bool designated);
 
   /*
    * GNU 扩展

@@ -1203,6 +1203,10 @@ IdentifierExpr* Declaration::GetIdent() const { return ident_; }
 
 bool Declaration::IsObj() const { return dynamic_cast<ObjectExpr*>(ident_); }
 
+void Declaration::SetConstant(llvm::Constant* constant) {
+  constant_ = constant;
+}
+
 Declaration::Declaration(IdentifierExpr* ident) : ident_{ident} {}
 
 /*

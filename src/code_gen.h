@@ -51,9 +51,6 @@ class CodeGen : public Visitor {
   llvm::Value *EqualOp(llvm::Value *lhs, llvm::Value *rhs);
   llvm::Value *NotEqualOp(llvm::Value *lhs, llvm::Value *rhs);
 
-  llvm::Value *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
-                              bool is_unsigned);
-  llvm::Value *ConstantCastToBool(llvm::Constant *value);
   llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned);
   llvm::Value *CastToBool(llvm::Value *value);
   bool IsArithmeticTy(llvm::Value *value) const;

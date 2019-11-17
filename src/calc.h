@@ -8,6 +8,8 @@
 #include <cassert>
 #include <cstdint>
 
+#include <llvm/IR/Constants.h>
+
 #include "ast.h"
 #include "error.h"
 #include "visitor.h"
@@ -346,6 +348,86 @@ void CalcExpr<T>::Visit(const FuncDef&) {
   assert(false);
 }
 
+class ConstantInitExpr : public Visitor {
+ public:
+  llvm::Constant* Calc(Expr* expr);
+
+ private:
+  virtual void Visit(const UnaryOpExpr& node) override;
+  virtual void Visit(const TypeCastExpr& node) override;
+  virtual void Visit(const BinaryOpExpr& node) override;
+  virtual void Visit(const ConditionOpExpr& node) override;
+  virtual void Visit(const ConstantExpr& node) override;
+  virtual void Visit(const EnumeratorExpr& node) override;
+  virtual void Visit(const StmtExpr& node) override;
+
+  virtual void Visit(const StringLiteralExpr& node) override;
+  virtual void Visit(const FuncCallExpr& node) override;
+  virtual void Visit(const IdentifierExpr& node) override;
+  virtual void Visit(const ObjectExpr& node) override;
+
+  virtual void Visit(const LabelStmt& node) override;
+  virtual void Visit(const CaseStmt& node) override;
+  virtual void Visit(const DefaultStmt& node) override;
+  virtual void Visit(const CompoundStmt& node) override;
+  virtual void Visit(const ExprStmt& node) override;
+  virtual void Visit(const IfStmt& node) override;
+  virtual void Visit(const SwitchStmt& node) override;
+  virtual void Visit(const WhileStmt& node) override;
+  virtual void Visit(const DoWhileStmt& node) override;
+  virtual void Visit(const ForStmt& node) override;
+  virtual void Visit(const GotoStmt& node) override;
+  virtual void Visit(const ContinueStmt& node) override;
+  virtual void Visit(const BreakStmt& node) override;
+  virtual void Visit(const ReturnStmt& node) override;
+
+  virtual void Visit(const TranslationUnit& node) override;
+  virtual void Visit(const Declaration& node) override;
+  virtual void Visit(const FuncDef& node) override;
+
+ private:
+  llvm::Constant* val_;
+};
+
+llvm::Constant* ConstantCastTo(llvm::Constant* value, llvm::Type* to,
+                               bool is_unsigned);
+
+llvm::Constant* ConstantCastToBool(llvm::Constant* value);
+llvm::Constant* AddOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                      bool is_unsigned);
+llvm::Constant* SubOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                      bool is_unsigned);
+llvm::Constant* MulOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                      bool is_unsigned);
+llvm::Constant* DivOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                      bool is_unsigned);
+llvm::Constant* ModOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                      bool is_unsigned);
+llvm::Constant* OrOp(llvm::Constant* lhs, llvm::Constant* rhs);
+llvm::Constant* AndOp(llvm::Constant* lhs, llvm::Constant* rhs);
+llvm::Constant* XorOp(llvm::Constant* lhs, llvm::Constant* rhs);
+llvm::Constant* ShlOp(llvm::Constant* lhs, llvm::Constant* rhs);
+llvm::Constant* ShrOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                      bool is_unsigned);
+llvm::Constant* LessEqualOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                            bool is_unsigned);
+llvm::Constant* LessOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                       bool is_unsigned);
+llvm::Constant* GreaterEqualOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                               bool is_unsigned);
+llvm::Constant* GreaterOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                          bool is_unsigned);
+llvm::Constant* EqualOp(llvm::Constant* lhs, llvm::Constant* rhs);
+llvm::Constant* NotEqualOp(llvm::Constant* lhs, llvm::Constant* rhs);
+llvm::Constant* LogicOrOp(const BinaryOpExpr& node);
+llvm::Constant* LogicAndOp(const BinaryOpExpr& node);
+bool IsIntegerTy(llvm::Constant* value);
+bool IsFloatingPointTy(llvm::Constant* value);
+bool IsPointerTy(llvm::Constant* value);
+bool IsArrCastToPtr(llvm::Constant* value, llvm::Type* type);
+std::int32_t FloatPointRank(llvm::Type *type);
+std::string LLVMTypeToStr(llvm::Type *type) ;
+llvm::Constant *GetZero(llvm::Type *type);
 }  // namespace kcc
 
 #endif  // KCC_SRC_CALC_H_

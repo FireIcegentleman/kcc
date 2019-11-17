@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/Instructions.h>
 #include <QMetaEnum>
@@ -122,6 +123,7 @@ class Expr : public AstNode {
 class UnaryOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -150,6 +152,7 @@ class UnaryOpExpr : public Expr {
 class TypeCastExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -180,6 +183,7 @@ class TypeCastExpr : public Expr {
 class BinaryOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -214,6 +218,7 @@ class BinaryOpExpr : public Expr {
 class ConditionOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -257,6 +262,7 @@ class FuncCallExpr : public Expr {
 class ConstantExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -285,6 +291,7 @@ class ConstantExpr : public Expr {
 class StringLiteralExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -349,6 +356,7 @@ class IdentifierExpr : public Expr {
 class EnumeratorExpr : public IdentifierExpr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -379,6 +387,7 @@ class EnumeratorExpr : public IdentifierExpr {
 // 可选项，表示该对象的标识符
 class ObjectExpr : public IdentifierExpr {
   friend class JsonGen;
+  friend class ConstantInitExpr;
   friend class CodeGen;
 
  public:
@@ -407,6 +416,8 @@ class ObjectExpr : public IdentifierExpr {
   llvm::Value* GetPtr();
 
   std::list<std::pair<Type*, std::int32_t>> indexs_;
+  llvm::AllocaInst* local_ptr_{};
+  llvm::GlobalValue* global_ptr_{};
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -418,15 +429,13 @@ class ObjectExpr : public IdentifierExpr {
   std::int32_t align_{};
   std::int32_t offset_{};
   Declaration* decl_{};
-
-  llvm::AllocaInst* local_ptr_{};
-  llvm::GlobalValue* global_ptr_{};
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式
 class StmtExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
+  friend class ConstantInitExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -772,6 +781,7 @@ class Declaration : public Stmt {
   void AddInits(const Initializers& inits);
   IdentifierExpr* GetIdent() const;
   bool IsObj() const;
+  void SetConstant(llvm::Constant* constant);
 
  private:
   explicit Declaration(IdentifierExpr* ident);
@@ -779,6 +789,8 @@ class Declaration : public Stmt {
   IdentifierExpr* ident_;
   Initializers inits_;
   bool value_init_{false};
+
+  llvm::Constant* constant_{};
 };
 
 class FuncDef : public ExtDecl {

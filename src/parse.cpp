@@ -21,7 +21,9 @@
 
 namespace kcc {
 
-Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {}
+Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {
+  Module = std::make_unique<llvm::Module>("fuck", Context);
+}
 
 TranslationUnit* Parser::ParseTranslationUnit() {
   while (HasNext()) {
@@ -1947,7 +1949,21 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
                             func_spec, align)};
 
   if (decl && Try(Tag::kEqual) && decl->IsObj()) {
-    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
+    if (curr_func_def_ != nullptr) {
+      decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
+    } else {
+      decl->SetConstant(
+          ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
+
+      auto obj{dynamic_cast<ObjectExpr*>(decl->GetIdent())};
+      auto name{obj->GetName()};
+      // 在符号表中查找指定的全局变量.如果不存在则添加并返回它;如果存在且类型
+      // 一致则直接返回;如果存在且类型不一致, 则返回一个转换为一致类型的常量
+      Module->getOrInsertGlobal(name,
+                                decl->GetIdent()->GetType()->GetLLVMType());
+      auto var{Module->getNamedGlobal(name)};
+      obj->global_ptr_ = var;
+    }
   }
 
   return decl;
@@ -2289,7 +2305,6 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
   }
 }
 
-// TODO 对剩余元素值初始化
 bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
                                      std::int32_t offset) {
   if (!type->ArrayGetElementType()->IsIntegerTy()) {
@@ -2635,6 +2650,291 @@ Expr* Parser::ParseRegClass() {
     assert(false);
     return nullptr;
   }
+}
+
+llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
+                                                 bool force_brace) {
+  if (designated && !Test(Tag::kPeriod) && !Test(Tag::kLeftSquare)) {
+    Expect(Tag::kEqual);
+  }
+
+  if (type->IsArrayTy()) {
+    if (force_brace && !Test(Tag::kLeftBrace) && !Test(Tag::kStringLiteral)) {
+      Expect(Tag::kLeftBrace);
+    } else if (auto p{ParseConstantLiteralInitializer(type.GetType())}; !p) {
+      auto arr{ParseConstantArrayInitializer(type.GetType(), designated)};
+      type->SetComplete(true);
+      return arr;
+    } else {
+      return p;
+    }
+  } else if (type->IsStructOrUnionTy()) {
+    return ParseConstantStructInitializer(type.GetType(), designated);
+  } else {
+    auto has_brace{Try(Tag::kLeftBrace)};
+    auto expr{ParseAssignExpr()};
+
+    if (has_brace) {
+      Try(Tag::kComma);
+      Expect(Tag::kRightBrace);
+    }
+
+    return ConstantCastTo(ConstantInitExpr{}.Calc(expr), type->GetLLVMType(),
+                          type->IsUnsigned());
+  }
+
+  assert(false);
+  return nullptr;
+}
+
+llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
+                                                      std::int32_t designated) {
+  std::int32_t index{};
+  auto has_brace{Try(Tag::kLeftBrace)};
+  auto size{type->ArrayGetNumElements()};
+  std::vector<llvm::Constant*> val(
+      size,
+      llvm::Constant::getNullValue(type->ArrayGetElementType()->GetLLVMType()));
+
+  while (true) {
+    if (Test(Tag::kRightBrace)) {
+      if (has_brace) {
+        Next();
+      }
+      return llvm::ConstantArray::get(
+          llvm::cast<llvm::ArrayType>(type->GetLLVMType()), val);
+    }
+
+    // TODO ???
+    if (!designated && !has_brace &&
+        (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
+      // put ',' back
+      PutBack();
+      return llvm::ConstantArray::get(
+          llvm::cast<llvm::ArrayType>(type->GetLLVMType()), val);
+    }
+
+    if ((designated = Try(Tag::kLeftSquare))) {
+      auto expr{ParseAssignExpr()};
+      if (!expr->GetType()->IsIntegerTy()) {
+        Error(expr, "expect integer type");
+      }
+
+      index = CalcExpr<std::int32_t>{}.Calc(expr);
+      Expect(Tag::kRightSquare);
+
+      if (index < 0 ||
+          (type->IsComplete() &&
+           static_cast<std::size_t>(index) >= type->ArrayGetNumElements())) {
+        Error(expr, "array designator index {} exceeds array bounds", index);
+      }
+    }
+
+    if (size) {
+      val[index] = ParseConstantInitializer(type->ArrayGetElementType(),
+                                            designated, false);
+    } else {
+      val.push_back(ParseConstantInitializer(type->ArrayGetElementType(),
+                                             designated, false));
+    }
+
+    designated = false;
+    ++index;
+
+    if (type->IsComplete() &&
+        static_cast<std::size_t>(index) >= type->ArrayGetNumElements()) {
+      break;
+    }
+
+    // int a[] = {1, 2, [5] = 3}; 这种也是合法的
+    if (!type->IsComplete()) {
+      type->ArraySetNumElements(std::max(static_cast<std::size_t>(index),
+                                         type->ArrayGetNumElements()));
+    }
+
+    if (!Try(Tag::kComma)) {
+      if (has_brace) {
+        Expect(Tag::kRightBrace);
+      }
+      return llvm::ConstantArray::get(
+          llvm::cast<llvm::ArrayType>(type->GetLLVMType()), val);
+    }
+  }
+
+  if (has_brace) {
+    Try(Tag::kComma);
+    if (!Try(Tag::kRightBrace)) {
+      Error(loc_, "excess elements in array initializer");
+    }
+  }
+
+  return llvm::ConstantArray::get(
+      llvm::cast<llvm::ArrayType>(type->GetLLVMType()), val);
+}
+
+llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
+  if (!type->ArrayGetElementType()->IsIntegerTy()) {
+    return nullptr;
+  }
+
+  auto has_brace{Try(Tag::kLeftBrace)};
+  if (!Test(Tag::kStringLiteral)) {
+    if (has_brace) {
+      PutBack();
+    }
+    return nullptr;
+  }
+
+  auto str_node{ParseStringLiteral()};
+
+  if (has_brace) {
+    Try(Tag::kComma);
+    Expect(Tag::kRightBrace);
+  }
+
+  if (!type->IsComplete()) {
+    type->ArraySetNumElements(str_node->GetType()->ArrayGetNumElements());
+    type->SetComplete(true);
+  }
+
+  // TODO 若数组大小已知, 则它可以比字符串字面量的大小少一,
+  // 此情况下空终止字符被忽略
+  if (str_node->GetType()->ArrayGetNumElements() >
+      type->ArrayGetNumElements()) {
+    Error(str_node->GetLoc(),
+          "initializer-string for char array is too long '{}' to '{}",
+          str_node->GetType()->ArrayGetNumElements(),
+          type->ArrayGetNumElements());
+  }
+
+  if (str_node->GetType()->ArrayGetElementType()->GetWidth() !=
+      type->ArrayGetElementType()->GetWidth()) {
+    Error(str_node->GetLoc(), "Different character types '{}' vs '{}",
+          str_node->GetType()->ArrayGetElementType()->ToString(),
+          type->ArrayGetElementType()->ToString());
+  }
+
+  auto width{type->ArrayGetElementType()->GetWidth()};
+  auto size{str_node->GetType()->ArrayGetNumElements()};
+  auto str{str_node->GetVal().c_str()};
+  std::vector<llvm::Constant*> val;
+
+  switch (width) {
+    case 1:
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
+        val.push_back(llvm::ConstantInt::get(Builder.getInt8Ty(), *ptr));
+        str += 1;
+      }
+      break;
+    case 2:
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
+        val.push_back(llvm::ConstantInt::get(Builder.getInt16Ty(), *ptr));
+        str += 2;
+      }
+      break;
+    case 4:
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
+        val.push_back(llvm::ConstantInt::get(Builder.getInt32Ty(), *ptr));
+        str += 4;
+      }
+      break;
+    default:
+      assert(false);
+  }
+
+  return llvm::ConstantDataArray::get(Context, val);
+}
+
+llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
+                                                       bool designated) {
+  auto has_brace{Try(Tag::kLeftBrace)};
+  auto member_iter{std::begin(type->StructGetMembers())};
+  std::vector<llvm::Constant*> val;
+
+  for (const auto& member : type->StructGetMembers()) {
+    val.push_back(
+        llvm::Constant::getNullValue(member->GetType()->GetLLVMType()));
+  }
+
+  while (true) {
+    if (Test(Tag::kRightBrace)) {
+      if (has_brace) {
+        Next();
+      }
+      return llvm::ConstantStruct::get(
+          llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
+    }
+
+    // TODO ???
+    if (!designated && !has_brace &&
+        (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
+      PutBack();
+      return llvm::ConstantStruct::get(
+          llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
+    }
+
+    if ((designated = Try(Tag::kPeriod))) {
+      auto tok{Expect(Tag::kIdentifier)};
+      auto name{tok.GetIdentifier()};
+
+      if (!type->StructGetMember(name)) {
+        Error(tok, "member '{}' not found", name);
+      }
+
+      member_iter = ParseStructDesignator(type, name);
+    }
+
+    if (member_iter == std::end(type->StructGetMembers())) {
+      break;
+    }
+
+    if ((*member_iter)->IsAnonymous()) {
+      if (designated) {
+        PutBack();
+        PutBack();
+      }
+
+      val[member_iter - std::begin(type->StructGetMembers())] =
+          ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                   false);
+    } else {
+      val[member_iter - std::begin(type->StructGetMembers())] =
+          ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                   false);
+    }
+
+    designated = false;
+    ++member_iter;
+
+    if (!type->IsStructTy()) {
+      break;
+    }
+
+    if (!has_brace && member_iter == std::end(type->StructGetMembers())) {
+      break;
+    }
+
+    if (!Try(Tag::kComma)) {
+      if (has_brace) {
+        Expect(Tag::kRightBrace);
+      }
+      return llvm::ConstantStruct::get(
+          llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
+    }
+  }
+
+  if (has_brace) {
+    Try(Tag::kComma);
+    if (!Try(Tag::kRightBrace)) {
+      Error(Peek(), "excess members in struct initializer");
+    }
+  }
+
+  return llvm::ConstantStruct::get(
+      llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
 }
 
 }  // namespace kcc

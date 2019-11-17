@@ -31,8 +31,7 @@
 
 namespace kcc {
 
-CodeGen::CodeGen(const std::string& file_name) {
-  Module = std::make_unique<llvm::Module>(file_name, Context);
+CodeGen::CodeGen(const std::string&) {
   DataLayout = llvm::DataLayout{Module.get()};
 
   // 获取当前计算机的目标三元组
@@ -1352,31 +1351,14 @@ void CodeGen::DealGlobalDecl(const Declaration& node) {
   } else if (obj->IsExtern()) {
     var->setLinkage(llvm::GlobalVariable::ExternalLinkage);
   } else {
-    if (!node.HasInit()) {
+    if (!node.constant_) {
       var->setLinkage(llvm::GlobalVariable::CommonLinkage);
     }
     var->setDSOLocal(true);
   }
 
-  if (node.HasInit()) {
-    if (type->IsAggregateTy()) {
-      // TODO
-      // var->setInitializer(MakeConstAggregate(type->GetLLVMType(),
-      // node.inits_));
-      var->setInitializer(
-          llvm::ConstantAggregateZero::get(obj->GetType()->GetLLVMType()));
-    } else {
-      auto init{dynamic_cast<ConstantExpr*>(node.inits_.inits_.front().expr_)};
-      if (type->IsIntegerTy()) {
-        var->setInitializer(llvm::ConstantInt::get(
-            obj->GetType()->GetLLVMType(), init->integer_val_));
-      } else if (type->IsFloatPointTy()) {
-        var->setInitializer(llvm::ConstantFP::get(obj->GetType()->GetLLVMType(),
-                                                  init->float_point_val_));
-      } else {
-        assert(false);
-      }
-    }
+  if (node.constant_) {
+    var->setInitializer(node.constant_);
   } else {
     if (!obj->IsExtern()) {
       if (type->IsAggregateTy()) {
@@ -1424,68 +1406,6 @@ llvm::Constant* CodeGen::MakeConstAggregate(llvm::Type* type,
   (void)type;
   (void)inits;
   return nullptr;
-}
-
-llvm::Value* CodeGen::ConstantCastTo(llvm::Constant* value, llvm::Type* to,
-                                     bool is_unsigned) {
-  if (to->isIntegerTy(1)) {
-    return ConstantCastToBool(value);
-  }
-
-  if (IsIntegerTy(value) && to->isIntegerTy()) {
-    if (is_unsigned) {
-      return Builder.CreateZExtOrTrunc(value, to);
-    } else {
-      return Builder.CreateSExtOrTrunc(value, to);
-    }
-  } else if (IsIntegerTy(value) && to->isFloatingPointTy()) {
-    if (is_unsigned) {
-      return llvm::ConstantExpr::getUIToFP(value, to);
-    } else {
-      return Builder.CreateSIToFP(value, to);
-    }
-  } else if (IsFloatingPointTy(value) && to->isIntegerTy()) {
-    if (is_unsigned) {
-      return Builder.CreateFPToUI(value, to);
-    } else {
-      return Builder.CreateFPToSI(value, to);
-    }
-  } else if (IsFloatingPointTy(value) && to->isFloatingPointTy()) {
-    if (FloatPointRank(value->getType()) > FloatPointRank(to)) {
-      return Builder.CreateFPTrunc(value, to);
-    } else {
-      return Builder.CreateFPExt(value, to);
-    }
-  } else if (IsPointerTy(value) && to->isIntegerTy()) {
-    return Builder.CreatePtrToInt(value, to);
-  } else if (IsIntegerTy(value) && to->isPointerTy()) {
-    return Builder.CreateIntToPtr(value, to);
-  } else if (to->isVoidTy() || value->getType() == to) {
-    // TODO 这里直接 == 可以吗
-    return value;
-  } else if (IsArrCastToPtr(value, to)) {
-    return llvm::GetElementPtrInst::CreateInBounds(
-        value, {Builder.getInt64(0), Builder.getInt64(0)}, "",
-        Builder.GetInsertBlock());
-  } else if (IsPointerTy(value) && to->isPointerTy()) {
-    return Builder.CreatePointerCast(value, to);
-  } else {
-    Error("{} to {}", LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
-  }
-}
-
-llvm::Value* CodeGen::ConstantCastToBool(llvm::Constant* value) {
-  if (value->getType()->isIntegerTy(1)) {
-    return value;
-  }
-
-  if (IsIntegerTy(value) || IsPointerTy(value)) {
-    return Builder.CreateICmpNE(value, GetZero(value->getType()));
-  } else if (IsFloatingPointTy(value)) {
-    return Builder.CreateFCmpONE(value, GetZero(value->getType()));
-  } else {
-    Error("{}", LLVMTypeToStr(value->getType()));
-  }
 }
 
 }  // namespace kcc
