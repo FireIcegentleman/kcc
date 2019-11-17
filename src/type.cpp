@@ -108,6 +108,10 @@ void Type::SetComplete(bool complete) {
 }
 
 bool Type::IsUnsigned() const {
+  if (IsBoolTy()) {
+    return true;
+  }
+
   if (!IsIntegerTy()) {
     return false;
   } else {
@@ -840,7 +844,7 @@ void StructType::AddMember(ObjectExpr* member) {
   members_.push_back(member);
 
   scope_->InsertNormal(member->GetName(), member);
-  member->indexs_.push_front({this, index_++});
+  member->GetIndexs().push_front({this, index_++});
 
   align_ = std::max(align_, member->GetAlign());
 
@@ -861,7 +865,7 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 
   auto offset{MakeAlign(offset_, anonymous->GetAlign())};
   anonymous->SetOffset(offset);
-  anonymous->indexs_.push_front({this, index_});
+  anonymous->GetIndexs().push_front({this, index_});
 
   members_.push_back(anonymous);
 
@@ -876,7 +880,7 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
       member->SetOffset(offset + member->GetOffset());
 
       scope_->InsertNormal(name, member);
-      member->indexs_.push_front({this, index_});
+      member->GetIndexs().push_front({this, index_});
     }
   }
 
@@ -911,7 +915,7 @@ std::list<std::pair<Type*, std::int32_t>> StructType::OffsetToIndexs(
     assert(p != nullptr);
 
     if (p->GetOffset() == offset) {
-      return p->indexs_;
+      return p->GetIndexs();
     }
   }
 

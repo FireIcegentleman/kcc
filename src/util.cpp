@@ -5,6 +5,7 @@
 #include "util.h"
 
 #include <unistd.h>
+#include <wait.h>
 
 #include <algorithm>
 #include <chrono>
@@ -138,6 +139,25 @@ std::string GetFileName(const std::string &name, std::string_view extension) {
 void RemoveAllFiles(const std::vector<std::string> &files) {
   for (const auto &item : files) {
     std::filesystem::remove(item);
+  }
+}
+
+bool CommandSuccess(std::int32_t status) {
+  return status != -1 && WIFEXITED(status) && !WEXITSTATUS(status);
+}
+
+llvm::Constant *GetConstantZero(llvm::Type *type) {
+  if (type->isIntegerTy()) {
+    return llvm::ConstantInt::get(type, 0);
+  } else if (type->isFloatingPointTy()) {
+    return llvm::ConstantFP::get(type, 0.0);
+  } else if (type->isPointerTy()) {
+    return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
+  } else if (type->isAggregateType()) {
+    return llvm::ConstantAggregateZero::get(type);
+  } else {
+    assert(false);
+    return nullptr;
   }
 }
 

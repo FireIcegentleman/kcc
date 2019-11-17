@@ -214,12 +214,13 @@ static void flexible_member() {
     expect(4, sizeof(x));
 
     struct t { int a, b[]; };
-    struct t x2 = { 1, 2, 3 };
-    struct t x3 = { 1, 2, 3, 4, 5 };
-    expect(2, x3.b[0]);
-    expect(3, x3.b[1]);
-    expect(4, x3.b[2]);
-    expect(5, x3.b[3]);
+    // TODO initialization of flexible array member is not allowed
+    //struct t x2 = { 1, 2, 3 };
+    //struct t x3 = { 1, 2, 3, 4, 5 };
+    //expect(2, x3.b[0]);
+    //expect(3, x3.b[1]);
+    //expect(4, x3.b[2]);
+    //expect(5, x3.b[3]);
 }
 
 static void empty_struct() {

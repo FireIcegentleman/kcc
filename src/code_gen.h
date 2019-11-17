@@ -112,9 +112,7 @@ class CodeGen : public Visitor {
 
   void DealGlobalDecl(const Declaration &node);
   void DealLocaleDecl(const Declaration &node);
-  void InitAggregateTy(const Declaration &node);
-  llvm::Constant *MakeConstAggregate(llvm::Type *type,
-                                     const Initializers &inits);
+  void InitLocalAggregate(const Declaration &node);
 
   void PushBlock(llvm::BasicBlock *continue_block,
                  llvm::BasicBlock *break_stack);
@@ -122,7 +120,7 @@ class CodeGen : public Visitor {
   bool HasBrOrReturn() const;
   bool HasReturn() const;
 
-  void CreateLLVMFunc();
+  bool MayCallBuiltinFunc(const FuncCallExpr &node);
 
   llvm::Value *result_{};
   std::int32_t align_{};
@@ -132,8 +130,6 @@ class CodeGen : public Visitor {
   std::stack<std::pair<bool, bool>> has_br_or_return_;
 
   std::map<llvm::Constant *, llvm::Constant *> strings_;
-
-  bool need_bool_{false};
 
   llvm::Function *va_start_{};
   llvm::Function *va_end_{};

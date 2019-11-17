@@ -129,6 +129,10 @@ std::string GetFileName(const std::string &name, std::string_view extension);
 
 void RemoveAllFiles(const std::vector<std::string> &files);
 
+bool CommandSuccess(std::int32_t status);
+
+llvm::Constant *GetConstantZero(llvm::Type *type);
+
 }  // namespace kcc
 
 #endif  // KCC_SRC_UTIL_H_

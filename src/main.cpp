@@ -229,7 +229,9 @@ void Run(const std::string &file) {
     ir_file << *Module;
 
     std::string cmd{"llc " + GetFileName(file, ".ll")};
-    std::system(cmd.c_str());
+    if (!CommandSuccess(std::system(cmd.c_str()))) {
+      Error("emit asm fail");
+    }
 
     ObjGen(GetFileName(file, ".o"));
   }
@@ -251,7 +253,9 @@ void RunTest() {
       }
 
       std::string cmd{"./" + GetFileName(file, ".out")};
-      std::system(cmd.c_str());
+      if (!CommandSuccess(std::system(cmd.c_str()))) {
+        //Error("run fail");
+      }
     }
   }
 
@@ -263,6 +267,8 @@ void RunDev() {
   Run(file);
 
   std::string cmd{"lli " + GetFileName(file, ".ll")};
-  std::system(cmd.c_str());
+  if (!CommandSuccess(std::system(cmd.c_str()))) {
+    Error("run fail");
+  }
 }
 #endif

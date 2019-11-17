@@ -363,7 +363,7 @@ llvm::Constant* AddOp(llvm::Constant* lhs, llvm::Constant* rhs,
     return llvm::ConstantExpr::getFAdd(lhs, rhs);
   } else if (IsPointerTy(lhs)) {
     return llvm::ConstantExpr::getInBoundsGetElementPtr(
-        lhs->getType(), lhs, llvm::ArrayRef<llvm::Constant*>{rhs});
+        nullptr, lhs, llvm::ArrayRef<llvm::Constant*>{rhs});
   } else {
     assert(false);
     return nullptr;

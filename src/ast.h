@@ -413,11 +413,13 @@ class ObjectExpr : public IdentifierExpr {
   bool HasInit() const;
   bool IsAnonymous() const;
   bool InGlobal() const;
-  llvm::Value* GetPtr();
-
-  std::list<std::pair<Type*, std::int32_t>> indexs_;
-  llvm::AllocaInst* local_ptr_{};
-  llvm::GlobalValue* global_ptr_{};
+  void SetLocalPtr(llvm::AllocaInst* local_ptr);
+  void SetGlobalPtr(llvm::GlobalVariable* global_ptr);
+  llvm::AllocaInst* GetLocalPtr();
+  llvm::GlobalVariable* GetGlobalPtr();
+  bool HasGlobalPtr() const;
+  std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
+  void SetIndexs(const std::list<std::pair<Type*, std::int32_t>>& indexs);
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -429,6 +431,10 @@ class ObjectExpr : public IdentifierExpr {
   std::int32_t align_{};
   std::int32_t offset_{};
   Declaration* decl_{};
+
+  std::list<std::pair<Type*, std::int32_t>> indexs_;
+  llvm::AllocaInst* local_ptr_{};
+  llvm::GlobalVariable* global_ptr_{};
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式
@@ -721,6 +727,7 @@ class TranslationUnit : public AstNode {
   virtual void Check() override;
 
   void AddExtDecl(ExtDecl* ext_decl);
+  std::vector<ExtDecl*> GetExtDecl() const;
 
  private:
   std::vector<ExtDecl*> ext_decls_;
@@ -737,6 +744,10 @@ class Initializer {
  public:
   Initializer(Type* type, std::int32_t offset, Expr* expr,
               const std::list<std::pair<Type*, std::int32_t>>& indexs);
+  Type* GetType() const;
+  int32_t GetOffset() const;
+  Expr* GetExpr() const;
+  std::list<std::pair<Type*, std::int32_t>> GetIndexs() const;
 
  private:
   Type* type_;
@@ -777,12 +788,16 @@ class Declaration : public Stmt {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  bool HasInit() const;
+  bool HasLocalInit() const;
   void AddInits(const Initializers& inits);
   IdentifierExpr* GetIdent() const;
-  bool IsObj() const;
+  bool IsObjDecl() const;
   void SetConstant(llvm::Constant* constant);
-  llvm::Constant* GetConstant() const;
+  llvm::Constant* GetGlobalInit() const;
+  bool IsObjDeclInGlobal() const;
+  ObjectExpr* GetObject() const;
+  bool HasGlobalInit() const;
+  std::vector<Initializer> GetLocalInits() const;
 
  private:
   explicit Declaration(IdentifierExpr* ident);

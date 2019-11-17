@@ -98,7 +98,7 @@ static void test_struct() {
 }
 
 static void test_array() {
-    expect(20, _Generic("abc", char[4]: 20, default: 21));
+    expect(21, _Generic("abc", char[4]: 20, default: 21));
     expect(22, _Generic((int*)NULL, int *: 22, default: 23));
     expect(23, _Generic((int*)NULL, int[1]: 22, default: 23));
 }

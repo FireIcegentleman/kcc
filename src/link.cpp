@@ -11,9 +11,9 @@ namespace kcc {
 bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
           const std::string &output_file) {
   std::vector<const char *> args{
-      "--pie"
-      "--eh-frame-hdr"
-      "-m elf_x86_64",
+      "-pie",
+      "--eh-frame-hdr",
+      "-melf_x86_64",
       "-dynamic-linker",
       "/lib64/ld-linux-x86-64.so.2",
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
@@ -51,10 +51,9 @@ bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
   args.push_back(str.c_str());
 
   auto level{static_cast<std::uint32_t>(opt_level)};
-  std::string level_str{"--plugin-opt=O" + std::to_string(level)};
+  std::string level_str{"-plugin-opt=O" + std::to_string(level)};
   if (level != 0) {
-    args.push_back("--plugin=/usr/bin/../lib/LLVMgold.so");
-    args.push_back("--plugin-opt=mcpu=x86-64");
+    args.push_back("-plugin=/usr/bin/../lib/LLVMgold.so");
     args.push_back(level_str.c_str());
   }
 

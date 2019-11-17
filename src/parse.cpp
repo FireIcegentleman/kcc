@@ -211,6 +211,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
       type->FuncSetFuncSpec(func_spec);
     }
 
+    type->FuncSetName(name);
     ret = MakeAstNode<IdentifierExpr>(name, type, linkage, false);
   } else {
     ret =
@@ -715,27 +716,20 @@ Expr* Parser::TryParseCompoundLiteral() {
 }
 
 Expr* Parser::ParseCompoundLiteral(QualType type) {
-  auto linkage{curr_scope_->IsFileScope() ? kInternal : kNone};
-  auto obj{MakeAstNode<ObjectExpr>("", type, 0, linkage, true)};
+  auto obj{MakeAstNode<ObjectExpr>("", type, 0, kInternal, true)};
   auto decl{MakeAstNode<Declaration>(obj)};
 
-  if (curr_func_def_ != nullptr) {
-    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
-  } else {
-    decl->SetConstant(
-        ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
-  }
+  decl->SetConstant(
+      ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
 
-  if (curr_func_def_ == nullptr) {
-    assert(decl->GetConstant() != nullptr);
-    auto global_var{
-        new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(), false,
-                                 llvm::GlobalValue::InternalLinkage,
-                                 decl->GetConstant(), ".compoundliteral")};
-    global_var->setAlignment(obj->GetAlign());
+  assert(decl->GetGlobalInit() != nullptr);
+  auto global_var{
+      new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(), false,
+                               llvm::GlobalValue::InternalLinkage,
+                               decl->GetGlobalInit(), ".compoundliteral")};
+  global_var->setAlignment(obj->GetAlign());
 
-    obj->global_ptr_ = global_var;
-  }
+  obj->SetGlobalPtr(global_var);
 
   return obj;
 }
@@ -1963,7 +1957,7 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
   auto decl{MakeDeclaration(tok.GetIdentifier(), base_type, storage_class_spec,
                             func_spec, align)};
 
-  if (decl && Try(Tag::kEqual) && decl->IsObj()) {
+  if (decl && Try(Tag::kEqual) && decl->IsObjDecl()) {
     if (curr_func_def_ != nullptr) {
       decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
     } else {
@@ -1977,7 +1971,7 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
       Module->getOrInsertGlobal(name,
                                 decl->GetIdent()->GetType()->GetLLVMType());
       auto var{Module->getNamedGlobal(name)};
-      obj->global_ptr_ = var;
+      obj->SetGlobalPtr(var);
     }
   }
 
@@ -2863,6 +2857,7 @@ llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
     } break;
     default:
       assert(false);
+      return nullptr;
   }
 }
 

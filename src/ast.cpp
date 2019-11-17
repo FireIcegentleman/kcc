@@ -791,20 +791,41 @@ Declaration* ObjectExpr::GetDecl() { return decl_; }
 
 void ObjectExpr::SetDecl(Declaration* decl) { decl_ = decl; }
 
-bool ObjectExpr::HasInit() const { return decl_->HasInit(); }
+bool ObjectExpr::HasInit() const { return decl_->HasLocalInit(); }
 
 bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
 bool ObjectExpr::InGlobal() const { return linkage_ != kNone; }
 
-llvm::Value* ObjectExpr::GetPtr() {
-  assert((local_ptr_ == nullptr) != (global_ptr_ == nullptr));
+void ObjectExpr::SetLocalPtr(llvm::AllocaInst* local_ptr) {
+  assert(local_ptr_ == nullptr && global_ptr_ == nullptr);
+  local_ptr_ = local_ptr;
+}
 
-  if (local_ptr_) {
-    return local_ptr_;
-  } else {
-    return global_ptr_;
-  }
+void ObjectExpr::SetGlobalPtr(llvm::GlobalVariable* global_ptr) {
+  assert(local_ptr_ == nullptr && global_ptr_ == nullptr);
+  global_ptr_ = global_ptr;
+}
+
+llvm::AllocaInst* ObjectExpr::GetLocalPtr() {
+  assert(local_ptr_ != nullptr);
+  return local_ptr_;
+}
+
+llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() {
+  assert(global_ptr_ != nullptr);
+  return global_ptr_;
+}
+
+bool ObjectExpr::HasGlobalPtr() const { return global_ptr_ != nullptr; }
+
+std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() {
+  return indexs_;
+}
+
+void ObjectExpr::SetIndexs(
+    const std::list<std::pair<Type*, std::int32_t>>& indexs) {
+  indexs_ = indexs;
 }
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
@@ -1103,6 +1124,8 @@ void TranslationUnit::AddExtDecl(ExtDecl* ext_decl) {
   }
 }
 
+std::vector<ExtDecl*> TranslationUnit::GetExtDecl() const { return ext_decls_; }
+
 /*
  * Initializer
  */
@@ -1110,6 +1133,22 @@ Initializer::Initializer(
     Type* type, std::int32_t offset, Expr* expr,
     const std::list<std::pair<Type*, std::int32_t>>& indexs)
     : type_(type), offset_(offset), expr_(expr), indexs_{indexs} {}
+
+Type* Initializer::GetType() const {
+  assert(type_ != nullptr);
+  return type_;
+}
+
+int32_t Initializer::GetOffset() const { return offset_; }
+
+Expr* Initializer::GetExpr() const {
+  assert(expr_ != nullptr);
+  return expr_;
+}
+
+std::list<std::pair<Type*, std::int32_t>> Initializer::GetIndexs() const {
+  return indexs_;
+}
 
 bool operator<(const Initializer& lhs, const Initializer& rhs) {
   return lhs.offset_ < rhs.offset_;
@@ -1142,7 +1181,9 @@ AstNodeType Declaration::Kind() const { return AstNodeType::kDeclaration; }
 
 void Declaration::Check() {}
 
-bool Declaration::HasInit() const { return std::size(inits_) || value_init_; }
+bool Declaration::HasLocalInit() const {
+  return std::size(inits_) || value_init_;
+}
 
 void Declaration::AddInits(const Initializers& inits) {
   if (std::size(inits) == 0) {
@@ -1201,13 +1242,31 @@ void Declaration::AddInits(const Initializers& inits) {
 
 IdentifierExpr* Declaration::GetIdent() const { return ident_; }
 
-bool Declaration::IsObj() const { return dynamic_cast<ObjectExpr*>(ident_); }
+bool Declaration::IsObjDecl() const {
+  return dynamic_cast<ObjectExpr*>(ident_);
+}
 
 void Declaration::SetConstant(llvm::Constant* constant) {
   constant_ = constant;
 }
 
-llvm::Constant* Declaration::GetConstant() const { return constant_; }
+llvm::Constant* Declaration::GetGlobalInit() const { return constant_; }
+
+bool Declaration::IsObjDeclInGlobal() const {
+  assert(IsObjDecl());
+  return dynamic_cast<ObjectExpr*>(ident_)->InGlobal();
+}
+
+ObjectExpr* Declaration::GetObject() const {
+  assert(IsObjDecl());
+  return dynamic_cast<ObjectExpr*>(ident_);
+}
+
+bool Declaration::HasGlobalInit() const { return constant_ != nullptr; }
+
+std::vector<Initializer> Declaration::GetLocalInits() const {
+  return inits_.inits_;
+}
 
 Declaration::Declaration(IdentifierExpr* ident) : ident_{ident} {}
 

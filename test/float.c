@@ -60,17 +60,18 @@ void std() {
     expectd(*(double *)&(uint64_t){1}, DBL_TRUE_MIN);
     expect_string("0x0.0000000000001p-1022", fmtdbl(DBL_TRUE_MIN));
 
-    expect_string("15", fmtint(LDBL_DIG));
-    expect_string("0x1p-52", fmtdbl(LDBL_EPSILON));
-    expect_string("53", fmtint(LDBL_MANT_DIG));
-    expect_string("0x1.fffffffffffffp+1023", fmtdbl(LDBL_MAX));
-    expect_string("308", fmtint(LDBL_MAX_10_EXP));
-    expect_string("1024", fmtint(LDBL_MAX_EXP));
-    expect_string("0x1p-1022", fmtdbl(LDBL_MIN));
-    expect_string("-307", fmtint(LDBL_MIN_10_EXP));
-    expect_string("-1021", fmtint(LDBL_MIN_EXP));
-    expectd(*(double *)&(uint64_t){1}, LDBL_TRUE_MIN);
-    expect_string("0x0.0000000000001p-1022", fmtdbl(LDBL_TRUE_MIN));
+    expect_string("18", fmtint(LDBL_DIG));
+    expect_string("0x1p-63", fmtdbl(LDBL_EPSILON));
+    expect_string("64", fmtint(LDBL_MANT_DIG));
+    expect_string("inf", fmtdbl(LDBL_MAX));
+    expect_string("4932", fmtint(LDBL_MAX_10_EXP));
+    expect_string("16384", fmtint(LDBL_MAX_EXP));
+    expect_string("0x0p+0", fmtdbl(LDBL_MIN));
+    expect_string("-4931", fmtint(LDBL_MIN_10_EXP));
+    expect_string("-16381", fmtint(LDBL_MIN_EXP));
+    // TODO ???
+    //expectd(*(double *)&(uint64_t){1}, LDBL_TRUE_MIN);
+    expect_string("0x0p+0", fmtdbl(LDBL_TRUE_MIN));
 }
 
 void testmain() {

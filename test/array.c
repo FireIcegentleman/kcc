@@ -26,36 +26,36 @@ static void t3() {
 }
 
 static void t4() {
-//    int a[3] = { 1, 2, 3 };
-//    expect(1, a[0]);
-//    expect(2, a[1]);
-//    expect(3, a[2]);
+    int a[3] = { 1, 2, 3 };
+    expect(1, a[0]);
+    expect(2, a[1]);
+    expect(3, a[2]);
 }
 
 static void t5() {
-//    int a[2][3];
-//    a[0][1] = 1;
-//    a[1][1] = 2;
-//    int *p = a;
-//    expect(1, p[1]);
-//    expect(2, p[4]);
+    int a[2][3];
+    a[0][1] = 1;
+    a[1][1] = 2;
+    int *p = a;
+    expect(1, p[1]);
+    expect(2, p[4]);
 }
 
 static void t6a(int e, int x[][3]) {
-    //expect(e, *(*(x + 1) + 1));
+    expect(e, *(*(x + 1) + 1));
 }
 
 static void t6() {
-//    int a[2][3];
-//    int *p = a;
-//    *(p + 4) = 65;
-//    t6a(65, a);
+    int a[2][3];
+    int *p = a;
+    *(p + 4) = 65;
+    t6a(65, a);
 }
 
 static void t7() {
-//    int a[3*3];  // integer constant expression
-//    a[8] = 68;
-//    expect(68, a[8]);
+    int a[3*3];  // integer constant expression
+    a[8] = 68;
+    expect(68, a[8]);
 }
 
 void testmain() {
