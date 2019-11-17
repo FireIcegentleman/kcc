@@ -1166,6 +1166,8 @@ void Declaration::AddInits(const Initializers& inits) {
         auto val{CalcExpr<long double>{}.Calc(item.expr_)};
         item.expr_ = MakeNode<ConstantExpr>(item.expr_->GetLoc(),
                                             item.expr_->GetType(), val);
+      } else if (item.expr_->GetType()->IsAggregateTy()) {
+      } else if (item.expr_->GetType()->IsPointerTy()) {
       } else {
         assert(false);
       }
