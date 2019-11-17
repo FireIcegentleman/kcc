@@ -828,6 +828,15 @@ void ObjectExpr::SetIndexs(
   indexs_ = indexs;
 }
 
+const std::string& ObjectExpr::GetStaticName() const {
+  assert(!std::empty(static_name_));
+  return static_name_;
+}
+
+void ObjectExpr::SetStaticName(const std::string& func_name) {
+  static_name_ = func_name;
+}
+
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
                        std::uint32_t storage_class_spec, enum Linkage linkage,
                        bool anonymous)

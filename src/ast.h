@@ -420,6 +420,8 @@ class ObjectExpr : public IdentifierExpr {
   bool HasGlobalPtr() const;
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   void SetIndexs(const std::list<std::pair<Type*, std::int32_t>>& indexs);
+  const std::string& GetStaticName() const;
+  void SetStaticName(const std::string& func_name);
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -435,6 +437,7 @@ class ObjectExpr : public IdentifierExpr {
   std::list<std::pair<Type*, std::int32_t>> indexs_;
   llvm::AllocaInst* local_ptr_{};
   llvm::GlobalVariable* global_ptr_{};
+  std::string static_name_;
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式

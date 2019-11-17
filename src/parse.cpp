@@ -214,8 +214,12 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     type->FuncSetName(name);
     ret = MakeAstNode<IdentifierExpr>(name, type, linkage, false);
   } else {
-    ret =
-        MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage, false);
+    auto obj{MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage,
+                                     false)};
+    if (curr_func_def_) {
+      obj->SetStaticName(curr_func_def_->GetFuncType()->FuncGetName());
+    }
+
     if (align > 0) {
       if (align < type->GetWidth()) {
         Error(loc_,
@@ -223,8 +227,10 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
               "type '{}'",
               type->GetWidth(), type->ToString());
       }
-      dynamic_cast<ObjectExpr*>(ret)->SetAlign(align);
+      obj->SetAlign(align);
     }
+
+    ret = obj;
   }
 
   curr_scope_->InsertNormal(name, ret);
@@ -1958,14 +1964,20 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
                             func_spec, align)};
 
   if (decl && Try(Tag::kEqual) && decl->IsObjDecl()) {
-    if (curr_func_def_ != nullptr) {
+    if (curr_func_def_ != nullptr && !(storage_class_spec & kStatic)) {
       decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
     } else {
       decl->SetConstant(
           ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
 
       auto obj{dynamic_cast<ObjectExpr*>(decl->GetIdent())};
-      auto name{obj->GetName()};
+
+      std::string name;
+      if ((storage_class_spec & kStatic) && curr_func_def_ != nullptr) {
+        name = curr_func_def_->GetName() + "." + obj->GetName();
+      } else {
+        name = obj->GetName();
+      }
       // 在符号表中查找指定的全局变量.如果不存在则添加并返回它;如果存在且类型
       // 一致则直接返回;如果存在且类型不一致, 则返回一个转换为一致类型的常量
       Module->getOrInsertGlobal(name,

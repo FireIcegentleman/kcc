@@ -350,15 +350,24 @@ void CodeGen::Visit(const EnumeratorExpr& node) {
 
 void CodeGen::Visit(const ObjectExpr& node) {
   if (!node.InGlobal()) {
-    assert(node.local_ptr_ != nullptr);
-    if (node.GetType()->IsArrayTy()) {
-      result_ = node.local_ptr_;
+    if (node.IsStatic()) {
+      assert(node.global_ptr_ != nullptr);
+      if (node.GetType()->IsAggregateTy()) {
+        result_ = node.global_ptr_;
+      } else {
+        result_ = Builder.CreateAlignedLoad(node.global_ptr_, node.GetAlign());
+      }
     } else {
-      result_ = Builder.CreateAlignedLoad(node.local_ptr_, node.GetAlign());
+      assert(node.local_ptr_ != nullptr);
+      if (node.GetType()->IsAggregateTy()) {
+        result_ = node.local_ptr_;
+      } else {
+        result_ = Builder.CreateAlignedLoad(node.local_ptr_, node.GetAlign());
+      }
     }
   } else {
     assert(node.global_ptr_ != nullptr);
-    if (node.GetType()->IsArrayTy()) {
+    if (node.GetType()->IsAggregateTy()) {
       result_ = node.global_ptr_;
     } else {
       result_ = Builder.CreateAlignedLoad(node.global_ptr_, node.GetAlign());
@@ -1335,6 +1344,33 @@ void CodeGen::DealGlobalDecl(const Declaration& node) {
 void CodeGen::DealLocaleDecl(const Declaration& node) {
   auto obj{node.GetObject()};
   auto type{obj->GetType()};
+  auto name{obj->GetName()};
+
+  if (obj->IsStatic()) {
+    llvm::GlobalVariable* ptr;
+    auto static_name{obj->GetStaticName() + "." + obj->GetName()};
+
+    if (obj->HasGlobalPtr()) {
+      ptr = obj->GetGlobalPtr();
+    } else {
+      Module->getOrInsertGlobal(static_name, type->GetLLVMType());
+      ptr = Module->getNamedGlobal(static_name);
+      obj->SetGlobalPtr(ptr);
+    }
+
+    ptr->setAlignment(obj->GetAlign());
+    ptr->setLinkage(llvm::GlobalVariable::InternalLinkage);
+
+    if (node.HasGlobalInit()) {
+      ptr->setInitializer(node.GetGlobalInit());
+    } else {
+      if (!obj->IsExtern()) {
+        ptr->setInitializer(GetConstantZero(type->GetLLVMType()));
+      }
+    }
+
+    return;
+  }
 
   obj->SetLocalPtr(CreateEntryBlockAlloca(Builder.GetInsertBlock()->getParent(),
                                           type->GetLLVMType(),

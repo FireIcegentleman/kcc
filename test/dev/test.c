@@ -1,15 +1,20 @@
+#include <float.h>
 #include <stdarg.h>
 #include <stdio.h>
 
-int add_nums(int count, ...) {
-  int result = 0;
+char *fmt(char *fmt, ...) {
+  static char buf[128];
   va_list args;
-  va_start(args, count);
-  for (int i = 0; i < count; ++i) {
-    result += va_arg(args, int);
-  }
+  va_start(args, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
-  return result;
+  return buf;
 }
 
-int main(void) { printf("%d\n", add_nums(4, 25, 25, 50, 50)); }
+char *fmtdbl(double x) { return fmt("%a", x); }
+
+int main(void) {
+  // 1.19209290e-7F
+  // 0x1p-23
+  printf("%s\n", fmtdbl(FLT_EPSILON));
+}
