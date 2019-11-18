@@ -220,15 +220,48 @@ void CodeGen::Visit(const BinaryOpExpr& node) {
 }
 
 void CodeGen::Visit(const ConditionOpExpr& node) {
+  auto parent_func{Builder.GetInsertBlock()->getParent()};
+  auto lhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+
   node.cond_->Accept(*this);
-  auto cond{CastToBool(result_)};
+  result_ = CastToBool(result_);
+  auto cond{result_};
+  Builder.CreateCondBr(cond, lhs_block, rhs_block);
 
+  Builder.SetInsertPoint(lhs_block);
+
+  last_ = nullptr;
   node.lhs_->Accept(*this);
-  auto lhs{result_};
-  node.rhs_->Accept(*this);
-  auto rhs{result_};
+  lhs_block = last_ == nullptr ? lhs_block : last_;
+  last_ = nullptr;
 
-  result_ = Builder.CreateSelect(cond, lhs, rhs);
+  auto lhs_value{result_};
+  Builder.CreateBr(after_block);
+
+  Builder.SetInsertPoint(rhs_block);
+
+  last_ = nullptr;
+  node.rhs_->Accept(*this);
+  rhs_block = last_ == nullptr ? rhs_block : last_;
+  last_ = nullptr;
+
+  auto rhs_value{result_};
+  Builder.CreateBr(after_block);
+
+  Builder.SetInsertPoint(after_block);
+  last_ = after_block;
+
+  if (lhs_value->getType()->isVoidTy() || rhs_value->getType()->isVoidTy()) {
+    return;
+  } else {
+    auto phi{Builder.CreatePHI(lhs_value->getType(), 2)};
+    phi->addIncoming(lhs_value, lhs_block);
+    phi->addIncoming(rhs_value, rhs_block);
+
+    result_ = phi;
+  }
 }
 
 // LLVM 默认使用本机 C 调用约定
