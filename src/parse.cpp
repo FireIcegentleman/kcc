@@ -848,7 +848,8 @@ Expr* Parser::ParsePrimaryExpr() {
       Error(loc_, "Not allowed to use __PRETTY_FUNCTION__ here");
     }
     return MakeAstNode<StringLiteralExpr>(
-        curr_func_def_->GetFuncType()->ToString());
+        curr_func_def_->GetFuncType()->ToString() + ": " +
+        curr_func_def_->GetFuncType()->FuncGetName());
   } else {
     Error(loc_, "{} unexpected", Peek().GetStr());
   }
@@ -1113,6 +1114,7 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
 Expr* Parser::ParseGenericSelection() {
   Expect(Tag::kLeftParen);
   auto control_expr{ParseAssignExpr()};
+  control_expr = Expr::MayCast(control_expr);
   Expect(Tag::kComma);
 
   Expr* ret{nullptr};

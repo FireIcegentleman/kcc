@@ -292,8 +292,8 @@ void CodeGen::Visit(const ConstantExpr& node) {
         Context, llvm::APInt(type->getIntegerBitWidth(), node.integer_val_,
                              !node.GetType()->IsUnsigned()));
   } else if (type->isFloatingPointTy()) {
-    result_ =
-        llvm::ConstantFP::get(type, std::to_string(node.float_point_val_));
+    // FIXME
+    result_ = llvm::ConstantFP::get(type, node.float_point_val_);
   } else {
     assert(false);
   }

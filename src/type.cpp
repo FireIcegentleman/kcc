@@ -124,37 +124,41 @@ bool Type::IsVoidTy() const { return dynamic_cast<const VoidType*>(this); }
 
 bool Type::IsBoolTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kBool);
+  return p && (p->type_spec_ == kBool);
 }
 
 bool Type::IsShortTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kShort);
+  return p &&
+         ((p->type_spec_ == kShort) || (p->type_spec_ == (kShort | kUnsigned)));
 }
 
 bool Type::IsIntTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kInt);
+  return p &&
+         ((p->type_spec_ == kInt) || (p->type_spec_ == (kInt | kUnsigned)));
 }
 
 bool Type::IsLongTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kLong);
+  return p &&
+         ((p->type_spec_ == kLong) || (p->type_spec_ == (kLong | kUnsigned)));
 }
 
 bool Type::IsLongLongTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kLongLong);
+  return p && ((p->type_spec_ == kLongLong) ||
+               (p->type_spec_ == (kLongLong | kUnsigned)));
 }
 
 bool Type::IsFloatTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kFloat);
+  return p && (p->type_spec_ == kFloat);
 }
 
 bool Type::IsDoubleTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kDouble);
+  return p && (p->type_spec_ == kDouble);
 }
 
 bool Type::IsLongDoubleTy() const {

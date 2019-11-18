@@ -482,11 +482,11 @@ static void gnuext() {
 
 #define m13(x, y) stringify([x y])
 
-#define m14 1
-    expect_string("[2 2]", m13(m14,
-#undef m14
-#define m14 2
-                               m14));
+#define m19 1
+    expect_string("[2 2]", m13(m19,
+#undef m19
+#define m19 2
+                               m19));
 }
 
 void testmain() {
