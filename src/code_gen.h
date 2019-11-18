@@ -135,6 +135,16 @@ class CodeGen : public Visitor {
   llvm::Function *va_end_{};
 
   llvm::BasicBlock *last_{nullptr};
+
+  bool load_{false};
+
+  std::stack<llvm::SwitchInst *> switch_insts_;
+  std::stack<llvm::BasicBlock *> switch_after_;
+  bool case_has_break_{false};
+
+  std::vector<
+      std::tuple<llvm::BasicBlock *, llvm::BasicBlock::iterator, GotoStmt>>
+      unresolved_gotos_;
 };
 
 }  // namespace kcc

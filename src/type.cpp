@@ -737,13 +737,7 @@ StructType* StructType::Get(bool is_struct, const std::string& name,
   return new (StructTypePool.Allocate()) StructType{is_struct, name, parent};
 }
 
-std::int32_t StructType::GetWidth() const {
-  if (std::size(members_) == 0) {
-    return 1;
-  } else {
-    return width_;
-  }
-}
+std::int32_t StructType::GetWidth() const { return width_; }
 
 std::int32_t StructType::GetAlign() const {
   if (std::size(members_) == 0) {
@@ -903,8 +897,21 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 
 void StructType::Finish() {
   std::vector<llvm::Type*> members;
-  for (const auto& item : members_) {
-    members.push_back(item->GetType()->GetLLVMType());
+
+  if (is_struct_) {
+    for (const auto& item : members_) {
+      members.push_back(item->GetType()->GetLLVMType());
+    }
+  } else {
+    if (std::size(members_) >= 1) {
+      Type* max_type{members_.front()->GetType()};
+      for (const auto& item : members_) {
+        if (item->GetType()->GetWidth() > max_type->GetWidth()) {
+          max_type = item->GetType();
+        }
+      }
+      members.push_back(max_type->GetLLVMType());
+    }
   }
 
   llvm::cast<llvm::StructType>(llvm_type_)->setBody(members);

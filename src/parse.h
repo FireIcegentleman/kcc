@@ -201,6 +201,8 @@ class Parser {
   Expr* ParseOffsetof();
   Expr* ParseRegClass();
 
+  LabelStmt* FindLabel(const std::string& name) const;
+
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
@@ -209,6 +211,9 @@ class Parser {
   FuncDef* curr_func_def_{};
   Scope* curr_scope_{Scope::Get(nullptr, kFile)};
   std::list<std::pair<Type*, std::int32_t>> indexs_;
+  SwitchStmt* switch_stmt_{nullptr};
+  std::vector<LabelStmt*> labels_;
+  std::vector<GotoStmt*> unresolved_gotos_;
 
   TranslationUnit* unit_{MakeAstNode<TranslationUnit>()};
 };

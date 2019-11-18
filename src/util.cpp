@@ -73,7 +73,7 @@ void CommandLineCheck() {
       for (const auto &file : std::filesystem::directory_iterator{
                std::filesystem::current_path()}) {
         if (file.path().filename().extension().string() == ".c") {
-          files.push_back(file.path().string());
+          files.push_back(file.path().filename().string());
         }
       }
     } else if (std::filesystem::exists(path)) {

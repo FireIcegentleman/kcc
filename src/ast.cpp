@@ -807,12 +807,12 @@ void ObjectExpr::SetGlobalPtr(llvm::GlobalVariable* global_ptr) {
   global_ptr_ = global_ptr;
 }
 
-llvm::AllocaInst* ObjectExpr::GetLocalPtr() {
+llvm::AllocaInst* ObjectExpr::GetLocalPtr() const {
   assert(local_ptr_ != nullptr);
   return local_ptr_;
 }
 
-llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() {
+llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() const {
   assert(global_ptr_ != nullptr);
   return global_ptr_;
 }
@@ -876,15 +876,19 @@ StmtExpr::StmtExpr(CompoundStmt* block) : block_{block} {}
 /*
  * LabelStmt
  */
-LabelStmt* LabelStmt::Get(IdentifierExpr* label) {
-  return new (LabelStmtPool.Allocate()) LabelStmt{label};
+LabelStmt* LabelStmt::Get(const std::string& ident) {
+  return new (LabelStmtPool.Allocate()) LabelStmt{ident};
 }
 
 AstNodeType LabelStmt::Kind() const { return AstNodeType::kLabelStmt; }
 
 void LabelStmt::Check() {}
 
-LabelStmt::LabelStmt(IdentifierExpr* ident) : ident_{ident} {}
+void LabelStmt::SetHasGoto(bool has_goto) { has_goto_ = has_goto; }
+
+std::string LabelStmt::GetIdent() const { return ident_; }
+
+LabelStmt::LabelStmt(const std::string& ident) : ident_{ident} {}
 
 /*
  * CaseStmt
@@ -989,6 +993,10 @@ IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
 /*
  * SwitchStmt
  */
+SwitchStmt* SwitchStmt::Get() {
+  return new (SwitchStmtPool.Allocate()) SwitchStmt{};
+}
+
 SwitchStmt* SwitchStmt::Get(Expr* cond, Stmt* block) {
   return new (SwitchStmtPool.Allocate()) SwitchStmt{cond, block};
 }
@@ -1000,6 +1008,16 @@ void SwitchStmt::Check() {
     Error(cond_->GetLoc(), "switch quantity not an integer");
   }
 }
+
+void SwitchStmt::SetCond(Expr* cond) { cond_ = cond; }
+
+void SwitchStmt::SetBlock(Stmt* block) { block_ = block; }
+
+void SwitchStmt::SetHasCase(bool flag) { has_case_ = flag; }
+
+void SwitchStmt::SetHasDefault(bool flag) { has_default_ = flag; }
+
+SwitchStmt::SwitchStmt() {}
 
 SwitchStmt::SwitchStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
 
@@ -1060,7 +1078,11 @@ ForStmt::ForStmt(Expr* init, Expr* cond, Expr* inc, Stmt* block, Stmt* decl)
 /*
  * GotoStmt
  */
-GotoStmt* GotoStmt::Get(IdentifierExpr* ident) {
+GotoStmt* GotoStmt::Get(const std::string& name) {
+  return new (GotoStmtPool.Allocate()) GotoStmt{name};
+}
+
+GotoStmt* GotoStmt::Get(LabelStmt* ident) {
   return new (GotoStmtPool.Allocate()) GotoStmt{ident};
 }
 
@@ -1068,7 +1090,13 @@ AstNodeType GotoStmt::Kind() const { return AstNodeType::kGotoStmt; }
 
 void GotoStmt::Check() {}
 
-GotoStmt::GotoStmt(IdentifierExpr* ident) : ident_{ident} {}
+void GotoStmt::SetLabel(LabelStmt* label) { label_ = label; }
+
+std::string GotoStmt::GetName() const { return name_; }
+
+GotoStmt::GotoStmt(const std::string& name) : name_{name} {}
+
+GotoStmt::GotoStmt(LabelStmt* label) : label_{label} {}
 
 /*
  * ContinueStmt

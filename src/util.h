@@ -52,7 +52,7 @@ inline llvm::cl::opt<bool> EmitTokens{
     llvm::cl::cat{Category}};
 
 inline llvm::cl::opt<bool> EmitAST{
-    "emit-ast", llvm::cl::desc{"Emit tcc AST for source inputs"},
+    "emit-ast", llvm::cl::desc{"Emit kcc AST for source inputs"},
     llvm::cl::cat{Category}};
 
 inline llvm::cl::opt<bool> EmitLLVM{

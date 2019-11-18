@@ -276,6 +276,18 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
   auto ret{curr_func_def_};
   ExitFunc();
 
+  for (auto&& goto_item : unresolved_gotos_) {
+    auto label{FindLabel(goto_item->GetName())};
+    if (label) {
+      label->SetHasGoto(true);
+      goto_item->SetLabel(label);
+    } else {
+      Error(goto_item->GetLoc(), "unknowen label: {}", goto_item->GetName());
+    }
+  }
+  unresolved_gotos_.clear();
+  labels_.clear();
+
   return ret;
 }
 
@@ -1215,11 +1227,19 @@ Stmt* Parser::ParseLabelStmt() {
 
   TryParseAttributeSpec();
 
-  return MakeAstNode<LabelStmt>(MakeAstNode<IdentifierExpr>(
-      tok.GetIdentifier(), VoidType::Get(), kNone, false));
+  auto label{MakeAstNode<LabelStmt>(tok.GetIdentifier())};
+  labels_.push_back(label);
+
+  return label;
 }
 
 Stmt* Parser::ParseCaseStmt() {
+  if (!switch_stmt_) {
+    Error("can not use case here");
+  }
+
+  switch_stmt_->SetHasCase(true);
+
   Expect(Tag::kCase);
 
   MarkLoc();
@@ -1242,7 +1262,7 @@ Stmt* Parser::ParseCaseStmt() {
     if (!expr2->GetType()->IsIntegerTy()) {
       Error(expr2, "expect integer");
     }
-    auto val2{CalcExpr<std::int64_t>{}.Calc(expr)};
+    auto val2{CalcExpr<std::int64_t>{}.Calc(expr2)};
     if (val2 > std::numeric_limits<std::int32_t>::max() ||
         val2 < std::numeric_limits<std::int32_t>::min()) {
       Error(loc_, "case range exceed range of int");
@@ -1257,6 +1277,12 @@ Stmt* Parser::ParseCaseStmt() {
 }
 
 Stmt* Parser::ParseDefaultStmt() {
+  if (!switch_stmt_) {
+    Error("can not use default here");
+  }
+
+  switch_stmt_->SetHasDefault(true);
+
   Expect(Tag::kDefault);
   Expect(Tag::kColon);
 
@@ -1313,13 +1339,20 @@ Stmt* Parser::ParseIfStmt() {
 }
 
 Stmt* Parser::ParseSwitchStmt() {
+  switch_stmt_ = SwitchStmt::Get();
+
   Expect(Tag::kSwitch);
 
   Expect(Tag::kLeftParen);
   auto cond{ParseExpr()};
   Expect(Tag::kRightParen);
 
-  return MakeAstNode<SwitchStmt>(cond, ParseStmt());
+  switch_stmt_->SetCond(cond);
+  switch_stmt_->SetBlock(ParseStmt());
+  auto copy{switch_stmt_};
+  switch_stmt_ = nullptr;
+
+  return copy;
 }
 
 Stmt* Parser::ParseWhileStmt() {
@@ -1391,8 +1424,16 @@ Stmt* Parser::ParseGotoStmt() {
   auto tok{Expect(Tag::kIdentifier)};
   Expect(Tag::kSemicolon);
 
-  return MakeAstNode<GotoStmt>(MakeAstNode<IdentifierExpr>(
-      tok.GetIdentifier(), VoidType::Get(), kNone, false));
+  auto label{FindLabel(tok.GetIdentifier())};
+
+  if (label) {
+    label->SetHasGoto(true);
+    return MakeAstNode<GotoStmt>(label);
+  } else {
+    auto ret{MakeAstNode<GotoStmt>(tok.GetIdentifier())};
+    unresolved_gotos_.push_back(ret);
+    return ret;
+  }
 }
 
 Stmt* Parser::ParseContinueStmt() {
@@ -2382,7 +2423,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
         auto char_type{ArithmeticType::Get(kChar | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value, indexs_});
+        inits.AddInit({char_type, offset, value, {{type, i}}});
         offset += 1;
         str += 1;
       }
@@ -2393,7 +2434,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
         auto char_type{ArithmeticType::Get(kShort | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value, indexs_});
+        inits.AddInit({char_type, offset, value, {{type, i}}});
         offset += 2;
         str += 2;
       }
@@ -2404,7 +2445,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
         auto char_type{ArithmeticType::Get(kInt | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value, indexs_});
+        inits.AddInit({char_type, offset, value, {{type, i}}});
         offset += 4;
         str += 4;
       }
@@ -2962,6 +3003,15 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
 
   return llvm::ConstantStruct::get(
       llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
+}
+
+LabelStmt* Parser::FindLabel(const std::string& name) const {
+  for (const auto& item : labels_) {
+    if (item->GetIdent() == name) {
+      return item;
+    }
+  }
+  return nullptr;
 }
 
 }  // namespace kcc

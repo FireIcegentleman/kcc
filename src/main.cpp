@@ -239,14 +239,19 @@ void Run(const std::string &file) {
 
 void RunTest() {
   Run("testmain.c");
+
   InputFilePaths.erase(std::remove(std::begin(InputFilePaths),
                                    std::end(InputFilePaths), "testmain.c"),
                        std::end(InputFilePaths));
+
+  std::cout << "Total: " << std::size(InputFilePaths) << '\n';
 
   for (const auto &file : InputFilePaths) {
     Run(file);
 
     if (!ParseOnly) {
+      EnsureFileExists(GetFileName(file, ".o"));
+
       if (!Link({GetFileName(file, ".o"), "testmain.o"}, OptimizationLevel,
                 GetFileName(file, ".out"))) {
         Error("link fail");
@@ -254,7 +259,7 @@ void RunTest() {
 
       std::string cmd{"./" + GetFileName(file, ".out")};
       if (!CommandSuccess(std::system(cmd.c_str()))) {
-        //Error("run fail");
+        Error("run fail");
       }
     }
   }
@@ -270,5 +275,7 @@ void RunDev() {
   if (!CommandSuccess(std::system(cmd.c_str()))) {
     Error("run fail");
   }
+
+  PrintWarnings();
 }
 #endif

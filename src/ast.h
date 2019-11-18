@@ -415,8 +415,8 @@ class ObjectExpr : public IdentifierExpr {
   bool InGlobal() const;
   void SetLocalPtr(llvm::AllocaInst* local_ptr);
   void SetGlobalPtr(llvm::GlobalVariable* global_ptr);
-  llvm::AllocaInst* GetLocalPtr();
-  llvm::GlobalVariable* GetGlobalPtr();
+  llvm::AllocaInst* GetLocalPtr() const;
+  llvm::GlobalVariable* GetGlobalPtr() const;
   bool HasGlobalPtr() const;
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   void SetIndexs(const std::list<std::pair<Type*, std::int32_t>>& indexs);
@@ -469,16 +469,20 @@ class LabelStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  static LabelStmt* Get(IdentifierExpr* label);
+  static LabelStmt* Get(const std::string& ident);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  void SetHasGoto(bool has_goto);
+  std::string GetIdent() const;
 
  private:
-  explicit LabelStmt(IdentifierExpr* label);
+  explicit LabelStmt(const std::string& ident);
 
-  IdentifierExpr* ident_;
+  std::string ident_;
+  bool has_goto_{false};
+  mutable llvm::BasicBlock* label_{};
 };
 
 class CaseStmt : public Stmt {
@@ -589,17 +593,26 @@ class SwitchStmt : public Stmt {
   friend class CodeGen;
 
  public:
+  static SwitchStmt* Get();
   static SwitchStmt* Get(Expr* cond, Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  void SetHasCase(bool flag);
+  void SetHasDefault(bool flag);
+  void SetCond(Expr* cond);
+  void SetBlock(Stmt* block);
 
  private:
+  SwitchStmt();
   SwitchStmt(Expr* cond, Stmt* block);
 
-  Expr* cond_;
-  Stmt* block_;
+  Expr* cond_{};
+  Stmt* block_{};
+
+  bool has_case_{false};
+  bool has_default_{false};
 };
 
 class WhileStmt : public Stmt {
@@ -663,16 +676,21 @@ class GotoStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  static GotoStmt* Get(IdentifierExpr* ident);
+  static GotoStmt* Get(const std::string& name);
+  static GotoStmt* Get(LabelStmt* ident);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  void SetLabel(LabelStmt* label);
+  std::string GetName() const;
 
  private:
-  explicit GotoStmt(IdentifierExpr* ident);
+  explicit GotoStmt(const std::string& name);
+  explicit GotoStmt(LabelStmt* ident);
 
-  IdentifierExpr* ident_;
+  std::string name_;
+  LabelStmt* label_{};
 };
 
 class ContinueStmt : public Stmt {

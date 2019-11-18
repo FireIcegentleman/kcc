@@ -1,7 +1,9 @@
-#include <float.h>
-#include <stdarg.h>
-#include <stdio.h>
+int printf(const char *s, ...);
 
-int ptrtest4(int(f)(int), int x) { return f(x); }
-
-int main(void) {}
+int main(void) {
+  int acc = 0;
+  goto x;
+  acc = 5;
+x:
+  printf("%d\n", acc);
+}
