@@ -1008,6 +1008,8 @@ void SwitchStmt::Check() {
   if (!cond_->GetType()->IsIntegerTy()) {
     Error(cond_->GetLoc(), "switch quantity not an integer");
   }
+
+  cond_ = Expr::MayCastTo(cond_, ArithmeticType::Get(kInt));
 }
 
 void SwitchStmt::SetCond(Expr* cond) { cond_ = cond; }

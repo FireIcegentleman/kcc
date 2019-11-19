@@ -1346,6 +1346,7 @@ Stmt* Parser::ParseSwitchStmt() {
 
   Expect(Tag::kLeftParen);
   auto cond{ParseExpr()};
+  cond = Expr::MayCastTo(cond, ArithmeticType::Get(kInt));
   Expect(Tag::kRightParen);
 
   switch_stmt_->SetCond(cond);

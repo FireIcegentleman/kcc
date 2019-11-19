@@ -463,9 +463,10 @@ void CodeGen::Visit(const CaseStmt& node) {
   auto inst{switch_insts_.top()};
   bool first{inst->getNumCases() == 0};
 
-  if (!first && !case_has_break_) {
+  if (!first && !case_has_break_ && !HasBrOrReturn()) {
     Builder.CreateBr(case_block);
   }
+  PopBlock();
   case_has_break_ = false;
 
   if (node.has_range_) {
@@ -481,6 +482,7 @@ void CodeGen::Visit(const CaseStmt& node) {
   }
 
   Builder.SetInsertPoint(case_block);
+  PushBlock(nullptr, nullptr);
   node.block_->Accept(*this);
 }
 
@@ -802,8 +804,10 @@ void CodeGen::Visit(const FuncDef& node) {
       Builder.CreateRet(Builder.getInt32(0));
     } else {
       if (!func_type->FuncGetReturnType()->IsVoidTy()) {
-        Error(node.ident_->GetLoc(),
-              "control reaches end of non-void function");
+        Warning(node.ident_->GetLoc(),
+                "control reaches end of non-void function");
+        Builder.CreateRet(
+            GetZero(func_type->FuncGetReturnType()->GetLLVMType()));
       } else {
         Builder.CreateRetVoid();
       }
