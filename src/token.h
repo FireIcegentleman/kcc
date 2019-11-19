@@ -139,7 +139,6 @@ class TokenTag : public QObject {
     kTypeof,         // typeof
     kTypeid,         // typeid
     kOffsetof,       // __builtin_offsetof
-    kRegClass,       // __builtin_reg_class
 
     kNone,
     kEof

@@ -251,12 +251,14 @@ class FuncCallExpr : public Expr {
   virtual bool IsLValue() const override;
 
   Type* GetFuncType() const;
+  void SetVaArgType(Type* va_arg_type) { va_arg_type_ = va_arg_type; }
 
  private:
   explicit FuncCallExpr(Expr* callee, std::vector<Expr*> args = {});
 
   Expr* callee_;
   std::vector<Expr*> args_;
+  Type* va_arg_type_{nullptr};
 };
 
 class ConstantExpr : public Expr {

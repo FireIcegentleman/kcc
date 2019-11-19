@@ -1604,10 +1604,10 @@ void CodeGen::DealLocaleDecl(const Declaration& node) {
 
 bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
   auto func_name{node.GetFuncType()->FuncGetName()};
-  auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
-                                         {Builder.getInt8PtrTy()}, false)};
 
   if (func_name == "__builtin_va_start") {
+    auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
+                                           {Builder.getInt8PtrTy()}, false)};
     if (!va_start_) {
       va_start_ =
           llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
@@ -1617,11 +1617,14 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
     assert(std::size(node.args_) == 2);
 
     node.args_.front()->Accept(*this);
+
     result_ = Builder.CreateBitCast(result_, Builder.getInt8PtrTy());
     result_ = Builder.CreateCall(va_start_, {result_});
 
     return true;
   } else if (func_name == "__builtin_va_end") {
+    auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
+                                           {Builder.getInt8PtrTy()}, false)};
     if (!va_end_) {
       va_end_ =
           llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
@@ -1631,8 +1634,42 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
     assert(std::size(node.args_) == 1);
 
     node.args_.front()->Accept(*this);
+
     result_ = Builder.CreateBitCast(result_, Builder.getInt8PtrTy());
     result_ = Builder.CreateCall(va_end_, {result_});
+
+    return true;
+  } else if (func_name == "__builtin_va_arg_sub") {
+    assert(std::size(node.args_) == 1);
+
+    node.args_.front()->Accept(*this);
+    assert(node.va_arg_type_ != nullptr);
+
+    auto r{Builder.CreateBitCast(result_, Builder.getInt8PtrTy())};
+    result_ = Builder.CreateVAArg(r, node.va_arg_type_->GetLLVMType());
+
+    return true;
+  } else if (func_name == "__builtin_va_copy") {
+    auto func_type{llvm::FunctionType::get(
+        Builder.getVoidTy(), {Builder.getInt8PtrTy(), Builder.getInt8PtrTy()},
+        false)};
+    if (!va_copy_) {
+      va_copy_ =
+          llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                 "llvm.va_copy", Module.get());
+    }
+
+    assert(std::size(node.args_) == 2);
+
+    node.args_.front()->Accept(*this);
+    auto arg1{result_};
+    node.args_[1]->Accept(*this);
+    auto arg2{result_};
+
+    auto r1{Builder.CreateBitCast(arg1, Builder.getInt8PtrTy())};
+    auto r2{Builder.CreateBitCast(arg2, Builder.getInt8PtrTy())};
+
+    result_ = Builder.CreateCall(va_copy_, {r1, r2});
 
     return true;
   } else {

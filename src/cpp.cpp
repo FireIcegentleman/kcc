@@ -22,10 +22,6 @@
 
 #include "error.h"
 
-#ifdef DEV
-#include "util.h"
-#endif
-
 namespace kcc {
 
 // TODO 禁用警告
@@ -83,18 +79,13 @@ Preprocessor::Preprocessor() {
                              clang::SrcMgr::C_System, false),
       true);
 
-  pp_->setPredefines(
-      pp_->getPredefines() +
-      "#define __builtin_va_copy(dest,src) ((dest)[0]=(src)[0])\n"
-      "#define __builtin_va_arg(ap, type)          \\\n"
-      "  ({int klass = __builtin_reg_class((type *)0);  \\\n"
-      "    *(type *)(klass == 0 ? __va_arg_gp(ap)   \\\n"
-      "   : klass == 1 ? __va_arg_fp(ap) : __va_arg_mem(ap));   \\\n"
-      "  })\n"
-      "#define __STDC_NO_ATOMICS__ 1\n"
-      "#define __STDC_NO_COMPLEX__ 1\n"
-      "#define __STDC_NO_THREADS__ 1\n"
-      "#define __STDC_NO_VLA__ 1\n");
+  pp_->setPredefines(pp_->getPredefines() +
+                     "#define __STDC_NO_ATOMICS__ 1\n"
+                     "#define __STDC_NO_COMPLEX__ 1\n"
+                     "#define __STDC_NO_THREADS__ 1\n"
+                     "#define __STDC_NO_VLA__ 1\n"
+                     "#define __builtin_va_arg(args,type) "
+                     "  *(type*)__builtin_va_arg_sub(args,type)\n");
 }
 
 void Preprocessor::SetIncludePaths(
@@ -142,15 +133,7 @@ std::string Preprocessor::Cpp(const std::string &input_file) {
 
   ci_.getDiagnosticClient().EndSourceFile();
 
-#ifdef DEV
-  if (NoBuiltin) {
-    return code;
-  } else {
-    return Preprocessor::Builtin + code;
-  }
-#else
-  return Preprocessor::Builtin + code;
-#endif
+  return code;
 }
 
 }  // namespace kcc

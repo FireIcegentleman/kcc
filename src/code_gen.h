@@ -133,6 +133,7 @@ class CodeGen : public Visitor {
 
   llvm::Function *va_start_{};
   llvm::Function *va_end_{};
+  llvm::Function *va_copy_{};
 
   llvm::BasicBlock *last_{nullptr};
 

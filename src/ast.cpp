@@ -106,7 +106,7 @@ Expr* Expr::MayCast(Expr* expr) {
 Expr* Expr::MayCastTo(Expr* expr, QualType to) {
   expr = MayCast(expr);
 
-  if (!expr->GetQualType()->Equal(to.GetType())) {
+  if (!expr->GetType()->Equal(to.GetType())) {
     return MakeNode<TypeCastExpr>(expr->GetLoc(), expr, to);
   } else {
     return expr;
@@ -599,6 +599,8 @@ void FuncCallExpr::Check() {
 
   auto func_type{callee_->GetType()};
   auto args_iter{std::begin(args_)};
+  auto func_name{func_type->FuncGetName()};
+  type_ = func_type->FuncGetReturnType();
 
   for (const auto& param : callee_->GetType()->FuncGetParams()) {
     if (args_iter == std::end(args_)) {
@@ -628,8 +630,6 @@ void FuncCallExpr::Check() {
     }
     ++args_iter;
   }
-
-  type_ = func_type->FuncGetReturnType();
 }
 
 bool FuncCallExpr::IsLValue() const { return false; }

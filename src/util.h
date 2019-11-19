@@ -102,9 +102,6 @@ inline llvm::cl::opt<bool> Test8cc{"8cc", llvm::cl::desc{"Test 8cc"},
 inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
                                      llvm::cl::cat{Category}};
 
-inline llvm::cl::opt<bool> NoBuiltin{"no-builtin", llvm::cl::desc{"No Builtin"},
-                                     llvm::cl::cat{Category}};
-
 inline llvm::cl::opt<bool> SymbolTable{
     "symbol", llvm::cl::desc{"Print symbol table"}, llvm::cl::cat{Category}};
 

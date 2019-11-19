@@ -26,6 +26,8 @@ Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {
 }
 
 TranslationUnit* Parser::ParseTranslationUnit() {
+  AddBuiltin();
+
   while (HasNext()) {
     unit_->AddExtDecl(ParseExternalDecl());
   }
@@ -654,8 +656,6 @@ Expr* Parser::ParseUnaryExpr() {
       return ParseAlignof();
     case Tag::kOffsetof:
       return ParseOffsetof();
-    case Tag::kRegClass:
-      return ParseRegClass();
     case Tag::kTypeid:
       return ParseTypeid();
     default:
@@ -806,6 +806,16 @@ Expr* Parser::ParseFuncCallExpr(Expr* expr) {
   MarkLoc();
 
   std::vector<Expr*> args;
+  if (expr->GetType()->FuncGetName() == "__builtin_va_arg_sub") {
+    args.push_back(ParseAssignExpr());
+    Expect(Tag::kComma);
+    auto type{ParseTypeName()};
+    Expect(Tag::kRightParen);
+    auto ret{MakeAstNode<FuncCallExpr>(expr, args)};
+    ret->SetVaArgType(type.GetType());
+    return ret;
+  }
+
   while (!Try(Tag::kRightParen)) {
     args.push_back(ParseAssignExpr());
 
@@ -2706,28 +2716,6 @@ Expr* Parser::ParseOffsetof() {
       static_cast<std::uint64_t>(type->StructGetMember(name)->GetOffset()));
 }
 
-Expr* Parser::ParseRegClass() {
-  Expect(Tag::kLeftParen);
-
-  auto expr{ParseExpr()};
-  Expect(Tag::kRightParen);
-
-  assert(expr->Kind() == AstNodeType::kTypeCastExpr);
-  assert(expr->GetType()->IsPointerTy());
-
-  auto type{expr->GetType()->PointerGetElementType()};
-  if (type->IsIntegerTy() || type->IsPointerTy()) {
-    return MakeAstNode<ConstantExpr>(0);
-  } else if (type->IsFloatPointTy()) {
-    return MakeAstNode<ConstantExpr>(1);
-  } else if (type->IsStructOrUnionTy()) {
-    return MakeAstNode<ConstantExpr>(2);
-  } else {
-    assert(false);
-    return nullptr;
-  }
-}
-
 llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
                                                  bool force_brace) {
   if (designated && !Test(Tag::kPeriod) && !Test(Tag::kLeftSquare)) {
@@ -3036,6 +3024,49 @@ LabelStmt* Parser::FindLabel(const std::string& name) const {
     }
   }
   return nullptr;
+}
+
+void Parser::AddBuiltin() {
+  auto va_list{StructType::Get(true, "__va_list_tag", curr_scope_)};
+  va_list->AddMember(
+      MakeAstNode<ObjectExpr>("gp_offset", ArithmeticType::Get(kInt)));
+  va_list->AddMember(
+      MakeAstNode<ObjectExpr>("fp_offset", ArithmeticType::Get(kInt)));
+  va_list->AddMember(MakeAstNode<ObjectExpr>(
+      "overflow_arg_area", PointerType::Get(VoidType::Get())));
+  va_list->AddMember(MakeAstNode<ObjectExpr>(
+      "reg_save_area", PointerType::Get(VoidType::Get())));
+  va_list->SetComplete(true);
+
+  curr_scope_->InsertNormal(
+      "__builtin_va_list",
+      MakeAstNode<IdentifierExpr>("__builtin_va_list",
+                                  ArrayType::Get(va_list, 1), kNone, true));
+
+  auto param1{MakeAstNode<ObjectExpr>("", va_list->GetPointerTo())};
+  auto param2{MakeAstNode<ObjectExpr>("", ArithmeticType::Get(kInt))};
+
+  auto start{FunctionType::Get(VoidType::Get(), {param1, param2})};
+  start->SetName("__builtin_va_start");
+  auto end{FunctionType::Get(VoidType::Get(), {param1})};
+  end->SetName("__builtin_va_end");
+  auto arg{FunctionType::Get(VoidType::Get(), {param1})};
+  arg->SetName("__builtin_va_arg_sub");
+  auto copy{FunctionType::Get(VoidType::Get(), {param1, param1})};
+  copy->SetName("__builtin_va_copy");
+
+  curr_scope_->InsertNormal("__builtin_va_start",
+                            MakeAstNode<IdentifierExpr>(
+                                "__builtin_va_start", start, kExternal, false));
+  curr_scope_->InsertNormal(
+      "__builtin_va_end",
+      MakeAstNode<IdentifierExpr>("__builtin_va_end", end, kExternal, false));
+  curr_scope_->InsertNormal("__builtin_va_arg_sub",
+                            MakeAstNode<IdentifierExpr>("__builtin_va_arg_sub",
+                                                        arg, kExternal, false));
+  curr_scope_->InsertNormal(
+      "__builtin_va_copy",
+      MakeAstNode<IdentifierExpr>("__builtin_va_copy", end, kExternal, false));
 }
 
 }  // namespace kcc

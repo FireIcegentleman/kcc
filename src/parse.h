@@ -200,7 +200,7 @@ class Parser {
    * built in
    */
   Expr* ParseOffsetof();
-  Expr* ParseRegClass();
+  void AddBuiltin();
 
   LabelStmt* FindLabel(const std::string& name) const;
 
