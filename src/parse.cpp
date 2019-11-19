@@ -2930,10 +2930,16 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
   auto has_brace{Try(Tag::kLeftBrace)};
   auto member_iter{std::begin(type->StructGetMembers())};
   std::vector<llvm::Constant*> val;
+  bool is_struct{type->IsStructTy()};
 
-  for (const auto& member : type->StructGetMembers()) {
-    val.push_back(
-        llvm::Constant::getNullValue(member->GetType()->GetLLVMType()));
+  if (is_struct) {
+    for (const auto& member : type->StructGetMembers()) {
+      val.push_back(
+          llvm::Constant::getNullValue(member->GetType()->GetLLVMType()));
+    }
+  } else {
+    val.push_back(llvm::Constant::getNullValue(
+        type->GetLLVMType()->getStructElementType(0)));
   }
 
   while (true) {
@@ -2973,13 +2979,23 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
         PutBack();
       }
 
-      val[member_iter - std::begin(type->StructGetMembers())] =
-          ParseConstantInitializer((*member_iter)->GetType(), designated,
-                                   false);
+      if (is_struct) {
+        val[member_iter - std::begin(type->StructGetMembers())] =
+            ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                     false);
+      } else {
+        val[0] = ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                          false);
+      }
     } else {
-      val[member_iter - std::begin(type->StructGetMembers())] =
-          ParseConstantInitializer((*member_iter)->GetType(), designated,
-                                   false);
+      if (is_struct) {
+        val[member_iter - std::begin(type->StructGetMembers())] =
+            ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                     false);
+      } else {
+        val[0] = ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                          false);
+      }
     }
 
     designated = false;

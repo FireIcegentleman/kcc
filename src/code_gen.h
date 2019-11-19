@@ -146,8 +146,6 @@ class CodeGen : public Visitor {
   std::vector<std::tuple<std::string, llvm::BasicBlock *, std::int32_t>>
       goto_stmt_;
   std::vector<LabelStmt> labels_;
-
-  std::map<llvm::BasicBlock *, std::int32_t> fuck_;
 };
 
 }  // namespace kcc

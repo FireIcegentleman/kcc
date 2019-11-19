@@ -10,8 +10,12 @@ static void expects(short a, short b) {
     }
 }
 
+static void test_promotion() {
+  expect(1, 1 < 0x80000000);
+}
+
 void testmain() {
-    print("long");
+    print("int");
 
     short a = 10;
     short int b = 15;
@@ -26,4 +30,6 @@ void testmain() {
     expectl(4294967295L, 4294967295);
     expectl(1152921504606846976, 1152921504606846976);
     expectl(1152921504606846977, 1152921504606846976 + 1);
+
+    test_promotion();
 }

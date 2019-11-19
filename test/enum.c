@@ -4,8 +4,29 @@
 
 enum { g1, g2, g3 } global1;
 
+void test()
+{
+  typedef enum {
+    AA,
+    BB = 3,
+    CC = 3,
+    DD,
+  } idtype_t;
+
+  expect(0, AA);
+  expect(3, BB);
+  expect(4, DD);
+  {
+    int AA = -4;
+    int BB = -5;
+    expect(-4, AA);
+    expect(-5, BB);
+  }
+}
+
 void testmain() {
     print("enum");
+    test();
 
     expect(0, g1);
     expect(2, g3);

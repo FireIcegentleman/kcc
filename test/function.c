@@ -178,6 +178,55 @@ static t6_t retfunc2() {
 // Make sure the compiler doesn't interpret it as a function definition.
 static _Alignas(32) char char32;
 
+typedef struct {
+  int line;
+  int column;
+} pos_t;
+
+static pos_t get_pos(int column, int line) {
+  return (pos_t){column, line};
+}
+
+static void test_return_struct() {
+  pos_t pos = get_pos(1, 2);
+  expect(1, pos.line);
+  expect(2, pos.column);
+}
+
+static void array_func_param(int arr[]) {
+  expect(8, sizeof(arr));
+}
+
+static void array_func_param_1(int arr[4]) {
+  expect(8, sizeof(arr));
+}
+
+static void test_func_param() {
+  int* p;
+  array_func_param(p);
+  array_func_param_1(p);
+}
+
+typedef struct {
+  int i;
+  int j;
+} pair_t;
+
+static int c = 10;
+static int foo(int* i) {
+  return *i;
+}
+
+static pair_t ret_pair(int a) {
+  pair_t pair = {1, 2};
+  return pair;
+}
+
+static void test_func_ret_struct() {
+  ret_pair(foo(&c));
+  expect(10, c);
+}
+
 void testmain() {
     print("function");
 
@@ -203,4 +252,7 @@ void testmain() {
     test_funcdesg();
     expect(3, retfunc()());
     expect(3, retfunc2()());
+    test_return_struct();
+    test_func_param();
+    test_func_ret_struct();
 }

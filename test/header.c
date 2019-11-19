@@ -28,6 +28,22 @@
 #include <wchar.h>
 #include <wctype.h>
 
+#if !__STDC_NO_COMPLEX__
+#include <complex.h>
+#endif
+
+#if !__STDC_NO_ATOMICS__
+#include <stdatomic.h>
+#endif
+
+#if !__STDC_NO_COMPLEX__
+#include <tgmath.h>
+#endif
+
+#if !__STDC_NO_THREADS__
+#include <threads.h>
+#endif
+
 #include "test.h"
 
 void testmain() { print("header"); }

@@ -58,9 +58,11 @@ CodeGen::CodeGen(const std::string&) {
 void CodeGen::GenCode(const TranslationUnit* root) {
   root->Accept(*this);
 
-  //  if (llvm::verifyModule(*Module, &llvm::errs())) {
-  //    Error("module is broken");
-  //  }
+#ifndef DEV
+  if (llvm::verifyModule(*Module, &llvm::errs())) {
+    Error("module is broken");
+  }
+#endif
 
   assert(std::size(continue_stack_) == 0);
   assert(std::size(break_stack_) == 0);
@@ -804,8 +806,6 @@ void CodeGen::Visit(const FuncDef& node) {
       Builder.CreateRet(Builder.getInt32(0));
     } else {
       if (!func_type->FuncGetReturnType()->IsVoidTy()) {
-        Warning(node.ident_->GetLoc(),
-                "control reaches end of non-void function");
         Builder.CreateRet(
             GetZero(func_type->FuncGetReturnType()->GetLLVMType()));
       } else {
@@ -1494,8 +1494,12 @@ void CodeGen::InitLocalAggregate(const Declaration& node) {
       if (type->IsArrayTy()) {
         ptr = Builder.CreateInBoundsGEP(
             ptr, {Builder.getInt64(0), Builder.getInt64(index)});
-      } else if (type->IsStructOrUnionTy()) {
+      } else if (type->IsStructTy()) {
         ptr = Builder.CreateStructGEP(ptr, index);
+      } else if (type->IsUnionTy()) {
+        ptr = Builder.CreateBitCast(
+            ptr,
+            type->StructGetMemberType(index)->GetLLVMType()->getPointerTo());
       } else {
         break;
       }
@@ -1530,7 +1534,7 @@ void CodeGen::DealGlobalDecl(const Declaration& node) {
     ptr->setDSOLocal(true);
 
     if (!node.HasGlobalInit()) {
-      //ptr->setLinkage(llvm::GlobalVariable::CommonLinkage);
+      // ptr->setLinkage(llvm::GlobalVariable::CommonLinkage);
     }
   }
 

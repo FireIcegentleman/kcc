@@ -196,8 +196,10 @@ void UnaryOpExpr::UnaryAddSubOpCheck() {
           expr_->GetType()->ToString());
   }
 
-  auto new_type{ArithmeticType::IntegerPromote(expr_->GetQualType().GetType())};
-  expr_ = Expr::MayCastTo(expr_, QualType{new_type});
+  if (expr_->GetType()->IsIntegerTy() || expr_->GetType()->IsBoolTy()) {
+    auto new_type{ArithmeticType::IntegerPromote(expr_->GetType())};
+    expr_ = Expr::MayCastTo(expr_, QualType{new_type});
+  }
 
   type_ = expr_->GetQualType();
 }
@@ -480,12 +482,17 @@ void BinaryOpExpr::LogicalOpCheck() {
 }
 
 void BinaryOpExpr::EqualityOpCheck() {
-  auto lhs_type{lhs_->GetQualType()};
-  auto rhs_type{rhs_->GetQualType()};
+  auto lhs_type{lhs_->GetType()};
+  auto rhs_type{rhs_->GetType()};
   std::uint32_t is_unsigned{};
 
   if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
     EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
+    if (lhs_type->PointerGetElementType()->IsVoidTy()) {
+      lhs_ = Expr::MayCastTo(lhs_, rhs_type);
+    } else if (rhs_type->PointerGetElementType()->IsVoidTy()) {
+      rhs_ = Expr::MayCastTo(rhs_, lhs_type);
+    }
   } else if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     Expr::Convert(lhs_, rhs_);
     is_unsigned =
