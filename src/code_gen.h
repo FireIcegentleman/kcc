@@ -121,6 +121,7 @@ class CodeGen : public Visitor {
   bool HasReturn() const;
 
   bool MayCallBuiltinFunc(const FuncCallExpr &node);
+  llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
 
   llvm::Value *result_{};
   std::int32_t align_{};

@@ -806,7 +806,8 @@ Expr* Parser::ParseFuncCallExpr(Expr* expr) {
   MarkLoc();
 
   std::vector<Expr*> args;
-  if (expr->GetType()->FuncGetName() == "__builtin_va_arg_sub") {
+  if (expr->GetType()->IsFunctionTy() &&
+      expr->GetType()->FuncGetName() == "__builtin_va_arg_sub") {
     args.push_back(ParseAssignExpr());
     Expect(Tag::kComma);
     auto type{ParseTypeName()};

@@ -1645,8 +1645,7 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
     node.args_.front()->Accept(*this);
     assert(node.va_arg_type_ != nullptr);
 
-    auto r{Builder.CreateBitCast(result_, Builder.getInt8PtrTy())};
-    result_ = Builder.CreateVAArg(r, node.va_arg_type_->GetLLVMType());
+    result_ = VaArg(result_, node.va_arg_type_->GetLLVMType());
 
     return true;
   } else if (func_name == "__builtin_va_copy") {
@@ -1675,6 +1674,45 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
   } else {
     return false;
   }
+}
+
+llvm::Value* CodeGen::VaArg(llvm::Value* ptr, llvm::Type* type) {
+  auto parent_func{Builder.GetInsertBlock()->getParent()};
+  auto lhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+
+  auto p{Builder.CreateStructGEP(ptr, 0)};
+  auto num{Builder.CreateAlignedLoad(p, 16)};
+  result_ = Builder.CreateICmpULE(
+      num, llvm::ConstantInt::get(Builder.getInt32Ty(), 40));
+  Builder.CreateCondBr(result_, lhs_block, rhs_block);
+
+  Builder.SetInsertPoint(lhs_block);
+  result_ = Builder.CreateStructGEP(ptr, 3);
+  result_ = Builder.CreateAlignedLoad(result_, 16);
+  result_ = Builder.CreateGEP(result_, num);
+  auto r{Builder.CreateBitCast(result_, type->getPointerTo())};
+  result_ =
+      Builder.CreateAdd(num, llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
+  Builder.CreateAlignedStore(result_, p, 16);
+  Builder.CreateBr(after_block);
+
+  Builder.SetInsertPoint(rhs_block);
+  auto pp{Builder.CreateStructGEP(ptr, 2)};
+  result_ = Builder.CreateAlignedLoad(pp, 8);
+  auto rr{Builder.CreateBitCast(result_, type->getPointerTo())};
+  result_ = Builder.CreateGEP(result_,
+                              llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
+  Builder.CreateAlignedStore(result_, pp, 8);
+  Builder.CreateBr(after_block);
+
+  Builder.SetInsertPoint(after_block);
+  auto phi{Builder.CreatePHI(type->getPointerTo(), 2)};
+  phi->addIncoming(r, lhs_block);
+  phi->addIncoming(rr, rhs_block);
+
+  return phi;
 }
 
 }  // namespace kcc
