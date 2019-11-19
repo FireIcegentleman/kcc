@@ -734,22 +734,31 @@ Expr* Parser::TryParseCompoundLiteral() {
 }
 
 Expr* Parser::ParseCompoundLiteral(QualType type) {
-  auto obj{MakeAstNode<ObjectExpr>("", type, 0, kInternal, true)};
-  auto decl{MakeAstNode<Declaration>(obj)};
+  if (curr_func_def_ == nullptr) {
+    auto obj{MakeAstNode<ObjectExpr>("", type, 0, kInternal, true)};
+    auto decl{MakeAstNode<Declaration>(obj)};
+    decl->SetConstant(
+        ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
 
-  decl->SetConstant(
-      ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
+    assert(decl->GetGlobalInit() != nullptr);
+    auto global_var{
+        new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(), false,
+                                 llvm::GlobalValue::InternalLinkage,
+                                 decl->GetGlobalInit(), ".compoundliteral")};
+    global_var->setAlignment(obj->GetAlign());
 
-  assert(decl->GetGlobalInit() != nullptr);
-  auto global_var{
-      new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(), false,
-                               llvm::GlobalValue::InternalLinkage,
-                               decl->GetGlobalInit(), ".compoundliteral")};
-  global_var->setAlignment(obj->GetAlign());
+    obj->SetGlobalPtr(global_var);
 
-  obj->SetGlobalPtr(global_var);
+    return obj;
+  } else {
+    auto obj{MakeAstNode<ObjectExpr>("", type, 0, kNone, true)};
+    auto decl{MakeAstNode<Declaration>(obj)};
 
-  return obj;
+    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
+    compound_stmt_.top()->AddStmt(decl);
+
+    return obj;
+  }
 }
 
 Expr* Parser::ParsePostfixExprTail(Expr* expr) {
@@ -1234,11 +1243,11 @@ Stmt* Parser::ParseLabelStmt() {
 }
 
 Stmt* Parser::ParseCaseStmt() {
-  if (!switch_stmt_) {
+  if (std::size(switch_stmts_) == 0) {
     Error("can not use case here");
   }
 
-  switch_stmt_->SetHasCase(true);
+  switch_stmts_.top()->SetHasCase(true);
 
   Expect(Tag::kCase);
 
@@ -1278,11 +1287,11 @@ Stmt* Parser::ParseCaseStmt() {
 }
 
 Stmt* Parser::ParseDefaultStmt() {
-  if (!switch_stmt_) {
+  if (std::size(switch_stmts_) == 0) {
     Error("can not use default here");
   }
 
-  switch_stmt_->SetHasDefault(true);
+  switch_stmts_.top()->SetHasDefault(true);
 
   Expect(Tag::kDefault);
   Expect(Tag::kColon);
@@ -1295,21 +1304,22 @@ CompoundStmt* Parser::ParseCompoundStmt(Type* func_type) {
 
   EnterBlock(func_type);
 
-  std::vector<Stmt*> stmts;
+  auto stmts{MakeAstNode<CompoundStmt>()};
+  compound_stmt_.push(stmts);
   while (!Try(Tag::kRightBrace)) {
     if (IsDecl(Peek())) {
       if (auto decl{ParseDecl()}; decl) {
-        stmts.push_back(decl);
+        stmts->AddStmt(decl);
       }
     } else {
-      stmts.push_back(ParseStmt());
+      stmts->AddStmt(ParseStmt());
     }
   }
 
-  auto scope{curr_scope_};
   ExitBlock();
+  compound_stmt_.pop();
 
-  return MakeAstNode<CompoundStmt>(stmts, scope);
+  return stmts;
 }
 
 Stmt* Parser::ParseExprStmt() {
@@ -1340,7 +1350,8 @@ Stmt* Parser::ParseIfStmt() {
 }
 
 Stmt* Parser::ParseSwitchStmt() {
-  switch_stmt_ = SwitchStmt::Get();
+  auto switch_stmt{SwitchStmt::Get()};
+  switch_stmts_.push(switch_stmt);
 
   Expect(Tag::kSwitch);
 
@@ -1349,12 +1360,12 @@ Stmt* Parser::ParseSwitchStmt() {
   cond = Expr::MayCastTo(cond, ArithmeticType::Get(kInt));
   Expect(Tag::kRightParen);
 
-  switch_stmt_->SetCond(cond);
-  switch_stmt_->SetBlock(ParseStmt());
-  auto copy{switch_stmt_};
-  switch_stmt_ = nullptr;
+  switch_stmt->SetCond(cond);
+  switch_stmt->SetBlock(ParseStmt());
 
-  return copy;
+  switch_stmts_.pop();
+
+  return switch_stmt;
 }
 
 Stmt* Parser::ParseWhileStmt() {

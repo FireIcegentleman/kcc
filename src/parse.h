@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <map>
 #include <set>
+#include <stack>
 #include <string>
 #include <utility>
 #include <vector>
@@ -211,9 +212,10 @@ class Parser {
   FuncDef* curr_func_def_{};
   Scope* curr_scope_{Scope::Get(nullptr, kFile)};
   std::list<std::pair<Type*, std::int32_t>> indexs_;
-  SwitchStmt* switch_stmt_{nullptr};
+  std::stack<SwitchStmt*> switch_stmts_;
   std::vector<LabelStmt*> labels_;
   std::vector<GotoStmt*> unresolved_gotos_;
+  std::stack<CompoundStmt*> compound_stmt_;
 
   TranslationUnit* unit_{MakeAstNode<TranslationUnit>()};
 };

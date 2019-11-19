@@ -1530,7 +1530,7 @@ void CodeGen::DealGlobalDecl(const Declaration& node) {
     ptr->setDSOLocal(true);
 
     if (!node.HasGlobalInit()) {
-      ptr->setLinkage(llvm::GlobalVariable::CommonLinkage);
+      //ptr->setLinkage(llvm::GlobalVariable::CommonLinkage);
     }
   }
 
