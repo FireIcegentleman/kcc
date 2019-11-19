@@ -88,7 +88,6 @@ void CalcExpr<T>::Visit(const UnaryOpExpr& node) {
       val_ = !CalcExpr<T>{}.Calc(node.expr_);
       break;
     case Tag::kAmp:
-      // TODO 地址常量表达式
       Error(node.expr_, "not support '&' in constant expression");
     default:
       Error(node.expr_, "expect constant expression");
@@ -180,7 +179,6 @@ void CalcExpr<T>::Visit(const BinaryOpExpr& node) {
       val_ = L >= R;
       break;
     case Tag::kPeriod:
-      // TODO 地址常量表达式
       Error(node.lhs_, "not support '.' in constant expression");
     default:
       Error(node.lhs_, "expect constant expression");
@@ -202,7 +200,6 @@ void CalcExpr<T>::Visit(const ConditionOpExpr& node) {
   } else if (cond_type->IsFloatPointTy()) {
     flag = CalcExpr<double>{}.Calc(node.cond_);
   } else if (cond_type->IsPointerTy()) {
-    // TODO 地址常量表达式
     Error(node.cond_,
           "not support pointer in consition op constant expression");
   } else {

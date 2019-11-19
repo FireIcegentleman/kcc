@@ -1234,25 +1234,6 @@ void Declaration::AddInits(const Initializers& inits) {
 
   std::sort(std::begin(inits_), std::end(inits_));
 
-  // 必须用常量表达式初始化
-  if (ident_->GetLinkage() != kNone) {
-    for (auto&& item : inits_.inits_) {
-      if (item.expr_->GetType()->IsIntegerTy()) {
-        auto val{CalcExpr<std::uint64_t>{}.Calc(item.expr_)};
-        item.expr_ = MakeNode<ConstantExpr>(item.expr_->GetLoc(),
-                                            item.expr_->GetType(), val);
-      } else if (item.expr_->GetType()->IsFloatPointTy()) {
-        auto val{CalcExpr<long double>{}.Calc(item.expr_)};
-        item.expr_ = MakeNode<ConstantExpr>(item.expr_->GetLoc(),
-                                            item.expr_->GetType(), val);
-      } else if (item.expr_->GetType()->IsAggregateTy()) {
-      } else if (item.expr_->GetType()->IsPointerTy()) {
-      } else {
-        assert(false);
-      }
-    }
-  }
-
   if (ident_->GetType()->IsScalarTy()) {
     assert(std::size(inits_) == 1);
     auto& init{*std::begin(inits_)};
@@ -1264,9 +1245,7 @@ void Declaration::AddInits(const Initializers& inits) {
 
     // TODO 柔性数组怎么实现???
     if ((last.offset_ + last.type_->GetWidth() >
-         ident_->GetType()->GetWidth()) &&
-        !(ident_->GetType()->IsStructTy() &&
-          ident_->GetType()->StructHasFlexibleArray())) {
+         ident_->GetType()->GetWidth())) {
       Error(loc_, "excess elements in array initializer");
     }
 

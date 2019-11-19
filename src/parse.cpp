@@ -2471,7 +2471,6 @@ void Parser::ParseStructInitializer(Initializers& inits, Type* type,
       return;
     }
 
-    // TODO ???
     if (!designated && !has_brace &&
         (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
       PutBack();
@@ -2770,7 +2769,6 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
           llvm::cast<llvm::ArrayType>(type->GetLLVMType()), val);
     }
 
-    // TODO ???
     if (!designated && !has_brace &&
         (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
       // put ',' back
@@ -2862,8 +2860,6 @@ llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
     type->SetComplete(true);
   }
 
-  // TODO 若数组大小已知, 则它可以比字符串字面量的大小少一,
-  // 此情况下空终止字符被忽略
   if (str_node->GetType()->ArrayGetNumElements() >
       type->ArrayGetNumElements()) {
     Error(str_node->GetLoc(),
@@ -2937,7 +2933,6 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
           llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
     }
 
-    // TODO ???
     if (!designated && !has_brace &&
         (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
       PutBack();

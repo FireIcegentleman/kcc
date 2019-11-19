@@ -1,10 +1,20 @@
 int printf(const char *s, ...);
 
 int main(void) {
-  int z = 0;
-  switch (7) {
-    if (1) case 5:
-      z += 2;
-  }
-  printf("%d\n", z);
+  struct {
+    union {
+      struct {
+        int x;
+        int y;
+      };
+      struct {
+        char c[8];
+      };
+    };
+  } v;
+  v.x = 1;
+  v.y = 7;
+
+  printf("%d\n", v.x);
+  printf("%d\n", v.y);
 }

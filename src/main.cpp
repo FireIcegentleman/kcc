@@ -271,9 +271,11 @@ void RunDev() {
   auto file{InputFilePaths.front()};
   Run(file);
 
-  std::string cmd{"lli " + GetFileName(file, ".ll")};
-  if (!CommandSuccess(std::system(cmd.c_str()))) {
-    Error("run fail");
+  if (!ParseOnly) {
+    std::string cmd{"lli " + GetFileName(file, ".ll")};
+    if (!CommandSuccess(std::system(cmd.c_str()))) {
+      Error("run fail");
+    }
   }
 
   PrintWarnings();

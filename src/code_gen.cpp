@@ -323,7 +323,6 @@ void CodeGen::Visit(const ConstantExpr& node) {
         Context, llvm::APInt(type->getIntegerBitWidth(), node.integer_val_,
                              !node.GetType()->IsUnsigned()));
   } else if (type->isFloatingPointTy()) {
-    // FIXME
     result_ = llvm::ConstantFP::get(type, node.float_point_val_);
   } else {
     assert(false);
@@ -1276,27 +1275,17 @@ llvm::Value* CodeGen::GetPtr(const AstNode& node) {
       auto obj{dynamic_cast<ObjectExpr*>(binary.rhs_)};
       assert(obj != nullptr);
 
-      if (binary.lhs_->GetType()->IsStructTy()) {
-        for (const auto& [type, index] : obj->GetIndexs()) {
+      auto indexs{obj->GetIndexs()};
+      for (const auto& [type, index] : indexs) {
+        if (type->IsStructTy()) {
           lhs_ptr = Builder.CreateStructGEP(lhs_ptr, index);
+        } else {
+          lhs_ptr = Builder.CreateBitCast(
+              lhs_ptr,
+              type->StructGetMemberType(index)->GetLLVMType()->getPointerTo());
         }
-
-        return lhs_ptr;
-      } else {
-        auto indexs{obj->GetIndexs()};
-        auto type{binary.lhs_->GetType()
-                      ->StructGetMemberType(indexs.front().second)
-                      ->GetLLVMType()
-                      ->getPointerTo()};
-        lhs_ptr = Builder.CreateBitCast(lhs_ptr, type);
-
-        for (auto iter{++std::begin(indexs)}; iter != std::end(indexs);
-             ++iter) {
-          lhs_ptr = Builder.CreateStructGEP(lhs_ptr, iter->second);
-        }
-
-        return lhs_ptr;
       }
+      return lhs_ptr;
     }
   }
 
