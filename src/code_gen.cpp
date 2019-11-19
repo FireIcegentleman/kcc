@@ -1682,10 +1682,23 @@ llvm::Value* CodeGen::VaArg(llvm::Value* ptr, llvm::Type* type) {
   auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
   auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
 
-  auto p{Builder.CreateStructGEP(ptr, 0)};
-  auto num{Builder.CreateAlignedLoad(p, 16)};
-  result_ = Builder.CreateICmpULE(
-      num, llvm::ConstantInt::get(Builder.getInt32Ty(), 40));
+  llvm::Value* p{};
+  llvm::Value* num{};
+
+  if (type->isIntegerTy() || type->isPointerTy()) {
+    p = Builder.CreateStructGEP(ptr, 0);
+    num = Builder.CreateAlignedLoad(p, 16);
+    result_ = Builder.CreateICmpULE(
+        num, llvm::ConstantInt::get(Builder.getInt32Ty(), 40));
+  } else if (type->isFloatingPointTy()) {
+    p = Builder.CreateStructGEP(ptr, 1);
+    num = Builder.CreateAlignedLoad(p, 16);
+    result_ = Builder.CreateICmpULE(
+        num, llvm::ConstantInt::get(Builder.getInt32Ty(), 160));
+  } else {
+    assert(false);
+  }
+
   Builder.CreateCondBr(result_, lhs_block, rhs_block);
 
   Builder.SetInsertPoint(lhs_block);

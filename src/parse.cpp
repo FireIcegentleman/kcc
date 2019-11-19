@@ -3067,7 +3067,7 @@ void Parser::AddBuiltin() {
                                                         arg, kExternal, false));
   curr_scope_->InsertNormal(
       "__builtin_va_copy",
-      MakeAstNode<IdentifierExpr>("__builtin_va_copy", end, kExternal, false));
+      MakeAstNode<IdentifierExpr>("__builtin_va_copy", copy, kExternal, false));
 }
 
 }  // namespace kcc
