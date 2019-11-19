@@ -1227,7 +1227,7 @@ Stmt* Parser::ParseLabelStmt() {
 
   TryParseAttributeSpec();
 
-  auto label{MakeAstNode<LabelStmt>(tok.GetIdentifier())};
+  auto label{MakeAstNode<LabelStmt>(tok.GetIdentifier(), ParseStmt())};
   labels_.push_back(label);
 
   return label;
@@ -1269,10 +1269,23 @@ Stmt* Parser::ParseCaseStmt() {
     }
 
     Expect(Tag::kColon);
-    return MakeAstNode<CaseStmt>(val, val2, ParseStmt());
+
+    auto stmt{CompoundStmt::Get()};
+    while (!Test(Tag::kCase) && !Test(Tag::kDefault) &&
+           !Test(Tag::kRightBrace)) {
+      stmt->AddStmt(ParseStmt());
+    }
+
+    return MakeAstNode<CaseStmt>(val, val2, stmt);
   } else {
     Expect(Tag::kColon);
-    return MakeAstNode<CaseStmt>(val, ParseStmt());
+
+    auto stmt{CompoundStmt::Get()};
+    while (!Test(Tag::kCase) && !Test(Tag::kDefault) &&
+           !Test(Tag::kRightBrace)) {
+      stmt->AddStmt(ParseStmt());
+    }
+    return MakeAstNode<CaseStmt>(val, stmt);
   }
 }
 

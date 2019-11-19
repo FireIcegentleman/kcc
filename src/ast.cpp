@@ -876,8 +876,8 @@ StmtExpr::StmtExpr(CompoundStmt* block) : block_{block} {}
 /*
  * LabelStmt
  */
-LabelStmt* LabelStmt::Get(const std::string& ident) {
-  return new (LabelStmtPool.Allocate()) LabelStmt{ident};
+LabelStmt* LabelStmt::Get(const std::string& ident, Stmt* stmt) {
+  return new (LabelStmtPool.Allocate()) LabelStmt{ident, stmt};
 }
 
 AstNodeType LabelStmt::Kind() const { return AstNodeType::kLabelStmt; }
@@ -888,17 +888,18 @@ void LabelStmt::SetHasGoto(bool has_goto) { has_goto_ = has_goto; }
 
 std::string LabelStmt::GetIdent() const { return ident_; }
 
-LabelStmt::LabelStmt(const std::string& ident) : ident_{ident} {}
+LabelStmt::LabelStmt(const std::string& ident, Stmt* stmt)
+    : stmt_{stmt}, ident_{ident} {}
 
 /*
  * CaseStmt
  */
-CaseStmt* CaseStmt::Get(std::int32_t case_value, Stmt* block) {
+CaseStmt* CaseStmt::Get(std::int32_t case_value, CompoundStmt* block) {
   return new (CaseStmtPool.Allocate()) CaseStmt{case_value, block};
 }
 
 CaseStmt* CaseStmt::Get(std::int32_t case_value, std::int32_t case_value2,
-                        Stmt* block) {
+                        CompoundStmt* block) {
   return new (CaseStmtPool.Allocate()) CaseStmt{case_value, case_value2, block};
 }
 
@@ -906,11 +907,11 @@ AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
 void CaseStmt::Check() {}
 
-CaseStmt::CaseStmt(std::int32_t case_value, Stmt* block)
+CaseStmt::CaseStmt(std::int32_t case_value, CompoundStmt* block)
     : case_value_{case_value}, block_{block} {}
 
 CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2,
-                   Stmt* block)
+                   CompoundStmt* block)
     : case_value_range_{case_value, case_value2},
       has_range_{true},
       block_{block} {}

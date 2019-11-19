@@ -469,20 +469,23 @@ class LabelStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  static LabelStmt* Get(const std::string& ident);
+  static LabelStmt* Get(const std::string& ident, Stmt* stmt);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
   void SetHasGoto(bool has_goto);
   std::string GetIdent() const;
+  void SetMove(bool flag) { has_to_move_ = flag; }
 
  private:
-  explicit LabelStmt(const std::string& ident);
+  explicit LabelStmt(const std::string& ident, Stmt* stmt);
 
+  Stmt* stmt_;
   std::string ident_;
   bool has_goto_{false};
   mutable llvm::BasicBlock* label_{};
+  bool has_to_move_{false};
 };
 
 class CaseStmt : public Stmt {
@@ -490,23 +493,23 @@ class CaseStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  static CaseStmt* Get(std::int32_t case_value, Stmt* block);
+  static CaseStmt* Get(std::int32_t case_value, CompoundStmt* block);
   static CaseStmt* Get(std::int32_t case_value, std::int32_t case_value2,
-                       Stmt* block);
+                       CompoundStmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  CaseStmt(std::int32_t case_value, Stmt* block);
-  CaseStmt(std::int32_t case_value, std::int32_t case_value2, Stmt* block);
+  CaseStmt(std::int32_t case_value, CompoundStmt* block);
+  CaseStmt(std::int32_t case_value, std::int32_t case_value2, CompoundStmt* block);
 
   std::int32_t case_value_{};
   std::pair<std::int32_t, std::int32_t> case_value_range_;
   bool has_range_{false};
 
-  Stmt* block_;
+  CompoundStmt* block_;
 };
 
 class DefaultStmt : public Stmt {

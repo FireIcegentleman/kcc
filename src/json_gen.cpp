@@ -211,6 +211,9 @@ void JsonGen::Visit(const LabelStmt& node) {
   name["name"] = QString::fromStdString("label: " + node.ident_);
   children.append(name);
 
+  node.stmt_->Accept(*this);
+  children.append(result_);
+
   root["children"] = children;
 
   result_ = root;
@@ -261,7 +264,9 @@ void JsonGen::Visit(const CompoundStmt& node) {
   QJsonArray children;
 
   for (const auto& item : node.stmts_) {
-    item->Accept(*this);
+    if (item) {
+      item->Accept(*this);
+    }
     children.append(result_);
   }
 
@@ -288,6 +293,10 @@ void JsonGen::Visit(const ExprStmt& node) {
 }
 
 void JsonGen::Visit(const IfStmt& node) {
+  if (!node.then_block_) {
+    return;
+  }
+
   QJsonObject root;
   root["name"] = node.KindStr();
 

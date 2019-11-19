@@ -142,9 +142,12 @@ class CodeGen : public Visitor {
   std::stack<llvm::BasicBlock *> switch_after_;
   bool case_has_break_{false};
 
-  std::vector<
-      std::tuple<llvm::BasicBlock *, llvm::BasicBlock::iterator, GotoStmt>>
-      unresolved_gotos_;
+  std::int32_t alloc_count_{};
+  std::vector<std::tuple<std::string, llvm::BasicBlock *, std::int32_t>>
+      goto_stmt_;
+  std::vector<LabelStmt> labels_;
+
+  std::map<llvm::BasicBlock *, std::int32_t> fuck_;
 };
 
 }  // namespace kcc

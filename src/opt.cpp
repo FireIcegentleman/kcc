@@ -104,10 +104,6 @@ void Optimization(OptLevel opt_level) {
     llvm::initializeWriteBitcodePassPass(registry);
     llvm::initializeHardwareLoopsPass(registry);
 
-    if (llvm::verifyModule(*Module, &llvm::errs())) {
-      Error("input module is broken");
-    }
-
     llvm::legacy::PassManager passes;
 
     llvm::TargetLibraryInfoImpl tlti(llvm::Triple{Module->getTargetTriple()});

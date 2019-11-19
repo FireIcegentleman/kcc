@@ -58,6 +58,10 @@ CodeGen::CodeGen(const std::string&) {
 void CodeGen::GenCode(const TranslationUnit* root) {
   root->Accept(*this);
 
+  //  if (llvm::verifyModule(*Module, &llvm::errs())) {
+  //    Error("module is broken");
+  //  }
+
   assert(std::size(continue_stack_) == 0);
   assert(std::size(break_stack_) == 0);
   assert(std::size(has_br_or_return_) == 0);
@@ -437,16 +441,21 @@ void CodeGen::Visit(const ObjectExpr& node) {
 void CodeGen::Visit(const StmtExpr& node) { node.block_->Accept(*this); }
 
 void CodeGen::Visit(const LabelStmt& node) {
-  if (node.has_goto_) {
-    auto bb{llvm::BasicBlock::Create(Context, "",
-                                     Builder.GetInsertBlock()->getParent())};
-    node.label_ = bb;
-
-    if (!HasBrOrReturn()) {
-      Builder.CreateBr(bb);
-    }
-    Builder.SetInsertPoint(bb);
+  if (!node.has_goto_) {
+    node.stmt_->Accept(*this);
+    return;
   }
+
+  node.label_ = llvm::BasicBlock::Create(Context, "",
+                                         Builder.GetInsertBlock()->getParent());
+  if (!HasBrOrReturn()) {
+    Builder.CreateBr(node.label_);
+  }
+  Builder.SetInsertPoint(node.label_);
+  labels_.push_back(node);
+
+  has_br_or_return_.top().first = false;
+  node.stmt_->Accept(*this);
 }
 
 void CodeGen::Visit(const CaseStmt& node) {
@@ -495,7 +504,9 @@ void CodeGen::Visit(const DefaultStmt& node) {
 
 void CodeGen::Visit(const CompoundStmt& node) {
   for (auto& item : node.stmts_) {
-    item->Accept(*this);
+    if (item) {
+      item->Accept(*this);
+    }
   }
 }
 
@@ -506,6 +517,10 @@ void CodeGen::Visit(const ExprStmt& node) {
 }
 
 void CodeGen::Visit(const IfStmt& node) {
+  if (!node.then_block_) {
+    return;
+  }
+
   auto parent_func{Builder.GetInsertBlock()->getParent()};
   auto then_block{llvm::BasicBlock::Create(Context, "", parent_func)};
   llvm::BasicBlock* else_block{};
@@ -680,14 +695,15 @@ void CodeGen::Visit(const ForStmt& node) {
 void CodeGen::Visit(const GotoStmt& node) {
   assert(node.label_->has_goto_);
 
-  has_br_or_return_.top().first = true;
-
-  if (node.label_->label_) {
-    Builder.CreateBr(node.label_->label_);
+  if (!node.label_->label_) {
+    goto_stmt_.push_back(
+        {node.GetName(), Builder.GetInsertBlock(),
+         Builder.GetInsertBlock()->getInstList().size() - alloc_count_});
   } else {
-    unresolved_gotos_.push_back(std::make_tuple(
-        Builder.GetInsertBlock(), Builder.GetInsertPoint(), node));
+    Builder.CreateBr(node.label_->label_);
   }
+
+  has_br_or_return_.top().first = true;
 }
 
 void CodeGen::Visit(const ContinueStmt&) {
@@ -800,12 +816,23 @@ void CodeGen::Visit(const FuncDef& node) {
   }
   ExitFunc();
 
-  for (const auto& [block, iter, stmt] : unresolved_gotos_) {
-    assert(stmt.label_->label_ != nullptr);
-    Builder.SetInsertPoint(block, iter);
-    Builder.CreateBr(stmt.label_->label_);
+  for (const auto& [name, bb, size] : goto_stmt_) {
+    Builder.SetInsertPoint(bb);
+    for (std::size_t i{};
+         i < bb->getInstList().size() - alloc_count_ - size + 1 &&
+         !bb->getInstList().empty();
+         ++i) {
+      bb->getInstList().back().eraseFromParent();
+    }
+    for (const auto& item : labels_) {
+      if (name == item.GetIdent()) {
+        Builder.CreateBr(item.label_);
+        break;
+      }
+    }
   }
-  unresolved_gotos_.clear();
+  alloc_count_ = 0;
+  goto_stmt_.clear();
 
   // 验证生成的代码, 检查一致性
   llvm::verifyFunction(*func);
@@ -818,6 +845,7 @@ llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Function* parent,
                          parent->getEntryBlock().begin()};
   auto ptr{temp.CreateAlloca(type, nullptr)};
   ptr->setAlignment(align);
+  ++alloc_count_;
 
   return ptr;
 }
