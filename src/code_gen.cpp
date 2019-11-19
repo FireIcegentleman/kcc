@@ -499,10 +499,6 @@ void CodeGen::Visit(const DefaultStmt& node) {
   Builder.SetInsertPoint(default_block);
   has_br_or_return_.push({false, false});
   node.block_->Accept(*this);
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(switch_after_.top());
-  }
-  has_br_or_return_.pop();
 }
 
 void CodeGen::Visit(const CompoundStmt& node) {
@@ -581,11 +577,17 @@ void CodeGen::Visit(const SwitchStmt& node) {
 
   PushBlock(nullptr, after_block);
   node.block_->Accept(*this);
-  PopBlock();
 
   if (!case_has_break_ && !node.has_default_) {
     Builder.CreateBr(default_block);
+  } else if (node.has_default_) {
+    if (!HasBrOrReturn()) {
+      Builder.CreateBr(after_block);
+    }
+    has_br_or_return_.pop();
   }
+
+  PopBlock();
 
   switch_insts_.pop();
   switch_after_.pop();
@@ -726,7 +728,10 @@ void CodeGen::Visit(const BreakStmt&) {
 
 void CodeGen::Visit(const ReturnStmt& node) {
   if (node.expr_) {
+    auto back{load_};
+    load_ = true;
     node.expr_->Accept(*this);
+    load_ = back;
     Builder.CreateRet(result_);
   } else {
     Builder.CreateRetVoid();

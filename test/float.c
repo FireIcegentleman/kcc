@@ -64,7 +64,7 @@ void std() {
     expect_string("18", fmtint(LDBL_DIG));
     expect_string("0x8p-66", fmtldbl(LDBL_EPSILON));
     expect_string("64", fmtint(LDBL_MANT_DIG));
-    // FIXME
+    // TODO
     //expect_string("0xf.fffffffffffffffp+16380", fmtldbl(LDBL_MAX));
     expect_string("4932", fmtint(LDBL_MAX_10_EXP));
     expect_string("16384", fmtint(LDBL_MAX_EXP));
