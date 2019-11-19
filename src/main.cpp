@@ -33,6 +33,7 @@ void RunKcc(const std::string &file_name);
 #ifdef DEV
 void RunTest();
 void RunDev();
+void Run8cc();
 #endif
 
 int main(int argc, char *argv[]) try {
@@ -47,6 +48,9 @@ int main(int argc, char *argv[]) try {
     return EXIT_SUCCESS;
   } else if (DevMode) {
     RunDev();
+    return EXIT_SUCCESS;
+  } else if (Test8cc) {
+    Run8cc();
     return EXIT_SUCCESS;
   }
 #endif
@@ -271,13 +275,19 @@ void RunDev() {
   auto file{InputFilePaths.front()};
   Run(file);
 
-  //  if (!ParseOnly) {
-  //    std::string cmd{"lli " + GetFileName(file, ".ll")};
-  //    if (!CommandSuccess(std::system(cmd.c_str()))) {
-  //      Error("run fail");
-  //    }
-  //  }
+  if (!ParseOnly) {
+    std::string cmd{"lli " + GetFileName(file, ".ll")};
+    if (!CommandSuccess(std::system(cmd.c_str()))) {
+      Error("run fail");
+    }
+  }
 
   PrintWarnings();
+}
+
+void Run8cc() {
+  for (const auto &file : InputFilePaths) {
+    Run(file);
+  }
 }
 #endif

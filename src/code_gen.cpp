@@ -482,7 +482,7 @@ void CodeGen::Visit(const CaseStmt& node) {
   }
 
   Builder.SetInsertPoint(case_block);
-  PushBlock(nullptr, nullptr);
+  PushBlock(nullptr, switch_after_.top());
   node.block_->Accept(*this);
 }
 

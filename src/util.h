@@ -96,6 +96,9 @@ inline llvm::cl::opt<bool> TestMode{"test", llvm::cl::desc{"Test Mode"},
 inline llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
                                    llvm::cl::cat{Category}};
 
+inline llvm::cl::opt<bool> Test8cc{"8cc", llvm::cl::desc{"Test 8cc"},
+                                   llvm::cl::cat{Category}};
+
 inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
                                      llvm::cl::cat{Category}};
 
