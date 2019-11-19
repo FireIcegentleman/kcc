@@ -1270,22 +1270,10 @@ Stmt* Parser::ParseCaseStmt() {
 
     Expect(Tag::kColon);
 
-    auto stmt{CompoundStmt::Get()};
-    while (!Test(Tag::kCase) && !Test(Tag::kDefault) &&
-           !Test(Tag::kRightBrace)) {
-      stmt->AddStmt(ParseStmt());
-    }
-
-    return MakeAstNode<CaseStmt>(val, val2, stmt);
+    return MakeAstNode<CaseStmt>(val, val2, ParseStmt());
   } else {
     Expect(Tag::kColon);
-
-    auto stmt{CompoundStmt::Get()};
-    while (!Test(Tag::kCase) && !Test(Tag::kDefault) &&
-           !Test(Tag::kRightBrace)) {
-      stmt->AddStmt(ParseStmt());
-    }
-    return MakeAstNode<CaseStmt>(val, stmt);
+    return MakeAstNode<CaseStmt>(val, ParseStmt());
   }
 }
 

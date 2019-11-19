@@ -493,23 +493,23 @@ class CaseStmt : public Stmt {
   friend class CodeGen;
 
  public:
-  static CaseStmt* Get(std::int32_t case_value, CompoundStmt* block);
+  static CaseStmt* Get(std::int32_t case_value, Stmt* block);
   static CaseStmt* Get(std::int32_t case_value, std::int32_t case_value2,
-                       CompoundStmt* block);
+                       Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
  private:
-  CaseStmt(std::int32_t case_value, CompoundStmt* block);
-  CaseStmt(std::int32_t case_value, std::int32_t case_value2, CompoundStmt* block);
+  CaseStmt(std::int32_t case_value, Stmt* block);
+  CaseStmt(std::int32_t case_value, std::int32_t case_value2, Stmt* block);
 
   std::int32_t case_value_{};
   std::pair<std::int32_t, std::int32_t> case_value_range_;
   bool has_range_{false};
 
-  CompoundStmt* block_;
+  Stmt* block_;
 };
 
 class DefaultStmt : public Stmt {

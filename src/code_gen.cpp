@@ -517,10 +517,6 @@ void CodeGen::Visit(const ExprStmt& node) {
 }
 
 void CodeGen::Visit(const IfStmt& node) {
-  if (!node.then_block_) {
-    return;
-  }
-
   auto parent_func{Builder.GetInsertBlock()->getParent()};
   auto then_block{llvm::BasicBlock::Create(Context, "", parent_func)};
   llvm::BasicBlock* else_block{};

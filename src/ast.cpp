@@ -894,12 +894,12 @@ LabelStmt::LabelStmt(const std::string& ident, Stmt* stmt)
 /*
  * CaseStmt
  */
-CaseStmt* CaseStmt::Get(std::int32_t case_value, CompoundStmt* block) {
+CaseStmt* CaseStmt::Get(std::int32_t case_value, Stmt* block) {
   return new (CaseStmtPool.Allocate()) CaseStmt{case_value, block};
 }
 
 CaseStmt* CaseStmt::Get(std::int32_t case_value, std::int32_t case_value2,
-                        CompoundStmt* block) {
+                        Stmt* block) {
   return new (CaseStmtPool.Allocate()) CaseStmt{case_value, case_value2, block};
 }
 
@@ -907,11 +907,11 @@ AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
 void CaseStmt::Check() {}
 
-CaseStmt::CaseStmt(std::int32_t case_value, CompoundStmt* block)
+CaseStmt::CaseStmt(std::int32_t case_value, Stmt* block)
     : case_value_{case_value}, block_{block} {}
 
 CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2,
-                   CompoundStmt* block)
+                   Stmt* block)
     : case_value_range_{case_value, case_value2},
       has_range_{true},
       block_{block} {}
