@@ -58,11 +58,13 @@ CodeGen::CodeGen(const std::string&) {
 void CodeGen::GenCode(const TranslationUnit* root) {
   root->Accept(*this);
 
-#ifndef DEV
   if (llvm::verifyModule(*Module, &llvm::errs())) {
+#ifdef DEV
+    Warning("module is broken");
+#else
     Error("module is broken");
-  }
 #endif
+  }
 
   assert(std::size(continue_stack_) == 0);
   assert(std::size(break_stack_) == 0);
@@ -371,7 +373,7 @@ void CodeGen::Visit(const StringLiteralExpr& node) {
       assert(false);
   }
 
-  if (auto iter{strings_.find(arr)}; iter != std::end(strings_)) {
+  if (auto iter{Strings.find(arr)}; iter != std::end(Strings)) {
     result_ = iter->second;
     return;
   }
@@ -382,12 +384,12 @@ void CodeGen::Visit(const StringLiteralExpr& node) {
   global_var->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   global_var->setAlignment(width);
 
-  auto zero{llvm::ConstantInt::get(llvm::Type::getInt64Ty(Context), 0)};
+  auto zero{llvm::ConstantInt::get(llvm::Type::getInt32Ty(Context), 0)};
   auto ptr{llvm::ConstantExpr::getInBoundsGetElementPtr(
       global_var->getValueType(), global_var,
       llvm::ArrayRef<llvm::Constant*>{zero, zero})};
 
-  strings_[arr] = ptr;
+  Strings[arr] = ptr;
   result_ = ptr;
 }
 
@@ -984,12 +986,10 @@ llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
   } else if (IsIntegerTy(value) && to->isPointerTy()) {
     return Builder.CreateIntToPtr(value, to);
   } else if (to->isVoidTy() || value->getType() == to) {
-    // TODO 这里直接 == 可以吗
     return value;
   } else if (IsArrCastToPtr(value, to)) {
-    return llvm::GetElementPtrInst::CreateInBounds(
-        value, {Builder.getInt64(0), Builder.getInt64(0)}, "",
-        Builder.GetInsertBlock());
+    return Builder.CreateInBoundsGEP(
+        value, {Builder.getInt64(0), Builder.getInt64(0)});
   } else if (IsPointerTy(value) && to->isPointerTy()) {
     return Builder.CreatePointerCast(value, to);
   } else {

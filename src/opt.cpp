@@ -14,13 +14,11 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/InitializePasses.h>
 #include <llvm/PassRegistry.h>
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
-#include "error.h"
 #include "util.h"
 
 namespace kcc {

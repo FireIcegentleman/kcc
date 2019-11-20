@@ -130,8 +130,6 @@ class CodeGen : public Visitor {
   std::stack<llvm::BasicBlock *> break_stack_;
   std::stack<std::pair<bool, bool>> has_br_or_return_;
 
-  std::map<llvm::Constant *, llvm::Constant *> strings_;
-
   llvm::Function *va_start_{};
   llvm::Function *va_end_{};
   llvm::Function *va_copy_{};

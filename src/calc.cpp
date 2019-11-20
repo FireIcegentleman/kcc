@@ -224,17 +224,25 @@ void ConstantInitExpr::Visit(const StringLiteralExpr& node) {
       assert(false);
   }
 
+  if (auto iter{Strings.find(arr)}; iter != std::end(Strings)) {
+    val_ = iter->second;
+    return;
+  }
+
   auto global_var{new llvm::GlobalVariable(*Module, arr->getType(), true,
                                            llvm::GlobalValue::PrivateLinkage,
                                            arr, ".str")};
   global_var->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   global_var->setAlignment(width);
 
-  auto zero{llvm::ConstantInt::get(llvm::Type::getInt64Ty(Context), 0)};
+  auto zero{llvm::ConstantInt::get(llvm::Type::getInt32Ty(Context), 0)};
 
-  val_ = llvm::ConstantExpr::getInBoundsGetElementPtr(
+  auto ptr{llvm::ConstantExpr::getInBoundsGetElementPtr(
       global_var->getValueType(), global_var,
-      llvm::ArrayRef<llvm::Constant*>{zero, zero});
+      llvm::ArrayRef<llvm::Constant*>{zero, zero})};
+
+  Strings[arr] = ptr;
+  val_ = ptr;
 }
 
 void ConstantInitExpr::Visit(const FuncCallExpr& node) {
@@ -325,7 +333,7 @@ llvm::Constant* ConstantCastTo(llvm::Constant* value, llvm::Type* to,
   } else if (to->isVoidTy() || value->getType() == to) {
     return value;
   } else if (IsArrCastToPtr(value, to)) {
-    auto zero{llvm::ConstantInt::get(Builder.getInt32Ty(), 0)};
+    auto zero{llvm::ConstantInt::get(Builder.getInt64Ty(), 0)};
     return llvm::ConstantExpr::getInBoundsGetElementPtr(
         nullptr, value, llvm::ArrayRef<llvm::Constant*>{zero, zero});
   } else if (IsPointerTy(value) && to->isPointerTy()) {

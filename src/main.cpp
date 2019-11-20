@@ -275,7 +275,23 @@ void RunDev() {
   Run(file);
 
   if (!ParseOnly) {
-    std::string cmd{"lli " + GetFileName(file, ".ll")};
+    std::cout << "link\n";
+
+    if (!Link({GetFileName(file, ".o")}, OptimizationLevel,
+              GetFileName(file, ".out"))) {
+      Error("link fail");
+    }
+    EnsureFileExists(GetFileName(file, ".out"));
+
+    std::string cmd{"./" + GetFileName(file, ".out")};
+    if (!CommandSuccess(std::system(cmd.c_str()))) {
+      Error("run fail");
+    }
+
+    std::cout << "-----------------------------\n";
+
+    std::cout << "lli\n";
+    cmd = "lli " + GetFileName(file, ".ll");
     if (!CommandSuccess(std::system(cmd.c_str()))) {
       Error("run fail");
     }

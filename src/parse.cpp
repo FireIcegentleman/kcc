@@ -2781,8 +2781,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
   auto has_brace{Try(Tag::kLeftBrace)};
   auto size{type->ArrayGetNumElements()};
   std::vector<llvm::Constant*> val(
-      size,
-      llvm::Constant::getNullValue(type->ArrayGetElementType()->GetLLVMType()));
+      size, GetConstantZero(type->ArrayGetElementType()->GetLLVMType()));
 
   while (true) {
     if (Test(Tag::kRightBrace)) {
