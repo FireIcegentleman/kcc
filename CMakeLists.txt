@@ -8,11 +8,11 @@ project(
 file(GLOB cppsrc src/*.h src/*.cpp)
 file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
 
-if(CMAKE_BUILD_TYPE MATCHES "Release")
+if(NOT (CMAKE_BUILD_TYPE MATCHES "Debug"))
   set(sanitizer "None")
 else()
   # Address Thread Undefined None
-  set(sanitizer "None")
+  set(sanitizer "Undefined")
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -30,11 +30,15 @@ find_package(Boost REQUIRED COMPONENTS locale)
 
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(-DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
-                ${LLVM_DEFINITIONS} -DDEV)
+                ${LLVM_DEFINITIONS})
 
 add_executable(${PROJECT_NAME} ${cppsrc})
 
-include(format)
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+  add_definitions(-DDEV)
+  message(STATUS "cmake-format found")
+  include(format)
+endif()
 
 target_link_libraries(
   ${PROJECT_NAME}

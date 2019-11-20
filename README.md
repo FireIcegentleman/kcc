@@ -1,14 +1,51 @@
 # kcc
-A tiny C compiler
 
-# Prerequisites
+A small C11 compiler
+
+# Quick Start
+
+#### Environment:
+
 * Linux
-* gcc
-* Boost
+* gcc 9.2(For header files and link libraries)
+* gcc/clang(Request to support C++17)
+
+#### Libraries:
+
 * fmt
-* Qt
 * LLVM
 * clang
+* lld
+* Qt
+* Boost
+
+#### Build
+
+```bash
+mkdir build && cd build
+cmake ..
+make -j8
+```
+
+#### Install
+
+```bash
+make install
+```
+
+#### Uninstall
+
+```bash
+make uninstall
+```
+
+#### Use
+
+Same as gcc/clang, but only a few common command line arguments are implemented
+
+```bash
+kcc test.c -O3 -o test
+```
 
 # Reference
 * Library

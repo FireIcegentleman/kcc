@@ -10,6 +10,6 @@ else()
   add_link_options(-fuse-ld=lld)
 endif()
 
-if(CMAKE_BUILD_TYPE MATCHES "Release")
+if(NOT (CMAKE_BUILD_TYPE MATCHES "Debug"))
   append("-flto" CMAKE_CXX_FLAGS)
 endif()

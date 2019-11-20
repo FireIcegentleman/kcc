@@ -14,10 +14,7 @@
 #include "encoding.h"
 #include "error.h"
 #include "lex.h"
-
-#ifdef DEV
 #include "util.h"
-#endif
 
 namespace kcc {
 
