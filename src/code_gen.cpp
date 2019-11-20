@@ -4,14 +4,11 @@
 
 #include "code_gen.h"
 
-#include <cassert>
-#include <memory>
-#include <vector>
-
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/Optional.h>
 #include <llvm/IR/Attributes.h>
+#include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/IRBuilder.h>
@@ -24,6 +21,10 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
+
+#include <cassert>
+#include <memory>
+#include <vector>
 
 #include "error.h"
 #include "util.h"
@@ -65,12 +66,6 @@ void CodeGen::GenCode(const TranslationUnit* root) {
     Error("module is broken");
 #endif
   }
-
-  assert(std::size(continue_stack_) == 0);
-  assert(std::size(break_stack_) == 0);
-  assert(std::size(has_br_or_return_) == 0);
-  assert(std::size(switch_insts_) == 0);
-  assert(std::size(switch_after_) == 0);
 }
 
 /*
@@ -253,48 +248,32 @@ void CodeGen::Visit(const BinaryOpExpr& node) {
 }
 
 void CodeGen::Visit(const ConditionOpExpr& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto lhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  TestAndClearIgnoreResultAssign();
 
-  node.cond_->Accept(*this);
-  result_ = CastToBool(result_);
-  auto cond{result_};
-  Builder.CreateCondBr(cond, lhs_block, rhs_block);
+  auto lhs_block{CreateBasicBlock("cond.true")};
+  auto rhs_block{CreateBasicBlock("cond.false")};
+  auto end_block{CreateBasicBlock("cond.end")};
 
-  Builder.SetInsertPoint(lhs_block);
+  EmitBranchOnBoolExpr(node.cond_, lhs_block, rhs_block);
 
-  last_ = nullptr;
+  EmitBlock(lhs_block);
   node.lhs_->Accept(*this);
-  lhs_block = last_ == nullptr ? lhs_block : last_;
-  last_ = nullptr;
+  auto lhs{result_};
+  lhs_block = Builder.GetInsertBlock();
+  EmitBranch(end_block);
 
-  auto lhs_value{result_};
-  Builder.CreateBr(after_block);
-
-  Builder.SetInsertPoint(rhs_block);
-
-  last_ = nullptr;
+  EmitBlock(rhs_block);
   node.rhs_->Accept(*this);
-  rhs_block = last_ == nullptr ? rhs_block : last_;
-  last_ = nullptr;
+  auto rhs{result_};
+  rhs_block = Builder.GetInsertBlock();
+  EmitBranch(end_block);
 
-  auto rhs_value{result_};
-  Builder.CreateBr(after_block);
+  EmitBlock(end_block);
+  auto phi{Builder.CreatePHI(lhs->getType(), 2)};
+  phi->addIncoming(lhs, lhs_block);
+  phi->addIncoming(rhs, rhs_block);
 
-  Builder.SetInsertPoint(after_block);
-  last_ = after_block;
-
-  if (lhs_value->getType()->isVoidTy() || rhs_value->getType()->isVoidTy()) {
-    return;
-  } else {
-    auto phi{Builder.CreatePHI(lhs_value->getType(), 2)};
-    phi->addIncoming(lhs_value, lhs_block);
-    phi->addIncoming(rhs_value, rhs_block);
-
-    result_ = phi;
-  }
+  result_ = phi;
 }
 
 // LLVM 默认使用本机 C 调用约定
@@ -444,70 +423,40 @@ void CodeGen::Visit(const ObjectExpr& node) {
 void CodeGen::Visit(const StmtExpr& node) { node.block_->Accept(*this); }
 
 void CodeGen::Visit(const LabelStmt& node) {
-  if (!node.has_goto_) {
-    node.stmt_->Accept(*this);
-    return;
-  }
-
-  node.label_ = llvm::BasicBlock::Create(Context, "",
-                                         Builder.GetInsertBlock()->getParent());
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(node.label_);
-  }
-  Builder.SetInsertPoint(node.label_);
-  labels_.push_back(node);
-
-  has_br_or_return_.top().first = false;
-  node.stmt_->Accept(*this);
+  EmitBlock(GetBasicBlockForLabel(&node));
+  EmitStmt(node.stmt_);
 }
 
 void CodeGen::Visit(const CaseStmt& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto case_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto inst{switch_insts_.top()};
-  bool first{inst->getNumCases() == 0};
-
-  if (!first && !case_has_break_ && !HasBrOrReturn()) {
-    Builder.CreateBr(case_block);
-  }
-  PopBlock();
-  case_has_break_ = false;
+  auto block{CreateBasicBlock("switch.case")};
+  EmitBlock(block);
+  std::int32_t begin, end;
 
   if (node.has_range_) {
-    for (auto i{node.case_value_range_.first};
-         i <= node.case_value_range_.second; ++i) {
-      inst->addCase(llvm::ConstantInt::get(Builder.getInt32Ty(), i),
-                    case_block);
-    }
+    begin = node.case_value_range_.first;
+    end = node.case_value_range_.second;
   } else {
-    inst->addCase(
-        llvm::ConstantInt::get(Builder.getInt32Ty(), node.case_value_),
-        case_block);
+    begin = node.case_value_;
+    end = begin;
   }
 
-  Builder.SetInsertPoint(case_block);
-  PushBlock(nullptr, switch_after_.top());
-  node.block_->Accept(*this);
+  for (std::int32_t i{begin}; i <= end; ++i) {
+    switch_inst_->addCase(llvm::ConstantInt::get(Builder.getInt32Ty(), i),
+                          block);
+  }
+
+  EmitStmt(node.block_);
 }
 
 void CodeGen::Visit(const DefaultStmt& node) {
-  auto inst{switch_insts_.top()};
-  auto default_block{inst->getDefaultDest()};
-
-  if (!case_has_break_) {
-    Builder.CreateBr(default_block);
-  }
-
-  Builder.SetInsertPoint(default_block);
-  has_br_or_return_.push({false, false});
-  node.block_->Accept(*this);
+  auto default_block{switch_inst_->getDefaultDest()};
+  EmitBlock(default_block);
+  EmitStmt(node.block_);
 }
 
 void CodeGen::Visit(const CompoundStmt& node) {
   for (auto& item : node.stmts_) {
-    if (item) {
-      item->Accept(*this);
-    }
+    EmitStmt(item);
   }
 }
 
@@ -518,43 +467,27 @@ void CodeGen::Visit(const ExprStmt& node) {
 }
 
 void CodeGen::Visit(const IfStmt& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto then_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  llvm::BasicBlock* else_block{};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-
-  node.cond_->Accept(*this);
-  result_ = CastToBool(result_);
+  auto then_block{CreateBasicBlock("if.then")};
+  auto end_block{CreateBasicBlock("if.end")};
+  auto else_block{end_block};
 
   if (node.else_block_) {
-    else_block = llvm::BasicBlock::Create(Context, "", parent_func);
-    Builder.CreateCondBr(result_, then_block, else_block);
-  } else {
-    Builder.CreateCondBr(result_, then_block, after_block);
+    else_block = CreateBasicBlock("if.else");
   }
 
-  Builder.SetInsertPoint(then_block);
+  EmitBranchOnBoolExpr(node.cond_, then_block, else_block);
 
-  has_br_or_return_.push({false, false});
-  node.then_block_->Accept(*this);
-  // 注意如果已经有一个无条件跳转指令了, 则不能再有一个
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(after_block);
-  }
-  has_br_or_return_.pop();
+  EmitBlock(then_block);
+  EmitStmt(node.then_block_);
+  EmitBranch(end_block);
 
   if (node.else_block_) {
-    Builder.SetInsertPoint(else_block);
-
-    has_br_or_return_.push({false, false});
-    node.else_block_->Accept(*this);
-    if (!HasBrOrReturn()) {
-      Builder.CreateBr(after_block);
-    }
-    has_br_or_return_.pop();
+    EmitBlock(else_block);
+    EmitStmt(node.else_block_);
+    EmitBranch(end_block);
   }
 
-  Builder.SetInsertPoint(after_block);
+  EmitBlock(end_block, true);
 }
 
 void CodeGen::Visit(const SwitchStmt& node) {
@@ -562,169 +495,138 @@ void CodeGen::Visit(const SwitchStmt& node) {
     return;
   }
 
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  llvm::BasicBlock* default_block{nullptr};
-
-  if (node.has_default_) {
-    default_block = llvm::BasicBlock::Create(Context, "", parent_func);
-  } else {
-    default_block = after_block;
-  }
-
   node.cond_->Accept(*this);
-  auto inst{Builder.CreateSwitch(result_, default_block)};
-  switch_insts_.push(inst);
-  switch_after_.push(after_block);
+  auto cond_val{result_};
 
-  PushBlock(nullptr, after_block);
-  node.block_->Accept(*this);
+  auto switch_inst_backup{switch_inst_};
 
-  if (!case_has_break_ && !node.has_default_) {
-    Builder.CreateBr(default_block);
-  } else if (node.has_default_) {
-    if (!HasBrOrReturn()) {
-      Builder.CreateBr(after_block);
-    }
-    has_br_or_return_.pop();
+  auto default_block{CreateBasicBlock("switch.default")};
+  auto end_block{CreateBasicBlock("switch.end")};
+  switch_inst_ = Builder.CreateSwitch(cond_val, default_block);
+
+  llvm::BasicBlock* continue_block{};
+  if (!std::empty(break_continue_stack_)) {
+    continue_block = break_continue_stack_.back().continue_block;
+  }
+  break_continue_stack_.push_back({end_block, continue_block});
+  EmitStmt(node.block_);
+  break_continue_stack_.pop_back();
+
+  if (!default_block->getParent()) {
+    default_block->replaceAllUsesWith(end_block);
+    delete default_block;
   }
 
-  PopBlock();
+  EmitBlock(end_block, true);
 
-  switch_insts_.pop();
-  switch_after_.pop();
-
-  Builder.SetInsertPoint(after_block);
+  switch_inst_ = switch_inst_backup;
 }
 
 void CodeGen::Visit(const WhileStmt& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto cond_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto loop_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto cond_block{CreateBasicBlock("while.cond")};
+  EmitBlock(cond_block);
 
-  Builder.CreateBr(cond_block);
+  auto end_block{CreateBasicBlock("while.end")};
+  auto body_block{CreateBasicBlock("while.body")};
 
-  Builder.SetInsertPoint(cond_block);
-  node.cond_->Accept(*this);
-  result_ = CastToBool(result_);
-  Builder.CreateCondBr(result_, loop_block, after_block);
+  break_continue_stack_.push_back({end_block, cond_block});
 
-  Builder.SetInsertPoint(loop_block);
+  auto cond_val{EvaluateExprAsBool(node.cond_)};
+  Builder.CreateCondBr(cond_val, body_block, end_block);
 
-  PushBlock(cond_block, after_block);
-  node.block_->Accept(*this);
+  EmitBlock(body_block);
+  EmitStmt(node.block_);
+  break_continue_stack_.pop_back();
 
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(cond_block);
-  }
-  PopBlock();
-
-  Builder.SetInsertPoint(after_block);
+  EmitBranch(cond_block);
+  EmitBlock(end_block, true);
 }
 
 void CodeGen::Visit(const DoWhileStmt& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto loop_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto cond_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto body_block{CreateBasicBlock("do.while.body")};
+  auto cond_block{CreateBasicBlock("do.while.cond")};
+  auto end_block{CreateBasicBlock("do.while.end")};
 
-  Builder.CreateBr(loop_block);
+  EmitBlock(body_block);
+  break_continue_stack_.push_back({end_block, cond_block});
+  EmitStmt(node.block_);
+  break_continue_stack_.pop_back();
 
-  Builder.SetInsertPoint(loop_block);
-  PushBlock(cond_block, after_block);
+  EmitBlock(cond_block);
+  auto cond_val{EvaluateExprAsBool(node.cond_)};
+  Builder.CreateCondBr(cond_val, body_block, end_block);
 
-  node.block_->Accept(*this);
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(cond_block);
-  }
-
-  PopBlock();
-
-  Builder.SetInsertPoint(cond_block);
-  node.cond_->Accept(*this);
-  result_ = CastToBool(result_);
-  Builder.CreateCondBr(result_, loop_block, after_block);
-
-  Builder.SetInsertPoint(after_block);
+  EmitBlock(end_block);
 }
 
 void CodeGen::Visit(const ForStmt& node) {
   if (node.init_) {
     node.init_->Accept(*this);
   } else if (node.decl_) {
-    node.decl_->Accept(*this);
+    EmitStmt(node.decl_);
   }
 
-  if (!node.inc_ && !node.cond_) {
-    VisitForNoIncCond(node);
-  } else if (!node.inc_ && node.cond_) {
-    VisitForNoInc(node);
-  } else if (node.inc_ && !node.cond_) {
-    VisitForNoCond(node);
+  auto cond_block{CreateBasicBlock("for.cond")};
+  auto end_block{CreateBasicBlock("for.end")};
+
+  EmitBlock(cond_block);
+
+  if (node.cond_) {
+    auto body_block{CreateBasicBlock("for.body")};
+    EmitBranchOnBoolExpr(node.cond_, body_block, end_block);
+    EmitBlock(body_block);
+  }
+
+  llvm::BasicBlock* continue_block;
+  if (node.inc_) {
+    continue_block = CreateBasicBlock("for.inc");
   } else {
-    auto parent_func{Builder.GetInsertBlock()->getParent()};
-    auto cond_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-    auto loop_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-    auto inc_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-    auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-
-    Builder.CreateBr(cond_block);
-    Builder.SetInsertPoint(cond_block);
-
-    node.cond_->Accept(*this);
-    result_ = CastToBool(result_);
-    Builder.CreateCondBr(result_, loop_block, after_block);
-
-    Builder.SetInsertPoint(loop_block);
-
-    PushBlock(inc_block, after_block);
-    node.block_->Accept(*this);
-
-    Builder.CreateBr(inc_block);
-
-    Builder.SetInsertPoint(inc_block);
-
-    node.inc_->Accept(*this);
-    if (!HasBrOrReturn()) {
-      Builder.CreateBr(cond_block);
-    }
-    PopBlock();
-
-    Builder.SetInsertPoint(after_block);
+    continue_block = cond_block;
   }
+
+  break_continue_stack_.push_back({end_block, continue_block});
+  EmitStmt(node.block_);
+  break_continue_stack_.pop_back();
+
+  if (node.inc_) {
+    EmitBlock(continue_block);
+    node.inc_->Accept(*this);
+  }
+
+  EmitBranch(cond_block);
+
+  EmitBlock(end_block, true);
 }
 
 void CodeGen::Visit(const GotoStmt& node) {
-  assert(node.label_->has_goto_);
-
-  if (!node.label_->label_) {
-    goto_stmt_.push_back(
-        {node.GetName(), Builder.GetInsertBlock(),
-         Builder.GetInsertBlock()->getInstList().size() - alloc_count_});
-  } else {
-    Builder.CreateBr(node.label_->label_);
+  if (!HaveInsertPoint()) {
+    return;
   }
-
-  has_br_or_return_.top().first = true;
+  Builder.CreateBr(GetBasicBlockForLabel(node.label_));
+  Builder.ClearInsertionPoint();
 }
 
-void CodeGen::Visit(const ContinueStmt&) {
-  if (std::empty(continue_stack_) || continue_stack_.top() == nullptr) {
-    Error("Cannot use continue here");
+void CodeGen::Visit(const ContinueStmt& node) {
+  if (std::empty(break_continue_stack_)) {
+    Error(node.GetLoc(), "continue stmt not in a loop or switch");
   } else {
-    Builder.CreateBr(continue_stack_.top());
-    has_br_or_return_.top().first = true;
+    if (!HaveInsertPoint()) {
+      return;
+    }
+    Builder.CreateBr(break_continue_stack_.back().continue_block);
+    Builder.ClearInsertionPoint();
   }
 }
 
-void CodeGen::Visit(const BreakStmt&) {
-  if (std::empty(break_stack_) || break_stack_.top() == nullptr) {
-    Error("Cannot use break here");
+void CodeGen::Visit(const BreakStmt& node) {
+  if (std::empty(break_continue_stack_)) {
+    Error(node.GetLoc(), "break stmt not in a loop or switch");
   } else {
-    Builder.CreateBr(break_stack_.top());
-    has_br_or_return_.top().first = true;
-    case_has_break_ = true;
+    if (!HaveInsertPoint()) {
+      return;
+    }
+    Builder.CreateBr(break_continue_stack_.back().break_block);
+    Builder.ClearInsertionPoint();
   }
 }
 
@@ -738,17 +640,12 @@ void CodeGen::Visit(const ReturnStmt& node) {
   } else {
     Builder.CreateRetVoid();
   }
-  has_br_or_return_.top().second = true;
 }
 
 void CodeGen::Visit(const TranslationUnit& node) {
-  PushBlock(nullptr, nullptr);
-
   for (const auto& item : node.GetExtDecl()) {
     item->Accept(*this);
   }
-
-  PopBlock();
 }
 
 void CodeGen::Visit(const Declaration& node) {
@@ -777,20 +674,22 @@ void CodeGen::Visit(const FuncDef& node) {
         func_name, Module.get());
   }
 
+  curr_func_ = func;
+
   // TODO Attribute DSOLocal 用法
   // TODO 实现 inline
-  if (node.GetLinkage() != kInternal) {
-    func->setDSOLocal(true);
-  }
-
-  func->addFnAttr(llvm::Attribute::NoUnwind);
-  func->addFnAttr(llvm::Attribute::StackProtectStrong);
-  func->addFnAttr(llvm::Attribute::UWTable);
-
-  if (OptimizationLevel == OptLevel::kO0) {
-    func->addFnAttr(llvm::Attribute::NoInline);
-    func->addFnAttr(llvm::Attribute::OptimizeNone);
-  }
+  //  if (node.GetLinkage() != kInternal) {
+  //    func->setDSOLocal(true);
+  //  }
+  //
+  //  func->addFnAttr(llvm::Attribute::NoUnwind);
+  //  func->addFnAttr(llvm::Attribute::StackProtectStrong);
+  //  func->addFnAttr(llvm::Attribute::UWTable);
+  //
+  //  if (OptimizationLevel == OptLevel::kO0) {
+  //    func->addFnAttr(llvm::Attribute::NoInline);
+  //    func->addFnAttr(llvm::Attribute::OptimizeNone);
+  //  }
 
   auto entry{llvm::BasicBlock::Create(Context, "", func)};
   Builder.SetInsertPoint(entry);
@@ -808,7 +707,7 @@ void CodeGen::Visit(const FuncDef& node) {
 
   node.body_->Accept(*this);
 
-  if (!HasReturn()) {
+  if (Builder.GetInsertBlock() && !Builder.GetInsertBlock()->getTerminator()) {
     if (func_name == "main") {
       Builder.CreateRet(Builder.getInt32(0));
     } else {
@@ -822,24 +721,6 @@ void CodeGen::Visit(const FuncDef& node) {
   }
   ExitFunc();
 
-  for (const auto& [name, bb, size] : goto_stmt_) {
-    Builder.SetInsertPoint(bb);
-    for (std::size_t i{};
-         i < bb->getInstList().size() - alloc_count_ - size + 1 &&
-         !bb->getInstList().empty();
-         ++i) {
-      bb->getInstList().back().eraseFromParent();
-    }
-    for (const auto& item : labels_) {
-      if (name == item.GetIdent()) {
-        Builder.CreateBr(item.label_);
-        break;
-      }
-    }
-  }
-  alloc_count_ = 0;
-  goto_stmt_.clear();
-
   // 验证生成的代码, 检查一致性
   llvm::verifyFunction(*func);
 }
@@ -851,7 +732,6 @@ llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Function* parent,
                          parent->getEntryBlock().begin()};
   auto ptr{temp.CreateAlloca(type, nullptr)};
   ptr->setAlignment(align);
-  ++alloc_count_;
 
   return ptr;
 }
@@ -1202,49 +1082,49 @@ std::int32_t CodeGen::FloatPointRank(llvm::Type* type) const {
 }
 
 llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
-  auto block{Builder.GetInsertBlock()};
-  auto parent_func{block->getParent()};
-  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto end_block{CreateBasicBlock("logic.or.end")};
+  auto rhs_block{CreateBasicBlock("logic.or.rhs")};
 
-  node.lhs_->Accept(*this);
-  result_ = CastToBool(result_);
-  Builder.CreateCondBr(result_, after_block, rhs_block);
+  EmitBranchOnBoolExpr(node.lhs_, end_block, rhs_block);
+  auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
 
-  Builder.SetInsertPoint(rhs_block);
-  node.rhs_->Accept(*this);
-  result_ = CastToBool(result_);
-  Builder.CreateBr(after_block);
+  for (auto begin{llvm::pred_begin(end_block)};
+       begin != llvm::pred_end(end_block); ++begin) {
+    phi->addIncoming(Builder.getTrue(), *begin);
+  }
 
-  Builder.SetInsertPoint(after_block);
-  auto phi{Builder.CreatePHI(Builder.getInt1Ty(), 2)};
-  phi->addIncoming(Builder.getTrue(), block);
-  phi->addIncoming(result_, rhs_block);
+  EmitBlock(rhs_block);
+  auto rhs_value{EvaluateExprAsBool(node.rhs_)};
 
-  return CastTo(phi, Builder.getInt32Ty(), true);
+  rhs_block = Builder.GetInsertBlock();
+  EmitBlock(end_block);
+
+  phi->addIncoming(rhs_value, rhs_block);
+
+  return Builder.CreateZExt(phi, Builder.getInt32Ty());
 }
 
 llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
-  auto block{Builder.GetInsertBlock()};
-  auto parent_func{block->getParent()};
-  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto end_block{CreateBasicBlock("logic.and.end")};
+  auto rhs_block{CreateBasicBlock("logic.and.rhs")};
 
-  node.lhs_->Accept(*this);
-  result_ = CastToBool(result_);
-  Builder.CreateCondBr(result_, rhs_block, after_block);
+  EmitBranchOnBoolExpr(node.lhs_, rhs_block, end_block);
+  auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
 
-  Builder.SetInsertPoint(rhs_block);
-  node.rhs_->Accept(*this);
-  result_ = CastToBool(result_);
-  Builder.CreateBr(after_block);
+  for (auto begin{llvm::pred_begin(end_block)};
+       begin != llvm::pred_end(end_block); ++begin) {
+    phi->addIncoming(Builder.getFalse(), *begin);
+  }
 
-  Builder.SetInsertPoint(after_block);
-  auto phi{Builder.CreatePHI(Builder.getInt1Ty(), 2)};
-  phi->addIncoming(Builder.getFalse(), block);
-  phi->addIncoming(result_, rhs_block);
+  EmitBlock(rhs_block);
+  auto rhs_value{EvaluateExprAsBool(node.rhs_)};
 
-  return CastTo(phi, Builder.getInt32Ty(), true);
+  rhs_block = Builder.GetInsertBlock();
+  EmitBlock(end_block);
+
+  phi->addIncoming(rhs_value, rhs_block);
+
+  return Builder.CreateZExt(phi, Builder.getInt32Ty());
 }
 
 llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
@@ -1307,96 +1187,12 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
   return Builder.CreateAlignedStore(rhs, lhs_ptr, align);
 }
 
-void CodeGen::VisitForNoInc(const ForStmt& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto cond_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto loop_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-
-  Builder.CreateBr(cond_block);
-  Builder.SetInsertPoint(cond_block);
-
-  node.cond_->Accept(*this);
-  result_ = CastToBool(result_);
-  Builder.CreateCondBr(result_, loop_block, after_block);
-
-  Builder.SetInsertPoint(loop_block);
-
-  PushBlock(cond_block, after_block);
-  node.block_->Accept(*this);
-
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(cond_block);
-  }
-  PopBlock();
-
-  Builder.SetInsertPoint(after_block);
+void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
+                        llvm::BasicBlock* continue_block) {
+  break_continue_stack_.push_back({break_stack, continue_block});
 }
 
-void CodeGen::VisitForNoCond(const ForStmt& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto loop_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto inc_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-
-  Builder.CreateBr(loop_block);
-  Builder.SetInsertPoint(loop_block);
-
-  Builder.SetInsertPoint(loop_block);
-
-  PushBlock(inc_block, after_block);
-  node.block_->Accept(*this);
-
-  Builder.CreateBr(inc_block);
-
-  Builder.SetInsertPoint(inc_block);
-
-  node.inc_->Accept(*this);
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(loop_block);
-  }
-  PopBlock();
-
-  Builder.SetInsertPoint(after_block);
-}
-
-void CodeGen::VisitForNoIncCond(const ForStmt& node) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto loop_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-
-  Builder.CreateBr(loop_block);
-
-  Builder.SetInsertPoint(loop_block);
-
-  PushBlock(loop_block, after_block);
-  node.block_->Accept(*this);
-
-  if (!HasBrOrReturn()) {
-    Builder.CreateBr(loop_block);
-  }
-  PopBlock();
-
-  Builder.SetInsertPoint(after_block);
-}
-
-void CodeGen::PushBlock(llvm::BasicBlock* continue_block,
-                        llvm::BasicBlock* break_stack) {
-  continue_stack_.push(continue_block);
-  break_stack_.push(break_stack);
-  has_br_or_return_.push({false, false});
-}
-
-void CodeGen::PopBlock() {
-  continue_stack_.pop();
-  break_stack_.pop();
-  has_br_or_return_.pop();
-}
-
-bool CodeGen::HasBrOrReturn() const {
-  auto [br, ret]{has_br_or_return_.top()};
-  return br || ret;
-}
+void CodeGen::PopBlock() { break_continue_stack_.pop_back(); }
 
 llvm::Value* CodeGen::NegOp(llvm::Value* value, bool is_unsigned) {
   if (IsIntegerTy(value)) {
@@ -1457,8 +1253,6 @@ llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
 
   return is_postfix ? lhs_value : rhs_value;
 }
-
-bool CodeGen::HasReturn() const { return has_br_or_return_.top().second; }
 
 void CodeGen::EnterFunc() { PushBlock(nullptr, nullptr); }
 
@@ -1736,5 +1530,136 @@ llvm::Value* CodeGen::VaArg(llvm::Value* ptr, llvm::Type* type) {
 
   return phi;
 }
+
+llvm::BasicBlock* CodeGen::CreateBasicBlock(const std::string& name,
+                                            llvm::Function* parent,
+                                            llvm::BasicBlock* insert_before) {
+#ifdef NDEBUG
+  return llvm::BasicBlock::Create(Context, "", parent, insert_before);
+#else
+  return llvm::BasicBlock::Create(Context, name, parent, insert_before);
+#endif
+}
+
+void CodeGen::EmitBranchOnBoolExpr(Expr* expr, llvm::BasicBlock* true_block,
+                                   llvm::BasicBlock* false_block) {
+  if (auto cond_binary{dynamic_cast<BinaryOpExpr*>(expr)}) {
+    if (cond_binary->op_ == Tag::kAmpAmp) {
+      auto lhs_true_block{CreateBasicBlock("logic.and.lhs.true")};
+      EmitBranchOnBoolExpr(cond_binary->lhs_, lhs_true_block, false_block);
+      EmitBlock(lhs_true_block);
+      EmitBranchOnBoolExpr(cond_binary->rhs_, true_block, false_block);
+      return;
+    } else if (cond_binary->op_ == Tag::kPipePipe) {
+      auto lhs_false_block{CreateBasicBlock("logic.or.lhs.false")};
+      EmitBranchOnBoolExpr(cond_binary->lhs_, true_block, lhs_false_block);
+      EmitBlock(lhs_false_block);
+      EmitBranchOnBoolExpr(cond_binary->rhs_, true_block, false_block);
+      return;
+    }
+  } else if (auto cond_unary{dynamic_cast<UnaryOpExpr*>(expr)}) {
+    if (cond_unary->op_ == Tag::kExclaim) {
+      EmitBranchOnBoolExpr(cond_unary->expr_, false_block, true_block);
+      return;
+    }
+  } else if (auto cond_op{dynamic_cast<ConditionOpExpr*>(expr)}) {
+    auto lhs_block{CreateBasicBlock("cond.true")};
+    auto rhs_block{CreateBasicBlock("cond.false")};
+    EmitBranchOnBoolExpr(cond_op->cond_, lhs_block, rhs_block);
+    EmitBlock(lhs_block);
+    EmitBranchOnBoolExpr(cond_op->lhs_, true_block, false_block);
+    EmitBlock(rhs_block);
+    EmitBranchOnBoolExpr(cond_op->rhs_, true_block, false_block);
+    return;
+  }
+
+  Builder.CreateCondBr(EvaluateExprAsBool(expr), true_block, false_block);
+}
+
+void CodeGen::EmitBlock(llvm::BasicBlock* bb, bool is_finished) {
+  EmitBranch(bb);
+
+  if (is_finished && bb->use_empty()) {
+    delete bb;
+    return;
+  }
+
+  curr_func_->getBasicBlockList().push_back(bb);
+  Builder.SetInsertPoint(bb);
+}
+
+void CodeGen::EmitBranch(llvm::BasicBlock* target) {
+  auto curr{Builder.GetInsertBlock()};
+
+  if (!curr || curr->getTerminator()) {
+  } else {
+    Builder.CreateBr(target);
+  }
+
+  Builder.ClearInsertionPoint();
+}
+
+llvm::Value* CodeGen::EvaluateExprAsBool(Expr* expr) {
+  expr->Accept(*this);
+  return CastToBool(result_);
+}
+
+llvm::BasicBlock* CodeGen::GetBasicBlockForLabel(const LabelStmt* label) {
+  auto& bb{label_map_[label]};
+  if (bb) {
+    return bb;
+  }
+
+  return bb = CreateBasicBlock(label->GetIdent());
+}
+
+bool CodeGen::TestAndClearIgnoreResultAssign() {
+  bool ret{ignore_result_assign_};
+  ignore_result_assign_ = false;
+  return ret;
+}
+
+void CodeGen::EmitStmt(const Stmt* stmt) {
+  if (EmitSimpleStmt(stmt)) {
+    return;
+  }
+
+  if (!HaveInsertPoint()) {
+    EnsureInsertPoint();
+  }
+
+  stmt->Accept(*this);
+}
+
+bool CodeGen::EmitSimpleStmt(const Stmt* stmt) {
+  switch (stmt->Kind()) {
+    case AstNodeType::kLabelStmt:
+    case AstNodeType::kCaseStmt:
+    case AstNodeType::kDefaultStmt:
+    case AstNodeType::kExprStmt:
+    case AstNodeType::kGotoStmt:
+    case AstNodeType::kContinueStmt:
+    case AstNodeType::kBreakStmt:
+    case AstNodeType::kDeclaration:
+      stmt->Accept(*this);
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool CodeGen::HaveInsertPoint() const {
+  return Builder.GetInsertBlock() != nullptr;
+}
+
+void CodeGen::EnsureInsertPoint() {
+  if (!HaveInsertPoint()) {
+    EmitBlock(CreateBasicBlock());
+  }
+}
+
+CodeGen::BreakContinue::BreakContinue(llvm::BasicBlock* break_block,
+                                      llvm::BasicBlock* continue_block)
+    : break_block(break_block), continue_block(continue_block) {}
 
 }  // namespace kcc

@@ -110,6 +110,14 @@ class CodeGen : public Visitor {
   virtual void Visit(const Declaration &node) override;
   virtual void Visit(const FuncDef &node) override;
 
+  llvm::BasicBlock *CreateBasicBlock(const std::string &name = "",
+                                     llvm::Function *parent = nullptr,
+                                     llvm::BasicBlock *insert_before = nullptr);
+  void EmitBranchOnBoolExpr(Expr *expr, llvm::BasicBlock *true_block,
+                            llvm::BasicBlock *false_block);
+  void EmitBlock(llvm::BasicBlock *bb, bool is_finished = false);
+  void EmitBranch(llvm::BasicBlock *target);
+
   void DealGlobalDecl(const Declaration &node);
   void DealLocaleDecl(const Declaration &node);
   void InitLocalAggregate(const Declaration &node);
@@ -117,8 +125,6 @@ class CodeGen : public Visitor {
   void PushBlock(llvm::BasicBlock *continue_block,
                  llvm::BasicBlock *break_stack);
   void PopBlock();
-  bool HasBrOrReturn() const;
-  bool HasReturn() const;
 
   bool MayCallBuiltinFunc(const FuncCallExpr &node);
   llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
@@ -126,28 +132,32 @@ class CodeGen : public Visitor {
   llvm::Value *result_{};
   std::int32_t align_{};
 
-  std::stack<llvm::BasicBlock *> continue_stack_;
-  std::stack<llvm::BasicBlock *> break_stack_;
-  std::stack<std::pair<bool, bool>> has_br_or_return_;
-
   llvm::Function *va_start_{};
   llvm::Function *va_end_{};
   llvm::Function *va_copy_{};
-
-  llvm::BasicBlock *last_{nullptr};
 
   std::map<llvm::Constant *, llvm::Constant *> strings_;
 
   bool load_{false};
 
-  std::stack<llvm::SwitchInst *> switch_insts_;
-  std::stack<llvm::BasicBlock *> switch_after_;
-  bool case_has_break_{false};
-
-  std::int32_t alloc_count_{};
-  std::vector<std::tuple<std::string, llvm::BasicBlock *, std::int32_t>>
-      goto_stmt_;
-  std::vector<LabelStmt> labels_;
+  llvm::Function *curr_func_{};
+  struct BreakContinue {
+    BreakContinue(llvm::BasicBlock *break_block,
+                  llvm::BasicBlock *continue_block);
+    llvm::BasicBlock *break_block;
+    llvm::BasicBlock *continue_block;
+  };
+  std::vector<BreakContinue> break_continue_stack_;
+  llvm::Value *EvaluateExprAsBool(Expr *expr);
+  llvm::SwitchInst *switch_inst_{};
+  std::map<const LabelStmt *, llvm::BasicBlock *> label_map_;
+  llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
+  bool TestAndClearIgnoreResultAssign();
+  bool ignore_result_assign_{false};
+  void EmitStmt(const Stmt *stmt);
+  bool EmitSimpleStmt(const Stmt *stmt);
+  bool HaveInsertPoint() const;
+  void EnsureInsertPoint();
 };
 
 }  // namespace kcc

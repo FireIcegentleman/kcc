@@ -209,7 +209,9 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     }
 
     if (ident->IsObject()) {
-      return nullptr;
+      auto decl{dynamic_cast<ObjectExpr*>(ident)->GetDecl()};
+      assert(decl != nullptr);
+      return decl;
     }
   }
 
@@ -237,6 +239,9 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
 
     type->FuncSetName(name);
     ret = MakeAstNode<IdentifierExpr>(name, type, linkage, false);
+
+    curr_scope_->InsertNormal(name, ret);
+    return MakeAstNode<Declaration>(ret);
   } else {
     auto obj{MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage,
                                      false)};
@@ -255,11 +260,12 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     }
 
     ret = obj;
+
+    curr_scope_->InsertNormal(name, ret);
+    auto decl{MakeAstNode<Declaration>(ret)};
+    obj->SetDecl(decl);
+    return decl;
   }
-
-  curr_scope_->InsertNormal(name, ret);
-
-  return MakeAstNode<Declaration>(ret);
 }
 
 /*
