@@ -8,22 +8,21 @@ int extern externvar2;
 int a = 3;
 
 void test() {
-  // FIXME
-//  extern int a;
-//  expect(3, a);
-//  {
-//    int a = 4;
-//    expect(4, a);
-//  }
-//  {
-//    extern int a;
-//    expect(3, a);
-//    a = 5;
-//    {
-//      extern int a;
-//      expect(5, a);
-//    }
-//  }
+  extern int a;
+  expect(3, a);
+  {
+    int a = 4;
+    expect(4, a);
+  }
+  {
+    extern int a;
+    expect(3, a);
+    a = 5;
+    {
+      extern int a;
+      expect(5, a);
+    }
+  }
 }
 
 void testmain() {

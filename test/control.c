@@ -228,7 +228,7 @@ static void test_label() {
     expect(0, y);
 
     int z = 0;
-    // FIXME
+    // TODO
 //    switch (7) {
 //        if (1)
 //          case 5: z += 2;

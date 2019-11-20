@@ -23,5 +23,4 @@ A tiny C compiler
 * Project
   * https://github.com/wgtdkp/wgtcc
   * https://github.com/rui314/8cc
-  * https://github.com/maekawatoshiki/qcc
   * https://github.com/zhangjiantao/llvm-cxxapi

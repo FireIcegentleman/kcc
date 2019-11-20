@@ -1706,8 +1706,17 @@ llvm::Value* CodeGen::VaArg(llvm::Value* ptr, llvm::Type* type) {
   result_ = Builder.CreateAlignedLoad(result_, 16);
   result_ = Builder.CreateGEP(result_, num);
   auto r{Builder.CreateBitCast(result_, type->getPointerTo())};
-  result_ =
-      Builder.CreateAdd(num, llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
+
+  if (type->isIntegerTy() || type->isPointerTy()) {
+    result_ =
+        Builder.CreateAdd(num, llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
+  } else if (type->isFloatingPointTy()) {
+    result_ = Builder.CreateAdd(
+        num, llvm::ConstantInt::get(Builder.getInt32Ty(), 16));
+  } else {
+    assert(false);
+  }
+
   Builder.CreateAlignedStore(result_, p, 16);
   Builder.CreateBr(after_block);
 
