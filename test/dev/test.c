@@ -1,30 +1,13 @@
-//int printf(const char* s, ...);
+#include <string.h>
 
-//int a = 3;
+int printf(const char* s, ...);
 
-//static char* arr[] = {"abc", (void*)0};
-//
-//static char* arr[];
+static char* arr[] = {"abc", (void*)0};
+static char* arr[];
 
-int x1[] = { 1, 2, 3, 4, 5 };
-int *p1 = x1;
-
-int main(void) {
-  //printf("%s\n", arr[0]);
-
-//  extern int a;
-//  printf("%d\n", a);  // 3
-//  {
-//    int a = 4;
-//    printf("%d\n", a);  // 4
-//  }
-//  {
-//    extern int a;
-//    printf("%d\n", a);  // 3
-//    a = 5;
-//    {
-//      extern int a;
-//      printf("%d\n", a);  // 5
-//    }
-//  }
+static void array_type_comp() {
+  printf("%d\n", strcmp("abc", arr[0]));
+  printf("%d\n", (int)arr[1]);
 }
+
+int main(void) { array_type_comp(); }

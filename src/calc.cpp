@@ -326,8 +326,8 @@ llvm::Constant* ConstantCastTo(llvm::Constant* value, llvm::Type* to,
     return value;
   } else if (IsArrCastToPtr(value, to)) {
     auto zero{llvm::ConstantInt::get(Builder.getInt32Ty(), 0)};
-    llvm::ArrayRef<llvm::Constant*> indexs{zero, zero};
-    return llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, value, indexs);
+    return llvm::ConstantExpr::getInBoundsGetElementPtr(
+        nullptr, value, llvm::ArrayRef<llvm::Constant*>{zero, zero});
   } else if (IsPointerTy(value) && to->isPointerTy()) {
     return llvm::ConstantExpr::getPointerCast(value, to);
   } else {

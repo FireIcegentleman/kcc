@@ -196,11 +196,33 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
       }
     }
 
+    if (!ident->GetType()->IsComplete()) {
+      ident->GetType()->SetComplete(type->IsComplete());
+    }
+
     // extern int a;
     // int a = 1;
     if (auto p{dynamic_cast<ObjectExpr*>(ident)}; p) {
-      if (storage_class_spec == 0) {
+      if (!(storage_class_spec & kExtern)) {
         p->SetStorageClassSpec(p->GetStorageClassSpec() & ~kExtern);
+      }
+    }
+
+    if (ident->IsObject()) {
+      return nullptr;
+    }
+  }
+
+  if (storage_class_spec & kExtern) {
+    ident = curr_scope_->FindNormal(name);
+    if (ident) {
+      if (!type->Compatible(ident->GetType())) {
+        Error(loc_, "conflicting types '{}' vs '{}'", type->ToString(),
+              ident->GetType()->ToString());
+      }
+
+      if (linkage != ident->GetLinkage()) {
+        linkage = ident->GetLinkage();
       }
     }
   }
@@ -2045,11 +2067,12 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
       } else {
         name = obj->GetName();
       }
-      // 在符号表中查找指定的全局变量.如果不存在则添加并返回它;如果存在且类型
-      // 一致则直接返回;如果存在且类型不一致, 则返回一个转换为一致类型的常量
-      Module->getOrInsertGlobal(name,
-                                decl->GetIdent()->GetType()->GetLLVMType());
-      auto var{Module->getNamedGlobal(name)};
+      auto var{new llvm::GlobalVariable(
+          *Module, decl->GetIdent()->GetType()->GetLLVMType(), false,
+          decl->GetIdent()->GetLinkage() == kInternal
+              ? llvm::GlobalValue::InternalLinkage
+              : llvm::GlobalValue::ExternalLinkage,
+          decl->GetGlobalInit(), name)};
       obj->SetGlobalPtr(var);
     }
   }
