@@ -2461,7 +2461,8 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
 
   auto width{type->ArrayGetElementType()->GetWidth()};
   auto size{str_node->GetType()->ArrayGetNumElements()};
-  auto str{str_node->GetVal().c_str()};
+  auto temp{str_node->GetVal()};
+  auto str{temp.c_str()};
 
   switch (width) {
     case 1:

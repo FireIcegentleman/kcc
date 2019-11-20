@@ -189,7 +189,8 @@ void ConstantInitExpr::Visit(const StmtExpr& node) {
 void ConstantInitExpr::Visit(const StringLiteralExpr& node) {
   auto width{node.GetType()->ArrayGetElementType()->GetWidth()};
   auto size{node.GetType()->ArrayGetNumElements()};
-  auto str{node.GetVal().c_str()};
+  auto temp{node.GetVal()};
+  auto str{temp.c_str()};
   llvm::Constant* arr{};
 
   switch (width) {
