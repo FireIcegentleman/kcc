@@ -60,11 +60,7 @@ void CodeGen::GenCode(const TranslationUnit* root) {
   root->Accept(*this);
 
   if (llvm::verifyModule(*Module, &llvm::errs())) {
-#ifdef DEV
-    Warning("module is broken");
-#else
     Error("module is broken");
-#endif
   }
 }
 
@@ -75,6 +71,9 @@ void CodeGen::GenCode(const TranslationUnit* root) {
  * * &
  */
 void CodeGen::Visit(const UnaryOpExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   auto is_unsigned{node.expr_->GetType()->IsUnsigned()};
 
   switch (node.op_) {
@@ -141,6 +140,9 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
 }
 
 void CodeGen::Visit(const TypeCastExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   node.expr_->Accept(*this);
   result_ = CastTo(result_, node.to_->GetLLVMType(),
                    node.expr_->GetType()->IsUnsigned());
@@ -155,6 +157,9 @@ void CodeGen::Visit(const TypeCastExpr& node) {
  * ,
  */
 void CodeGen::Visit(const BinaryOpExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   switch (node.op_) {
     case Tag::kPipePipe:
       result_ = LogicOrOp(node);
@@ -248,6 +253,9 @@ void CodeGen::Visit(const BinaryOpExpr& node) {
 }
 
 void CodeGen::Visit(const ConditionOpExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   TestAndClearIgnoreResultAssign();
 
   auto lhs_block{CreateBasicBlock("cond.true")};
@@ -269,6 +277,11 @@ void CodeGen::Visit(const ConditionOpExpr& node) {
   EmitBranch(end_block);
 
   EmitBlock(end_block);
+
+  if (lhs->getType()->isVoidTy()) {
+    return;
+  }
+
   auto phi{Builder.CreatePHI(lhs->getType(), 2)};
   phi->addIncoming(lhs, lhs_block);
   phi->addIncoming(rhs, rhs_block);
@@ -278,6 +291,9 @@ void CodeGen::Visit(const ConditionOpExpr& node) {
 
 // LLVM 默认使用本机 C 调用约定
 void CodeGen::Visit(const FuncCallExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   if (MayCallBuiltinFunc(node)) {
     return;
   }
@@ -299,6 +315,9 @@ void CodeGen::Visit(const FuncCallExpr& node) {
 // 常量用 ConstantFP / ConstantInt 类表示
 // 在 LLVM IR 中, 常量都是唯一且共享的
 void CodeGen::Visit(const ConstantExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   auto type{node.GetType()->GetLLVMType()};
 
   if (type->isIntegerTy()) {
@@ -315,6 +334,9 @@ void CodeGen::Visit(const ConstantExpr& node) {
 // 1 / 2 / 4
 // 注意已经添加空字符了
 void CodeGen::Visit(const StringLiteralExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   auto width{node.GetType()->ArrayGetElementType()->GetWidth()};
   auto size{node.GetType()->ArrayGetNumElements()};
   auto str{node.val_.c_str()};
@@ -373,6 +395,9 @@ void CodeGen::Visit(const StringLiteralExpr& node) {
 }
 
 void CodeGen::Visit(const IdentifierExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   auto type{node.GetType()};
   assert(type->IsFunctionTy());
 
@@ -391,10 +416,16 @@ void CodeGen::Visit(const IdentifierExpr& node) {
 }
 
 void CodeGen::Visit(const EnumeratorExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   result_ = llvm::ConstantInt::get(Builder.getInt32Ty(), node.val_);
 }
 
 void CodeGen::Visit(const ObjectExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
   align_ = node.GetAlign();
 
   if (node.InGlobal() || node.IsStatic()) {
@@ -420,7 +451,12 @@ void CodeGen::Visit(const ObjectExpr& node) {
   }
 }
 
-void CodeGen::Visit(const StmtExpr& node) { node.block_->Accept(*this); }
+void CodeGen::Visit(const StmtExpr& node) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
+  node.block_->Accept(*this);
+}
 
 void CodeGen::Visit(const LabelStmt& node) {
   EmitBlock(GetBasicBlockForLabel(&node));
@@ -1534,6 +1570,7 @@ llvm::Value* CodeGen::VaArg(llvm::Value* ptr, llvm::Type* type) {
 llvm::BasicBlock* CodeGen::CreateBasicBlock(const std::string& name,
                                             llvm::Function* parent,
                                             llvm::BasicBlock* insert_before) {
+  (void)name;
 #ifdef NDEBUG
   return llvm::BasicBlock::Create(Context, "", parent, insert_before);
 #else
