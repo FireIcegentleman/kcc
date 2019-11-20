@@ -68,8 +68,7 @@ static void array_of_zero_size() {
 static char* arr[] = {"abc", NULL};
 static char* arr[];
 static void array_type_comp() {
-  // FIXME
-  //expect_string("abc", arr[0]);
+  expect_string("abc", arr[0]);
   expect(NULL, arr[1]);
 }
 

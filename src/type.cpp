@@ -710,6 +710,8 @@ bool ArrayType::Equal(const Type* other) const {
 
 void ArrayType::SetNumElements(std::size_t num_elements) {
   num_elements_ = num_elements;
+  llvm_type_ =
+      llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
 }
 
 std::size_t ArrayType::GetNumElements() const { return num_elements_; }
