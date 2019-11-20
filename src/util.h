@@ -6,13 +6,11 @@
 #define KCC_SRC_UTIL_H_
 
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -32,8 +30,6 @@ inline auto Module{std::make_unique<llvm::Module>("main", Context)};
 inline llvm::DataLayout DataLayout{Module.get()};
 
 inline std::unique_ptr<llvm::TargetMachine> TargetMachine;
-
-inline std::map<llvm::Constant *, llvm::Constant *> Strings;
 
 enum class OptLevel { kO0, kO1, kO2, kO3 };
 

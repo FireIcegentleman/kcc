@@ -224,24 +224,18 @@ void ConstantInitExpr::Visit(const StringLiteralExpr& node) {
       assert(false);
   }
 
-  if (auto iter{Strings.find(arr)}; iter != std::end(Strings)) {
-    val_ = iter->second;
-    return;
-  }
-
   auto global_var{new llvm::GlobalVariable(*Module, arr->getType(), true,
                                            llvm::GlobalValue::PrivateLinkage,
                                            arr, ".str")};
   global_var->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   global_var->setAlignment(width);
 
-  auto zero{llvm::ConstantInt::get(llvm::Type::getInt32Ty(Context), 0)};
+  auto zero{llvm::ConstantInt::get(llvm::Type::getInt64Ty(Context), 0)};
 
   auto ptr{llvm::ConstantExpr::getInBoundsGetElementPtr(
       global_var->getValueType(), global_var,
       llvm::ArrayRef<llvm::Constant*>{zero, zero})};
 
-  Strings[arr] = ptr;
   val_ = ptr;
 }
 

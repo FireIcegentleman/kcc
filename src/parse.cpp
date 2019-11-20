@@ -2768,7 +2768,7 @@ llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
     }
 
     return ConstantCastTo(ConstantInitExpr{}.Calc(expr), type->GetLLVMType(),
-                          type->IsUnsigned());
+                          expr->GetType()->IsUnsigned());
   }
 
   assert(false);

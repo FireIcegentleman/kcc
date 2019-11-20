@@ -373,7 +373,7 @@ void CodeGen::Visit(const StringLiteralExpr& node) {
       assert(false);
   }
 
-  if (auto iter{Strings.find(arr)}; iter != std::end(Strings)) {
+  if (auto iter{strings_.find(arr)}; iter != std::end(strings_)) {
     result_ = iter->second;
     return;
   }
@@ -384,12 +384,12 @@ void CodeGen::Visit(const StringLiteralExpr& node) {
   global_var->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   global_var->setAlignment(width);
 
-  auto zero{llvm::ConstantInt::get(llvm::Type::getInt32Ty(Context), 0)};
+  auto zero{llvm::ConstantInt::get(llvm::Type::getInt64Ty(Context), 0)};
   auto ptr{llvm::ConstantExpr::getInBoundsGetElementPtr(
       global_var->getValueType(), global_var,
       llvm::ArrayRef<llvm::Constant*>{zero, zero})};
 
-  Strings[arr] = ptr;
+  strings_[arr] = ptr;
   result_ = ptr;
 }
 

@@ -136,6 +136,8 @@ class CodeGen : public Visitor {
 
   llvm::BasicBlock *last_{nullptr};
 
+  std::map<llvm::Constant *, llvm::Constant *> strings_;
+
   bool load_{false};
 
   std::stack<llvm::SwitchInst *> switch_insts_;
