@@ -18,7 +18,7 @@ void ConvertToUtf16(std::string &s);
 
 void ConvertToUtf32(std::string &s);
 
-void ConvertStringLiteral(std::string &s, Encoding encoding);
+void ConvertString(std::string &s, Encoding encoding);
 
 }  // namespace kcc
 

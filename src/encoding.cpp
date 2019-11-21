@@ -25,7 +25,7 @@ void ConvertToUtf32(std::string& s) {
   s = boost::locale::conv::between(s, "UTF-32LE", "UTF-8");
 }
 
-void ConvertStringLiteral(std::string& s, Encoding encoding) {
+void ConvertString(std::string& s, Encoding encoding) {
   switch (encoding) {
     case Encoding::kNone:
     case Encoding::kUtf8:

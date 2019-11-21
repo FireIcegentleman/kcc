@@ -36,7 +36,7 @@ std::int32_t CharToDigit(std::int32_t ch) {
 
 Scanner::Scanner(std::string preprocessed_code)
     : source_{std::move(preprocessed_code)} {
-  loc_.content = source_.data();
+  loc_.SetContent(source_.data());
 }
 
 std::vector<Token> Scanner::Tokenize() {
@@ -372,12 +372,9 @@ std::int32_t Scanner::Next(bool push) {
   }
 
   if (ch == '\n') {
-    ++loc_.row;
-    pre_column_ = loc_.column;
-    loc_.column = 1;
-    loc_.line_begin = curr_index_;
+    loc_.NextRow(curr_index_);
   } else {
-    ++loc_.column;
+    loc_.NextColumn();
   }
 
   return ch;
@@ -391,10 +388,9 @@ void Scanner::PutBack() {
   buffer_.pop_back();
 
   if (ch == '\n') {
-    --loc_.row;
-    loc_.column = pre_column_;
+    loc_.PrevRow();
   } else {
-    --loc_.column;
+    loc_.PrevColumn();
   }
 }
 
@@ -437,7 +433,7 @@ void Scanner::SkipComment() {
   // eat first number
   Next();
   // # 后的数字指示的是下一行的行号
-  loc_.row = std::stoi(SkipNumber().GetStr()) - 1;
+  loc_.SetRow(std::stoi(SkipNumber().GetStr()) - 1);
   // eat space
   Next(false);
 
@@ -445,7 +441,7 @@ void Scanner::SkipComment() {
   Next();
   auto file_name{SkipStringLiteral().GetStr()};
   // 去掉前后的 "
-  loc_.file_name = file_name.substr(1, std::size(file_name) - 2);
+  loc_.SetFileName(file_name.substr(1, std::size(file_name) - 2));
 
   while (HasNext() && Next(false) != '\n') {
   }
@@ -465,7 +461,7 @@ void Scanner::SkipComment() {
 //  pp-number .
 Token Scanner::SkipNumber() {
   bool saw_hex_prefix{false};
-  auto tag{Tag::kIntegerConstant};
+  auto tag{Tag::kInteger};
 
   auto ch{buffer_.front()};
   while (ch == '.' || std::isalnum(ch) || ch == '_' || IsUCN(ch)) {
@@ -476,15 +472,15 @@ Token Scanner::SkipNumber() {
       }
 
       if ((ch == 'p' || ch == 'P') && saw_hex_prefix) {
-        tag = Tag::kFloatingConstant;
+        tag = Tag::kFloatingPoint;
       }
       if ((ch == 'e' || ch == 'E') && !saw_hex_prefix) {
-        tag = Tag::kFloatingConstant;
+        tag = Tag::kFloatingPoint;
       }
     } else if (IsUCN(ch)) {
       HandleEscape();
     } else if (ch == '.') {
-      tag = Tag::kFloatingConstant;
+      tag = Tag::kFloatingPoint;
     } else if (ch == 'x' || ch == 'X') {
       // 这里如果前面是其他数字或 . 也会执行下面的语句, 在后面处理
       // 过程中, 如 2x541, 将 x541 视为后缀, 也是不合法的
@@ -551,7 +547,7 @@ Token Scanner::SkipCharacter() {
     Error(loc_, "missing terminating ' character");
   }
 
-  return MakeToken(Tag::kCharacterConstant);
+  return MakeToken(Tag::kCharacter);
 }
 
 // string-literal:

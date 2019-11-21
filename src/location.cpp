@@ -7,29 +7,69 @@
 #include <cassert>
 #include <cstring>
 
-#include <fmt/core.h>
 #include <fmt/format.h>
 
 namespace kcc {
 
+void Location::SetFileName(const std::string& file_name) {
+  assert(!std::empty(file_name));
+  file_name_ = file_name;
+}
+
+void Location::SetContent(const char* content) {
+  assert(content != nullptr);
+  content_ = content;
+}
+
+void Location::NextColumn() { ++column_; }
+
+void Location::NextRow(std::size_t line_begin) {
+  line_begin_backup_ = line_begin;
+  column_backup_ = column_;
+
+  line_begin_ = line_begin;
+  ++row_;
+  column_ = 1;
+}
+
+void Location::PrevRow() {
+  assert(row_ > 1);
+
+  line_begin_ = line_begin_backup_;
+  column_ = column_backup_;
+
+  --row_;
+}
+
+void Location::PrevColumn() {
+  assert(column_ > 1);
+  --column_;
+}
+
+// row 代表的是下一行的行号
+void Location::SetRow(std::int32_t row) {
+  assert(row >= 0);
+  row_ = row;
+}
+
 std::string Location::ToLocStr() const {
-  return fmt::format(fmt("{}:{}:{}"), file_name, row, column);
+  assert(!std::empty(file_name_));
+  return fmt::format(fmt("{}:{}:{}"), file_name_, row_, column_);
 }
 
 std::string Location::GetLineContent() const {
+  assert(content_ != nullptr);
+
   std::string str;
+  auto size{std::strlen(content_)};
 
-  if (content == nullptr) {
-    assert(false);
-  }
-
-  for (auto index{line_begin};
-       index < std::strlen(content) && content[index] != '\n'; ++index) {
-    str.push_back(content[index]);
+  for (auto index{line_begin_}; index < size && content_[index] != '\n';
+       ++index) {
+    str.push_back(content_[index]);
   }
 
   str += '\n';
-  str += fmt::format(fmt("{}{}\n"), std::string(column - 1, ' '), "^");
+  str += fmt::format(fmt("{}{}\n"), std::string(column_ - 1, ' '), "^");
 
   return str;
 }

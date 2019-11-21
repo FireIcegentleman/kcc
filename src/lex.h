@@ -58,7 +58,6 @@ class Scanner {
   std::string::size_type curr_index_{};
 
   Location loc_;
-  std::int32_t pre_column_{1};
 
   Token curr_token_;
   std::string buffer_;

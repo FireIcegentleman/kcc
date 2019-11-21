@@ -64,17 +64,6 @@ class TokenTag : public QObject {
     kStaticAssert,  // C11
     kThreadLocal,   // C11
 
-    kAsm,
-    kAttribute,
-
-    kIdentifier,
-
-    kIntegerConstant,
-    kFloatingConstant,
-    kCharacterConstant,
-
-    kStringLiteral,
-
     kLeftSquare,   // [
     kRightSquare,  // ]
     kLeftParen,    // (
@@ -129,16 +118,24 @@ class TokenTag : public QObject {
     kCaretEqual,           // ^=
     kPipeEqual,            // |=
 
-    kComma,  // ,
-    kSharp,
-    kSharpSharp,
+    kComma,       // ,
+    kSharp,       // #
+    kSharpSharp,  // ##
 
+    kIdentifier,
+    kInteger,
+    kFloatingPoint,
+    kCharacter,
+    kStringLiteral,
+
+    kOffsetof,       // __builtin_offsetof
     kFuncName,       // __func__ / __FUNCTION__
+    kTypeid,         // typeid
+    kAsm,            // asm
+    kAttribute,      // __attribute__
     kFuncSignature,  // __PRETTY_FUNCTION__
     kExtension,      // __extension__
     kTypeof,         // typeof
-    kTypeid,         // typeid
-    kOffsetof,       // __builtin_offsetof
 
     kNone,
     kEof
@@ -171,17 +168,17 @@ class Token {
   bool IsIdentifier() const;
   bool IsStringLiteral() const;
   bool IsConstant() const;
-  bool IsIntegerConstant() const;
-  bool IsFloatConstant() const;
-  bool IsCharacterConstant() const;
+  bool IsInteger() const;
+  bool IsFloatPoint() const;
+  bool IsCharacter() const;
 
   bool IsTypeSpecQual() const;
-  bool IsDecl() const;
+  bool IsDeclSpec() const;
 
  private:
   Tag tag_{Tag::kNone};
   std::string str_;
-  Location location_;
+  Location loc_;
 };
 
 }  // namespace kcc

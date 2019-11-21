@@ -53,7 +53,18 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"_Thread_local", Tag::kThreadLocal});
 
   keywords_.insert({"__func__", Tag::kFuncName});
+  keywords_.insert({"__builtin_offsetof", Tag::kOffsetof});
+
+  // 一个显示表达式类型名称的扩展
+  keywords_.insert({"typeid", Tag::kTypeid});
+
+  // gcc 扩展
+  keywords_.insert({"typeof", Tag::kTypeof});
+  keywords_.insert({"__typeof__", Tag::kTypeof});
+  keywords_.insert({"__attribute__", Tag::kAttribute});
+  keywords_.insert({"__extension__", Tag::kExtension});
   keywords_.insert({"__FUNCTION__", Tag::kFuncName});
+  keywords_.insert({"__PRETTY_FUNCTION__", Tag::kFuncSignature});
 
   keywords_.insert({"__inline", Tag::kInline});
   keywords_.insert({"__alignof__", Tag::kAlignof});
@@ -65,13 +76,6 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"asm", Tag::kAsm});
   keywords_.insert({"__asm__", Tag::kAsm});
   keywords_.insert({"__asm", Tag::kAsm});
-  keywords_.insert({"typeof", Tag::kTypeof});
-  keywords_.insert({"__typeof__", Tag::kTypeof});
-  keywords_.insert({"__attribute__", Tag::kAttribute});
-  keywords_.insert({"__extension__", Tag::kExtension});
-  keywords_.insert({"__builtin_offsetof", Tag::kOffsetof});
-  keywords_.insert({"__PRETTY_FUNCTION__", Tag::kFuncSignature});
-  keywords_.insert({"typeid", Tag::kTypeid});
 }
 
 Tag KeywordsDictionary::Find(const std::string& name) const {

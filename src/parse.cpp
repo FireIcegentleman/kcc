@@ -106,7 +106,7 @@ bool Parser::IsTypeName(const Token& tok) {
 }
 
 bool Parser::IsDecl(const Token& tok) {
-  if (tok.IsDecl()) {
+  if (tok.IsDeclSpec()) {
     return true;
   } else if (tok.IsIdentifier()) {
     auto ident{curr_scope_->FindNormal(tok)};
@@ -913,11 +913,11 @@ Expr* Parser::ParsePrimaryExpr() {
 }
 
 Expr* Parser::ParseConstant() {
-  if (Peek().IsCharacterConstant()) {
+  if (Peek().IsCharacter()) {
     return ParseCharacter();
-  } else if (Peek().IsIntegerConstant()) {
+  } else if (Peek().IsInteger()) {
     return ParseInteger();
-  } else if (Peek().IsFloatConstant()) {
+  } else if (Peek().IsFloatPoint()) {
     return ParseFloat();
   } else {
     assert(false);
@@ -1119,19 +1119,19 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
   // 两个都指定了不能连接
   auto tok{Expect(Tag::kStringLiteral)};
   auto [str, encoding]{Scanner{tok.GetStr()}.HandleStringLiteral()};
-  ConvertStringLiteral(str, encoding);
+  ConvertString(str, encoding);
 
   while (Test(Tag::kStringLiteral)) {
     tok = Next();
     auto [next_str, next_encoding]{Scanner{tok.GetStr()}.HandleStringLiteral()};
-    ConvertStringLiteral(next_str, next_encoding);
+    ConvertString(next_str, next_encoding);
 
     if (encoding == Encoding::kNone && next_encoding != Encoding::kNone) {
-      ConvertStringLiteral(str, next_encoding);
+      ConvertString(str, next_encoding);
       encoding = next_encoding;
     } else if (encoding != Encoding::kNone &&
                next_encoding == Encoding::kNone) {
-      ConvertStringLiteral(next_str, encoding);
+      ConvertString(next_str, encoding);
       next_encoding = encoding;
     }
 

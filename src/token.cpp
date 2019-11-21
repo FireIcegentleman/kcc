@@ -6,7 +6,7 @@
 
 #include <cassert>
 
-#include <fmt/core.h>
+#include <fmt/format.h>
 
 #include "lex.h"
 
@@ -41,13 +41,13 @@ std::string Token::GetIdentifier() const {
   return Scanner{str_}.HandleIdentifier();
 }
 
-Location Token::GetLoc() const { return location_; }
+Location Token::GetLoc() const { return loc_; }
 
-void Token::SetLoc(const Location& loc) { location_ = loc; }
+void Token::SetLoc(const Location& loc) { loc_ = loc; }
 
 std::string Token::ToString() const {
   return fmt::format("{:<25}str: {:<25}loc: <{}>", TokenTag::ToString(tag_),
-                     str_, location_.ToLocStr());
+                     str_, loc_.ToLocStr());
 }
 
 bool Token::IsEof() const { return tag_ == Tag::kEof; }
@@ -57,15 +57,17 @@ bool Token::IsIdentifier() const { return tag_ == Tag::kIdentifier; }
 bool Token::IsStringLiteral() const { return tag_ == Tag::kStringLiteral; }
 
 bool Token::IsConstant() const {
-  return IsIntegerConstant() || IsFloatConstant() || IsCharacterConstant();
+  return IsInteger() || IsFloatPoint() || IsCharacter();
 }
 
-bool Token::IsIntegerConstant() const { return tag_ == Tag::kIntegerConstant; }
+bool Token::IsInteger() const { return tag_ == Tag::kInteger; }
 
-bool Token::IsFloatConstant() const { return tag_ == Tag::kFloatingConstant; }
+bool Token::IsFloatPoint() const {
+  return tag_ == Tag::kFloatingPoint;
+}
 
-bool Token::IsCharacterConstant() const {
-  return tag_ == Tag::kCharacterConstant;
+bool Token::IsCharacter() const {
+  return tag_ == Tag::kCharacter;
 }
 
 bool Token::IsTypeSpecQual() const {
@@ -79,7 +81,7 @@ bool Token::IsTypeSpecQual() const {
          tag_ == Tag::kVolatile || tag_ == Tag::kAtomic || tag_ == Tag::kTypeof;
 }
 
-bool Token::IsDecl() const {
+bool Token::IsDeclSpec() const {
   return IsTypeSpecQual() || tag_ == Tag::kAttribute || tag_ == Tag::kInline ||
          tag_ == Tag::kNoreturn || tag_ == Tag::kAlignas ||
          tag_ == Tag::kStaticAssert || tag_ == Tag::kTypedef ||
