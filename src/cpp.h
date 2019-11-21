@@ -19,6 +19,7 @@ class Preprocessor {
  public:
   Preprocessor();
   void SetIncludePaths(const std::vector<std::string> &include_paths);
+  // 输入形式为 name=value
   void SetMacroDefinitions(const std::vector<std::string> &macro_definitions);
   std::string Cpp(const std::string &input_file);
 

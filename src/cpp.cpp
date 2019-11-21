@@ -57,10 +57,17 @@ Preprocessor::Preprocessor() {
   pp_ = &ci_.getPreprocessor();
   header_search_ = &pp_->getHeaderSearchInfo();
 
-  AddIncludePath("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include", true);
-  AddIncludePath("/usr/local/include", true);
-  AddIncludePath("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include-fixed", true);
   AddIncludePath("/usr/include", true);
+  AddIncludePath("/usr/local/include", true);
+
+  /*
+   * Platform Specific Code
+   */
+  AddIncludePath("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include", true);
+  AddIncludePath("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include-fixed", true);
+  /*
+   * End of Platform Specific Code
+   */
 
   pp_->setPredefines(pp_->getPredefines() +
                      "#define __STDC_NO_ATOMICS__ 1\n"

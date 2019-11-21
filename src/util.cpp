@@ -40,11 +40,20 @@ decltype(std::chrono::system_clock::now()) T0;
 void TimingStart() { T0 = std::chrono::system_clock::now(); }
 
 void TimingEnd(const std::string &str) {
-  std::cout << str << ' '
-            << std::chrono::duration_cast<std::chrono::microseconds>(
-                   std::chrono::system_clock::now() - T0)
-                   .count()
-            << " μs" << std::endl;
+  auto time{std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::system_clock::now() - T0)
+                .count()};
+  std::cout << str << ": ";
+
+  if (time > 10000000) {
+    time /= 1000000;
+    std::cout << time << " s" << std::endl;
+  } else if (time > 10000) {
+    time /= 1000;
+    std::cout << time << " ms" << std::endl;
+  } else {
+    std::cout << time << " μs" << std::endl;
+  }
 }
 
 void InitCommandLine(int argc, char *argv[]) {

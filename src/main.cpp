@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) try {
   if (Preprocess || OutputAssembly || OutputObjectFile || EmitTokens ||
       EmitAST || EmitLLVM) {
     if (Timing) {
-      TimingEnd("Timing:");
+      TimingEnd("Timing");
     }
     return EXIT_SUCCESS;
   }
@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) try {
   }
 
   if (Timing) {
-    TimingEnd("Timing:");
+    TimingEnd("Timing");
   }
 } catch (const std::exception &error) {
   Error("{}", error.what());
