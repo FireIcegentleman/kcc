@@ -69,7 +69,7 @@ void Parser::EnterBlock(Type* func_type) {
 
   if (func_type) {
     for (const auto& param : func_type->FuncGetParams()) {
-      curr_scope_->InsertNormal(param->GetName(), param);
+      curr_scope_->InsertUsual(param->GetName(), param);
     }
   }
 }
@@ -90,7 +90,7 @@ bool Parser::IsTypeName(const Token& tok) {
   if (tok.IsTypeSpecQual()) {
     return true;
   } else if (tok.IsIdentifier()) {
-    auto ident{curr_scope_->FindNormal(tok)};
+    auto ident{curr_scope_->FindUsual(tok)};
     if (ident && ident->IsTypeName()) {
       return true;
     }
@@ -103,7 +103,7 @@ bool Parser::IsDecl(const Token& tok) {
   if (tok.IsDeclSpec()) {
     return true;
   } else if (tok.IsIdentifier()) {
-    auto ident{curr_scope_->FindNormal(tok)};
+    auto ident{curr_scope_->FindUsual(tok)};
     if (ident && ident->IsTypeName()) {
       return true;
     }
@@ -121,7 +121,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
       Error(loc_, "'_Alignas' attribute applies to typedef");
     }
 
-    auto ident{curr_scope_->FindNormalInCurrScope(name)};
+    auto ident{curr_scope_->FindUsualInCurrScope(name)};
     if (ident) {
       // 如果两次定义的类型兼容是可以的
       if (!type->Compatible(ident->GetType())) {
@@ -132,7 +132,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
         return nullptr;
       }
     } else {
-      curr_scope_->InsertNormal(
+      curr_scope_->InsertUsual(
           name, MakeAstNode<IdentifierExpr>(name, type, kNone, true));
       if (type->IsStructOrUnionTy()) {
         type->StructSetName(name);
@@ -162,7 +162,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     linkage = kNone;
   }
 
-  auto ident{curr_scope_->FindNormalInCurrScope(name)};
+  auto ident{curr_scope_->FindUsualInCurrScope(name)};
   //有链接对象(外部或内部)的声明可以重复
   if (ident) {
     if (!type->Compatible(ident->GetType())) {
@@ -207,7 +207,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
   }
 
   if (storage_class_spec & kExtern) {
-    ident = curr_scope_->FindNormal(name);
+    ident = curr_scope_->FindUsual(name);
     if (ident) {
       if (!type->Compatible(ident->GetType())) {
         Error(loc_, "conflicting types '{}' vs '{}'", type->ToString(),
@@ -231,7 +231,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     type->FuncSetName(name);
     ret = MakeAstNode<IdentifierExpr>(name, type, linkage, false);
 
-    curr_scope_->InsertNormal(name, ret);
+    curr_scope_->InsertUsual(name, ret);
     return MakeAstNode<Declaration>(ret);
   } else {
     auto obj{MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage,
@@ -252,7 +252,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
 
     ret = obj;
 
-    curr_scope_->InsertNormal(name, ret);
+    curr_scope_->InsertUsual(name, ret);
     auto decl{MakeAstNode<Declaration>(ret)};
     obj->SetDecl(decl);
     return decl;
@@ -872,7 +872,7 @@ Expr* Parser::ParsePrimaryExpr() {
 
   if (Peek().IsIdentifier()) {
     auto name{Next().GetIdentifier()};
-    auto ident{curr_scope_->FindNormal(name)};
+    auto ident{curr_scope_->FindUsual(name)};
 
     if (ident) {
       return ident;
@@ -1734,7 +1734,7 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
 
       default: {
         if (type_spec == 0 && IsTypeName(tok)) {
-          auto ident{curr_scope_->FindNormal(tok.GetIdentifier())};
+          auto ident{curr_scope_->FindUsual(tok.GetIdentifier())};
           type = ident->GetQualType();
           type_spec |= kTypedefName;
 
@@ -1975,7 +1975,7 @@ void Parser::ParseEnumerator() {
     TryParseAttributeSpec();
 
     auto name{tok.GetIdentifier()};
-    auto ident{curr_scope_->FindNormalInCurrScope(name)};
+    auto ident{curr_scope_->FindUsualInCurrScope(name)};
 
     if (ident) {
       Error(tok, "redefinition of enumerator '{}'", name);
@@ -1988,7 +1988,7 @@ void Parser::ParseEnumerator() {
 
     auto enumer{MakeAstNode<EnumeratorExpr>(tok.GetIdentifier(), val)};
     ++val;
-    curr_scope_->InsertNormal(name, enumer);
+    curr_scope_->InsertUsual(name, enumer);
 
     Try(Tag::kComma);
   } while (!Test(Tag::kRightBrace));
@@ -3062,7 +3062,7 @@ void Parser::AddBuiltin() {
       "reg_save_area", PointerType::Get(VoidType::Get())));
   va_list->SetComplete(true);
 
-  curr_scope_->InsertNormal(
+  curr_scope_->InsertUsual(
       "__builtin_va_list",
       MakeAstNode<IdentifierExpr>("__builtin_va_list",
                                   ArrayType::Get(va_list, 1), kNone, true));
@@ -3079,16 +3079,16 @@ void Parser::AddBuiltin() {
   auto copy{FunctionType::Get(VoidType::Get(), {param1, param1})};
   copy->SetName("__builtin_va_copy");
 
-  curr_scope_->InsertNormal("__builtin_va_start",
-                            MakeAstNode<IdentifierExpr>(
-                                "__builtin_va_start", start, kExternal, false));
-  curr_scope_->InsertNormal(
+  curr_scope_->InsertUsual("__builtin_va_start",
+                           MakeAstNode<IdentifierExpr>(
+                               "__builtin_va_start", start, kExternal, false));
+  curr_scope_->InsertUsual(
       "__builtin_va_end",
       MakeAstNode<IdentifierExpr>("__builtin_va_end", end, kExternal, false));
-  curr_scope_->InsertNormal("__builtin_va_arg_sub",
-                            MakeAstNode<IdentifierExpr>("__builtin_va_arg_sub",
-                                                        arg, kExternal, false));
-  curr_scope_->InsertNormal(
+  curr_scope_->InsertUsual("__builtin_va_arg_sub",
+                           MakeAstNode<IdentifierExpr>("__builtin_va_arg_sub",
+                                                       arg, kExternal, false));
+  curr_scope_->InsertUsual(
       "__builtin_va_copy",
       MakeAstNode<IdentifierExpr>("__builtin_va_copy", copy, kExternal, false));
 }

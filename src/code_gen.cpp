@@ -28,6 +28,7 @@
 
 #include "error.h"
 #include "llvm_common.h"
+#include "util.h"
 
 namespace kcc {
 
@@ -714,18 +715,18 @@ void CodeGen::Visit(const FuncDef& node) {
 
   // TODO Attribute DSOLocal 用法
   // TODO 实现 inline
-  //  if (node.GetLinkage() != kInternal) {
-  //    func->setDSOLocal(true);
-  //  }
-  //
-  //  func->addFnAttr(llvm::Attribute::NoUnwind);
-  //  func->addFnAttr(llvm::Attribute::StackProtectStrong);
-  //  func->addFnAttr(llvm::Attribute::UWTable);
-  //
-  //  if (OptimizationLevel == OptLevel::kO0) {
-  //    func->addFnAttr(llvm::Attribute::NoInline);
-  //    func->addFnAttr(llvm::Attribute::OptimizeNone);
-  //  }
+  if (node.GetLinkage() != kInternal) {
+    func->setDSOLocal(true);
+  }
+
+  func->addFnAttr(llvm::Attribute::NoUnwind);
+  func->addFnAttr(llvm::Attribute::StackProtectStrong);
+  func->addFnAttr(llvm::Attribute::UWTable);
+
+  if (OptimizationLevel == OptLevel::kO0) {
+    func->addFnAttr(llvm::Attribute::NoInline);
+    func->addFnAttr(llvm::Attribute::OptimizeNone);
+  }
 
   auto entry{llvm::BasicBlock::Create(Context, "", func)};
   Builder.SetInsertPoint(entry);

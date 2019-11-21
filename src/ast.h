@@ -99,7 +99,6 @@ class Expr : public AstNode {
   const Type* GetType() const;
 
   bool IsConst() const;
-  bool IsRestrict() const;
 
   void EnsureCompatible(QualType lhs, QualType rhs) const;
   void EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const;
@@ -121,8 +120,6 @@ class Expr : public AstNode {
  * * &
  */
 class UnaryOpExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
   friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
@@ -150,8 +147,6 @@ class UnaryOpExpr : public Expr {
 };
 
 class TypeCastExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
   friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
@@ -181,8 +176,6 @@ class TypeCastExpr : public Expr {
  */
 // 复合赋值运算符, [] , -> 均做了转换
 class BinaryOpExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
   friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;

@@ -74,8 +74,6 @@ const Type* Expr::GetType() const { return type_.GetType(); }
 
 bool Expr::IsConst() const { return type_.IsConst(); }
 
-bool Expr::IsRestrict() const { return type_.IsRestrict(); }
-
 void Expr::EnsureCompatible(QualType lhs, QualType rhs) const {
   if (!lhs->Compatible(rhs.GetType())) {
     Error(loc_, "incompatible types: '{}' vs '{}'", lhs->ToString(),

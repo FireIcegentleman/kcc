@@ -7,7 +7,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <list>
 #include <string>
 #include <vector>
 
@@ -82,24 +81,19 @@ class QualType {
   QualType() = default;
   QualType(Type* type, std::uint32_t type_qual = 0);
 
-  QualType(const QualType& item);
-  QualType& operator=(const QualType& item);
-
-  Type& operator*();
-  const Type& operator*() const;
   Type* operator->();
   const Type* operator->() const;
 
   Type* GetType();
   const Type* GetType() const;
+
   std::uint32_t GetTypeQual() const;
 
   bool IsConst() const;
-  bool IsRestrict() const;
 
  private:
   Type* type_{};
-  std::uint32_t type_qual_;
+  std::uint32_t type_qual_{};
 };
 
 bool operator==(QualType lhs, QualType rhs);
@@ -107,7 +101,7 @@ bool operator!=(QualType lhs, QualType rhs);
 
 class Type {
  public:
-  // 数组函数隐式转换为指针
+  // 数组和函数隐式转换为指针
   static QualType MayCast(QualType type);
 
   virtual ~Type() = default;
@@ -116,7 +110,7 @@ class Type {
   virtual std::int32_t GetWidth() const = 0;
   virtual std::int32_t GetAlign() const = 0;
   // 这里忽略了 cvr
-  // 若涉及同一对象或函数的二个声明不使用兼容类型，则程序的行为未定义。
+  // 若涉及同一对象或函数的二个声明不使用兼容类型, 则程序的行为未定义
   virtual bool Compatible(const Type* other) const = 0;
   virtual bool Equal(const Type* other) const = 0;
 
@@ -136,7 +130,6 @@ class Type {
   bool IsFloatTy() const;
   bool IsDoubleTy() const;
   bool IsLongDoubleTy() const;
-  bool IsComplexTy() const;
   bool IsTypeName() const;
 
   bool IsPointerTy() const;
@@ -146,14 +139,12 @@ class Type {
   bool IsStructOrUnionTy() const;
   bool IsFunctionTy() const;
 
-  bool IsObjectTy() const;
   bool IsCharacterTy() const;
   bool IsIntegerTy() const;
   bool IsRealTy() const;
   bool IsArithmeticTy() const;
   bool IsScalarTy() const;
   bool IsAggregateTy() const;
-  bool IsDerivedTy() const;
 
   bool IsRealFloatPointTy() const;
   bool IsFloatPointTy() const;
@@ -162,7 +153,6 @@ class Type {
 
   std::int32_t ArithmeticRank() const;
   std::uint64_t ArithmeticMaxIntegerValue() const;
-  void ArithmeticSetUnsigned();
 
   QualType PointerGetElementType() const;
 
@@ -174,7 +164,6 @@ class Type {
   bool StructOrUnionHasName() const;
   void StructSetName(const std::string& name);
   std::string StructGetName() const;
-  std::int32_t StructGetNumMembers() const;
   std::vector<ObjectExpr*>& StructGetMembers();
   ObjectExpr* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
@@ -187,8 +176,6 @@ class Type {
 
   bool FuncIsVarArgs() const;
   QualType FuncGetReturnType() const;
-  std::int32_t FuncGetNumParams() const;
-  QualType FuncGetParamType(std::int32_t i) const;
   std::vector<ObjectExpr*>& FuncGetParams();
   void FuncSetFuncSpec(std::uint32_t func_spec);
   bool FuncIsInline() const;
@@ -231,13 +218,12 @@ class ArithmeticType : public Type {
   virtual bool Compatible(const Type* other) const override;
   virtual bool Equal(const Type* other) const override;
 
-  std::int32_t Rank() const;
   std::uint64_t MaxIntegerValue() const;
-  void SetUnsigned();
 
  private:
   explicit ArithmeticType(std::uint32_t type_spec);
 
+  std::int32_t Rank() const;
   static std::uint32_t DealWithTypeSpec(std::uint32_t type_spec);
 
   std::uint32_t type_spec_{};
@@ -310,7 +296,6 @@ class StructType : public Type {
   void Finish();
 
   bool HasFlexibleArray() const;
-  std::list<std::pair<Type*, std::int32_t>> OffsetToIndexs(std::int32_t offset);
 
  private:
   StructType(bool is_struct, const std::string& name, Scope* parent);
@@ -345,7 +330,6 @@ class FunctionType : public Type {
   bool IsVarArgs() const;
   QualType GetReturnType() const;
   std::int32_t GetNumParams() const;
-  QualType GetParamType(std::int32_t i) const;
   std::vector<ObjectExpr*>& GetParams();
   void SetFuncSpec(std::uint32_t func_spec);
   bool IsInline() const;
@@ -357,11 +341,13 @@ class FunctionType : public Type {
   FunctionType(QualType return_type, std::vector<ObjectExpr*> param,
                bool is_var_args);
 
-  std::string name_;
-  bool is_var_args_;
-  std::uint32_t func_spec_{};
   QualType return_type_;
   std::vector<ObjectExpr*> params_;
+  bool is_var_args_;
+
+  std::uint32_t func_spec_{};
+
+  std::string name_;
 };
 
 }  // namespace kcc

@@ -23,24 +23,15 @@ namespace kcc {
 QualType::QualType(Type* type, std::uint32_t type_qual)
     : type_{type}, type_qual_{type_qual} {}
 
-QualType::QualType(const QualType& item) {
-  type_ = item.type_;
-  type_qual_ = item.type_qual_;
+Type* QualType::operator->() {
+  assert(type_ != nullptr);
+  return type_;
 }
 
-QualType& QualType::operator=(const QualType& item) {
-  type_ = item.type_;
-  type_qual_ = item.type_qual_;
-  return *this;
+const Type* QualType::operator->() const {
+  assert(type_ != nullptr);
+  return type_;
 }
-
-Type& QualType::operator*() { return *type_; }
-
-const Type& QualType::operator*() const { return *type_; }
-
-Type* QualType::operator->() { return type_; }
-
-const Type* QualType::operator->() const { return type_; }
 
 Type* QualType::GetType() {
   assert(type_ != nullptr);
@@ -55,8 +46,6 @@ const Type* QualType::GetType() const {
 std::uint32_t QualType::GetTypeQual() const { return type_qual_; }
 
 bool QualType::IsConst() const { return type_qual_ & kConst; }
-
-bool QualType::IsRestrict() const { return type_qual_ & kRestrict; }
 
 bool operator==(QualType lhs, QualType rhs) { return lhs.type_ == rhs.type_; }
 
@@ -76,9 +65,7 @@ QualType Type::MayCast(QualType type) {
 }
 
 std::string Type::ToString() const {
-  std::string s;
-  llvm::raw_string_ostream rso{s};
-  llvm_type_->print(rso);
+  auto s{LLVMTypeToStr(llvm_type_)};
 
   if (IsLongTy()) {
     s = "l" + s;
@@ -86,10 +73,11 @@ std::string Type::ToString() const {
     s = "ll" + s;
   }
 
-  if (IsIntegerTy() && IsUnsigned()) {
+  if (IsUnsigned()) {
     s = "u" + s;
   }
-  return rso.str();
+
+  return s;
 }
 
 llvm::Type* Type::GetLLVMType() const { return llvm_type_; }
@@ -166,11 +154,6 @@ bool Type::IsLongDoubleTy() const {
   return p && (p->type_spec_ == (kLong | kDouble));
 }
 
-bool Type::IsComplexTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
-  return p && (p->type_spec_ & kComplex);
-}
-
 bool Type::IsTypeName() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
   return p && (p->type_spec_ & kTypedefName);
@@ -198,8 +181,6 @@ bool Type::IsFunctionTy() const {
   return dynamic_cast<const FunctionType*>(this);
 }
 
-bool Type::IsObjectTy() const { return !IsFunctionTy(); }
-
 bool Type::IsCharacterTy() const {
   auto p{dynamic_cast<const ArithmeticType*>(this)};
   return p && (p->type_spec_ & kChar);
@@ -220,10 +201,6 @@ bool Type::IsScalarTy() const { return IsArithmeticTy() || IsPointerTy(); }
 
 bool Type::IsAggregateTy() const { return IsArrayTy() || IsStructOrUnionTy(); }
 
-bool Type::IsDerivedTy() const {
-  return IsArrayTy() || IsFunctionTy() || IsPointerTy();
-}
-
 bool Type::IsRealFloatPointTy() const {
   return IsFloatTy() || IsDoubleTy() || IsLongDoubleTy();
 }
@@ -241,10 +218,6 @@ std::int32_t Type::ArithmeticRank() const {
 
 std::uint64_t Type::ArithmeticMaxIntegerValue() const {
   return dynamic_cast<const ArithmeticType*>(this)->MaxIntegerValue();
-}
-
-void Type::ArithmeticSetUnsigned() {
-  dynamic_cast<ArithmeticType*>(this)->SetUnsigned();
 }
 
 QualType Type::PointerGetElementType() const {
@@ -275,10 +248,6 @@ void Type::StructSetName(const std::string& name) {
 
 std::string Type::StructGetName() const {
   return dynamic_cast<const StructType*>(this)->GetName();
-}
-
-std::int32_t Type::StructGetNumMembers() const {
-  return dynamic_cast<const StructType*>(this)->GetNumMembers();
 }
 
 std::vector<ObjectExpr*>& Type::StructGetMembers() {
@@ -322,14 +291,6 @@ bool Type::FuncIsVarArgs() const {
 
 QualType Type::FuncGetReturnType() const {
   return dynamic_cast<const FunctionType*>(this)->GetReturnType();
-}
-
-std::int32_t Type::FuncGetNumParams() const {
-  return dynamic_cast<const FunctionType*>(this)->GetNumParams();
-}
-
-QualType Type::FuncGetParamType(std::int32_t i) const {
-  return dynamic_cast<const FunctionType*>(this)->GetParamType(i);
 }
 
 std::vector<ObjectExpr*>& Type::FuncGetParams() {
@@ -462,8 +423,10 @@ Type* ArithmeticType::MaxType(Type* lhs, Type* rhs) {
             unsigned_type->ArithmeticMaxIntegerValue()) {
           return signed_type;
         } else {
-          signed_type->ArithmeticSetUnsigned();
-          return signed_type;
+          auto new_type{ArithmeticType::Get(
+              dynamic_cast<ArithmeticType*>(signed_type)->type_spec_ |
+              kUnsigned)};
+          return new_type;
         }
       }
     }
@@ -540,11 +503,6 @@ std::uint64_t ArithmeticType::MaxIntegerValue() const {
       assert(false);
       return 0;
   }
-}
-
-void ArithmeticType::SetUnsigned() {
-  assert(!IsBoolTy() && !IsFloatPointTy());
-  type_spec_ |= kUnsigned;
 }
 
 ArithmeticType::ArithmeticType(std::uint32_t type_spec) : Type{true} {
@@ -817,7 +775,7 @@ std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 std::vector<ObjectExpr*>& StructType::GetMembers() { return members_; }
 
 ObjectExpr* StructType::GetMember(const std::string& name) const {
-  auto iter{scope_->FindNormalInCurrScope(name)};
+  auto iter{scope_->FindUsualInCurrScope(name)};
   if (iter == nullptr) {
     return nullptr;
   } else {
@@ -843,7 +801,7 @@ void StructType::AddMember(ObjectExpr* member) {
 
   members_.push_back(member);
 
-  scope_->InsertNormal(member->GetName(), member);
+  scope_->InsertUsual(member->GetName(), member);
   member->GetIndexs().push_front({this, index_++});
 
   align_ = std::max(align_, member->GetAlign());
@@ -879,7 +837,7 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 
       member->SetOffset(offset + member->GetOffset());
 
-      scope_->InsertNormal(name, member);
+      scope_->InsertUsual(name, member);
       member->GetIndexs().push_front({this, index_});
     }
   }
@@ -920,21 +878,6 @@ void StructType::Finish() {
 }
 
 bool StructType::HasFlexibleArray() const { return has_flexible_array_; }
-
-std::list<std::pair<Type*, std::int32_t>> StructType::OffsetToIndexs(
-    std::int32_t offset) {
-  for (const auto& [name, obj] : *scope_) {
-    auto p{dynamic_cast<ObjectExpr*>(obj)};
-    assert(p != nullptr);
-
-    if (p->GetOffset() == offset) {
-      return p->GetIndexs();
-    }
-  }
-
-  assert(false);
-  return {};
-}
 
 StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
     : Type{false},
@@ -1043,10 +986,6 @@ QualType FunctionType::GetReturnType() const { return return_type_; }
 
 std::int32_t FunctionType::GetNumParams() const { return std::size(params_); }
 
-QualType FunctionType::GetParamType(std::int32_t i) const {
-  return params_[i]->GetQualType();
-}
-
 std::vector<ObjectExpr*>& FunctionType::GetParams() { return params_; }
 
 void FunctionType::SetFuncSpec(std::uint32_t func_spec) {
@@ -1064,9 +1003,9 @@ std::string FunctionType::GetName() const { return name_; }
 FunctionType::FunctionType(QualType return_type, std::vector<ObjectExpr*> param,
                            bool is_var_args)
     : Type{false},
-      is_var_args_{is_var_args},
       return_type_{return_type},
-      params_{param} {
+      params_{param},
+      is_var_args_{is_var_args} {
   std::vector<llvm::Type*> params;
   for (const auto& item : params_) {
     params.push_back(item->GetType()->GetLLVMType());

@@ -16,16 +16,16 @@ void Scope::InsertTag(IdentifierExpr* ident) {
   InsertTag(ident->GetName(), ident);
 }
 
-void Scope::InsertNormal(IdentifierExpr* ident) {
-  InsertNormal(ident->GetName(), ident);
+void Scope::InsertUsual(IdentifierExpr* ident) {
+  InsertUsual(ident->GetName(), ident);
 }
 
 void Scope::InsertTag(const std::string& name, IdentifierExpr* ident) {
   tags_[name] = ident;
 }
 
-void Scope::InsertNormal(const std::string& name, IdentifierExpr* ident) {
-  normal_[name] = ident;
+void Scope::InsertUsual(const std::string& name, IdentifierExpr* ident) {
+  usual_[name] = ident;
 }
 
 IdentifierExpr* Scope::FindTag(const std::string& name) {
@@ -36,20 +36,22 @@ IdentifierExpr* Scope::FindTag(const std::string& name) {
 
   if (type_ == kFile || parent_ == nullptr) {
     return nullptr;
+  } else {
+    return parent_->FindTag(name);
   }
-  return parent_->FindTag(name);
 }
 
-IdentifierExpr* Scope::FindNormal(const std::string& name) {
-  auto iter{normal_.find(name)};
-  if (iter != std::end(normal_)) {
+IdentifierExpr* Scope::FindUsual(const std::string& name) {
+  auto iter{usual_.find(name)};
+  if (iter != std::end(usual_)) {
     return iter->second;
   }
 
   if (type_ == kFile || parent_ == nullptr) {
     return nullptr;
+  } else {
+    return parent_->FindUsual(name);
   }
-  return parent_->FindNormal(name);
 }
 
 IdentifierExpr* Scope::FindTagInCurrScope(const std::string& name) {
@@ -57,25 +59,25 @@ IdentifierExpr* Scope::FindTagInCurrScope(const std::string& name) {
   return iter == std::end(tags_) ? nullptr : iter->second;
 }
 
-IdentifierExpr* Scope::FindNormalInCurrScope(const std::string& name) {
-  auto iter{normal_.find(name)};
-  return iter == std::end(normal_) ? nullptr : iter->second;
+IdentifierExpr* Scope::FindUsualInCurrScope(const std::string& name) {
+  auto iter{usual_.find(name)};
+  return iter == std::end(usual_) ? nullptr : iter->second;
 }
 
 IdentifierExpr* Scope::FindTag(const Token& tok) {
   return FindTag(tok.GetIdentifier());
 }
 
-IdentifierExpr* Scope::FindNormal(const Token& tok) {
-  return FindNormal(tok.GetIdentifier());
+IdentifierExpr* Scope::FindUsual(const Token& tok) {
+  return FindUsual(tok.GetIdentifier());
 }
 
 IdentifierExpr* Scope::FindTagInCurrScope(const Token& tok) {
   return FindTagInCurrScope(tok.GetIdentifier());
 }
 
-IdentifierExpr* Scope::FindNormalInCurrScope(const Token& tok) {
-  return FindNormalInCurrScope(tok.GetIdentifier());
+IdentifierExpr* Scope::FindUsualInCurrScope(const Token& tok) {
+  return FindUsualInCurrScope(tok.GetIdentifier());
 }
 
 std::unordered_map<std::string, IdentifierExpr*> Scope::AllTagInCurrScope()
@@ -86,5 +88,8 @@ std::unordered_map<std::string, IdentifierExpr*> Scope::AllTagInCurrScope()
 Scope* Scope::GetParent() { return parent_; }
 
 bool Scope::IsFileScope() const { return type_ == kFile; }
+
+Scope::Scope(Scope* parent, enum ScopeType type)
+    : parent_{parent}, type_{type} {}
 
 }  // namespace kcc
