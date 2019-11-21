@@ -51,7 +51,7 @@ class MemoryPool {
   void AllocateBlock();
   SizeType PadPointer(DataPointer p, SizeType align) const noexcept;
 
-  static_assert(BlockSize >= 2 * sizeof(SlotType), "BlockSize too small.");
+  static_assert(BlockSize >= 2 * sizeof(SlotType), "BlockSize too small");
 };
 
 template <typename T, size_t BlockSize>

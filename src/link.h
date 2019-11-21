@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "util.h"
+#include "llvm_common.h"
 
 namespace kcc {
 

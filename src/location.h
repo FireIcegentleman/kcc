@@ -23,6 +23,7 @@ class Location {
 
   std::string ToLocStr() const;
   std::string GetLineContent() const;
+  std::string GetPositionArrow() const;
 
  private:
   std::string file_name_;

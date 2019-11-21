@@ -127,7 +127,7 @@ void EnsureFileExists(const std::string &file_name) {
 }
 
 std::string GetObjFile(const std::string &name) {
-  auto file_name{std::filesystem::path{name}.replace_extension(".o")};
+  auto file_name{std::filesystem::path{name + ".o"}};
   return ("/tmp" / file_name).string();
 }
 
@@ -153,21 +153,6 @@ void RemoveAllFiles(const std::vector<std::string> &files) {
 
 bool CommandSuccess(std::int32_t status) {
   return status != -1 && WIFEXITED(status) && !WEXITSTATUS(status);
-}
-
-llvm::Constant *GetConstantZero(llvm::Type *type) {
-  if (type->isIntegerTy()) {
-    return llvm::ConstantInt::get(type, 0);
-  } else if (type->isFloatingPointTy()) {
-    return llvm::ConstantFP::get(type, 0.0);
-  } else if (type->isPointerTy()) {
-    return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
-  } else if (type->isAggregateType()) {
-    return llvm::ConstantAggregateZero::get(type);
-  } else {
-    assert(false);
-    return nullptr;
-  }
 }
 
 }  // namespace kcc

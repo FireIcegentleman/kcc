@@ -62,13 +62,9 @@ bool Token::IsConstant() const {
 
 bool Token::IsInteger() const { return tag_ == Tag::kInteger; }
 
-bool Token::IsFloatPoint() const {
-  return tag_ == Tag::kFloatingPoint;
-}
+bool Token::IsFloatPoint() const { return tag_ == Tag::kFloatingPoint; }
 
-bool Token::IsCharacter() const {
-  return tag_ == Tag::kCharacter;
-}
+bool Token::IsCharacter() const { return tag_ == Tag::kCharacter; }
 
 bool Token::IsTypeSpecQual() const {
   return tag_ == Tag::kVoid || tag_ == Tag::kChar || tag_ == Tag::kShort ||

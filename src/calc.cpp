@@ -4,7 +4,7 @@
 
 #include "calc.h"
 
-#include "util.h"
+#include "llvm_common.h"
 
 namespace kcc {
 

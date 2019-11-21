@@ -5,7 +5,7 @@
 #ifndef KCC_SRC_OPT_H_
 #define KCC_SRC_OPT_H_
 
-#include "util.h"
+#include "llvm_common.h"
 
 namespace kcc {
 

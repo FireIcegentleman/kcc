@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <fmt/color.h>
@@ -20,7 +21,7 @@
 
 namespace kcc {
 
-inline std::vector<std::string> WarningStrings;
+inline std::vector<std::pair<std::string, std::string>> WarningStrings;
 
 [[noreturn]] void Error(Tag expect, const Token &actual);
 void PrintWarnings();
@@ -45,6 +46,8 @@ template <typename... Args>
 
   fmt::print(fmt::fg(fmt::terminal_color::red), fmt("{}"),
              loc.GetLineContent());
+  fmt::print(fmt::fg(fmt::terminal_color::green), fmt("{}"),
+             loc.GetPositionArrow());
 
   PrintWarnings();
   std::exit(EXIT_FAILURE);
@@ -69,7 +72,7 @@ void Warning(std::string_view format_str, const Args &... args) {
   str += fmt::format(format_str, args...);
   str += '\n';
 
-  WarningStrings.push_back(str);
+  WarningStrings.push_back({str, ""});
 }
 
 template <typename... Args>
@@ -82,7 +85,7 @@ void Warning(const Location &loc, std::string_view format_str,
   str += '\n';
   str += loc.GetLineContent();
 
-  WarningStrings.push_back(str);
+  WarningStrings.push_back({str, loc.GetPositionArrow()});
 }
 
 template <typename... Args>

@@ -7,8 +7,11 @@
 namespace kcc {
 
 void PrintWarnings() {
-  for (const auto &item : WarningStrings) {
-    fmt::print(fmt::fg(fmt::terminal_color::yellow), fmt("{}"), item);
+  for (const auto &[item, arrow] : WarningStrings) {
+    fmt::print(fmt::fg(fmt::terminal_color::white), fmt("{}"), item);
+    if (!std::empty(arrow)) {
+      fmt::print(fmt::fg(fmt::terminal_color::green), fmt("{}"), arrow);
+    }
   }
 }
 
@@ -21,6 +24,8 @@ void PrintWarnings() {
 
   fmt::print(fmt::fg(fmt::terminal_color::red), fmt("{}"),
              loc.GetLineContent());
+  fmt::print(fmt::fg(fmt::terminal_color::green), fmt("{}"),
+             loc.GetPositionArrow());
 
   PrintWarnings();
   std::exit(EXIT_FAILURE);

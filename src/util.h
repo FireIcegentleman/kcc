@@ -11,27 +11,11 @@
 #include <string_view>
 #include <vector>
 
-#include <llvm/IR/DataLayout.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Target/TargetMachine.h>
+
+#include "llvm_common.h"
 
 namespace kcc {
-
-// 拥有许多 LLVM 核心数据结构, 如类型和常量值表
-inline llvm::LLVMContext Context;
-// 一个辅助对象, 跟踪当前位置并且可以插入 LLVM 指令
-inline llvm::IRBuilder<> Builder{Context};
-// 包含函数和全局变量, 它拥有生成的所有 IR 的内存
-inline auto Module{std::make_unique<llvm::Module>("main", Context)};
-
-inline llvm::DataLayout DataLayout{Module.get()};
-
-inline std::unique_ptr<llvm::TargetMachine> TargetMachine;
-
-enum class OptLevel { kO0, kO1, kO2, kO3 };
 
 inline llvm::cl::OptionCategory Category{"Compiler Options"};
 
@@ -102,9 +86,6 @@ inline llvm::cl::opt<bool> Test8cc{"8cc", llvm::cl::desc{"Test 8cc"},
 inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
                                      llvm::cl::cat{Category}};
 
-inline llvm::cl::opt<bool> SymbolTable{
-    "symbol", llvm::cl::desc{"Print symbol table"}, llvm::cl::cat{Category}};
-
 inline llvm::cl::opt<bool> StandardIR{"ir", llvm::cl::desc{"emit Standard IR"},
                                       llvm::cl::cat{Category}};
 #endif
@@ -130,8 +111,6 @@ std::string GetFileName(const std::string &name, std::string_view extension);
 void RemoveAllFiles(const std::vector<std::string> &files);
 
 bool CommandSuccess(std::int32_t status);
-
-llvm::Constant *GetConstantZero(llvm::Type *type);
 
 }  // namespace kcc
 

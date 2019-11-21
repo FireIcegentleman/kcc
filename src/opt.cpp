@@ -19,8 +19,6 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
-#include "util.h"
-
 namespace kcc {
 
 void AddOptimizationPasses(llvm::legacy::PassManagerBase &mpm,
@@ -64,7 +62,6 @@ void Optimization(OptLevel opt_level) {
   auto level{static_cast<std::uint32_t>(opt_level)};
 
   if (level != 0) {
-    // 初始化
     llvm::PassRegistry &registry{*llvm::PassRegistry::getPassRegistry()};
 
     llvm::initializeCore(registry);

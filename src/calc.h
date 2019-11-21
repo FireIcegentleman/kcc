@@ -422,9 +422,9 @@ bool IsIntegerTy(llvm::Constant* value);
 bool IsFloatingPointTy(llvm::Constant* value);
 bool IsPointerTy(llvm::Constant* value);
 bool IsArrCastToPtr(llvm::Constant* value, llvm::Type* type);
-std::int32_t FloatPointRank(llvm::Type *type);
-std::string LLVMTypeToStr(llvm::Type *type) ;
-llvm::Constant *GetZero(llvm::Type *type);
+std::int32_t FloatPointRank(llvm::Type* type);
+std::string LLVMTypeToStr(llvm::Type* type);
+llvm::Constant* GetZero(llvm::Type* type);
 }  // namespace kcc
 
 #endif  // KCC_SRC_CALC_H_

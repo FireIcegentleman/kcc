@@ -12,13 +12,12 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include "error.h"
-#include "util.h"
+#include "llvm_common.h"
 
 namespace kcc {
 
 void ObjGen(const std::string& obj_file,
             llvm::TargetMachine::CodeGenFileType file_type) {
-  // 初始化
   llvm::InitializeAllAsmPrinters();
   llvm::InitializeAllAsmParsers();
 
@@ -26,7 +25,7 @@ void ObjGen(const std::string& obj_file,
   llvm::raw_fd_ostream dest{obj_file, error_code, llvm::sys::fs::F_None};
 
   if (error_code) {
-    Error("Could not open file: {}", error_code.message());
+    Error("Could not open file: '{}'", error_code.message());
   }
 
   // 定义 PassManager 以生成目标代码

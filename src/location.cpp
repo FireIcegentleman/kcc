@@ -69,9 +69,12 @@ std::string Location::GetLineContent() const {
   }
 
   str += '\n';
-  str += fmt::format(fmt("{}{}\n"), std::string(column_ - 1, ' '), "^");
 
   return str;
+}
+
+std::string Location::GetPositionArrow() const {
+  return fmt::format(fmt("{}{}\n"), std::string(column_ - 1, ' '), "^");
 }
 
 }  // namespace kcc

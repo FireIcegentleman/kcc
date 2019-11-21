@@ -11,9 +11,9 @@
 
 #include "ast.h"
 #include "error.h"
+#include "llvm_common.h"
 #include "memory_pool.h"
 #include "scope.h"
-#include "util.h"
 
 namespace kcc {
 

@@ -92,6 +92,7 @@ int main(int argc, char *argv[]) try {
 
   auto obj_files{GetObjFiles()};
   if (!Link(obj_files, OptimizationLevel, OutputFilePath)) {
+    RemoveAllFiles(obj_files);
     Error("Link Failed");
   } else {
     RemoveAllFiles(obj_files);
@@ -182,17 +183,14 @@ void RunKcc(const std::string &file_name) {
 
   if (OutputObjectFile) {
     if (std::empty(OutputFilePath)) {
-      ObjGen(GetFileName(file_name, ".o"),
-             llvm::TargetMachine::CodeGenFileType::CGFT_ObjectFile);
+      ObjGen(GetFileName(file_name, ".o"));
     } else {
-      ObjGen(OutputFilePath,
-             llvm::TargetMachine::CodeGenFileType::CGFT_ObjectFile);
+      ObjGen(OutputFilePath);
     }
     return;
   }
 
-  ObjGen(GetObjFile(file_name),
-         llvm::TargetMachine::CodeGenFileType::CGFT_ObjectFile);
+  ObjGen(GetObjFile(file_name));
 }
 
 #ifdef DEV
@@ -276,7 +274,6 @@ void RunDev() {
 
   if (!ParseOnly) {
     std::cout << "link\n";
-
     if (!Link({GetFileName(file, ".o")}, OptimizationLevel,
               GetFileName(file, ".out"))) {
       Error("link fail");

@@ -14,7 +14,7 @@
 #include "encoding.h"
 #include "error.h"
 #include "lex.h"
-#include "util.h"
+#include "llvm_common.h"
 
 namespace kcc {
 
@@ -28,12 +28,6 @@ TranslationUnit* Parser::ParseTranslationUnit() {
   while (HasNext()) {
     unit_->AddExtDecl(ParseExternalDecl());
   }
-
-#ifdef DEV
-  if (SymbolTable) {
-    curr_scope_->PrintCurrScope();
-  }
-#endif
 
   return unit_;
 }
@@ -929,7 +923,8 @@ Expr* Parser::ParseCharacter() {
   MarkLoc();
 
   auto tok{Next()};
-  auto [val, encoding]{Scanner{tok.GetStr()}.HandleCharacter()};
+  Scanner scanner{tok.GetStr(), loc_};
+  auto [val, encoding]{scanner.HandleCharacter()};
 
   std::uint32_t type_spec{};
   switch (encoding) {

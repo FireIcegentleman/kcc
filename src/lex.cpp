@@ -2,14 +2,6 @@
 // Created by kaiser on 2019/10/30.
 //
 
-// 替用记号(C95)
-// {	<%
-// }	%>
-// [	<:
-// ]	:>
-// #	%:
-// ##	%:%:
-
 #include "lex.h"
 
 #include <cassert>
@@ -18,6 +10,8 @@
 #include "error.h"
 
 namespace kcc {
+
+namespace {
 
 bool IsOctDigit(std::int32_t ch) { return ch >= '0' && ch <= '7'; }
 
@@ -34,21 +28,29 @@ std::int32_t CharToDigit(std::int32_t ch) {
   }
 }
 
+}  // namespace
+
 Scanner::Scanner(std::string preprocessed_code)
     : source_{std::move(preprocessed_code)} {
   loc_.SetContent(source_.data());
 }
 
+Scanner::Scanner(std::string code, const Location& loc)
+    : source_{std::move(code)} {
+  loc_ = loc;
+}
+
 std::vector<Token> Scanner::Tokenize() {
   std::vector<Token> token_sequence;
+  token_sequence.reserve(Scanner::kTokenReserve);
 
   while (true) {
     auto token{Scan()};
+    assert(!token.TagIs(Tag::kNone));
+
     token_sequence.push_back(token);
 
-    if (token.TagIs(Tag::kNone)) {
-      Error(loc_, "token error");
-    } else if (token.IsEof()) {
+    if (token.IsEof()) {
       break;
     }
   }
@@ -124,6 +126,70 @@ std::pair<std::string, Encoding> Scanner::HandleStringLiteral() {
   return {s, encoding};
 }
 
+bool Scanner::HasNext() { return index_ < std::size(source_); }
+
+std::int32_t Scanner::Peek() {
+  // 注意 C++11 起, 若 curr_index_ == size() 则返回空字符
+  auto ret{source_[index_]};
+  // 可能是 UTF-8 编码的非 ascii 字符, 此时值为负
+  return ret >= 0 ? ret : ret + 256;
+}
+
+std::int32_t Scanner::Next(bool push) {
+  auto ch{Peek()};
+  ++index_;
+
+  if (push) {
+    buffer_.push_back(ch);
+  }
+
+  if (ch == '\n') {
+    loc_.NextRow(index_);
+  } else {
+    loc_.NextColumn();
+  }
+
+  return ch;
+}
+
+void Scanner::PutBack() {
+  assert(index_ > 0);
+  auto ch{source_[--index_]};
+
+  assert(!std::empty(buffer_));
+  buffer_.pop_back();
+
+  if (ch == '\n') {
+    loc_.PrevRow();
+  } else {
+    loc_.PrevColumn();
+  }
+}
+
+bool Scanner::Test(std::int32_t c) { return Peek() == c; }
+
+bool Scanner::Try(std::int32_t c) {
+  if (Peek() == c) {
+    Next();
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool Scanner::IsUCN(std::int32_t ch) {
+  return ch == '\\' && (Test('u') || Test('U'));
+}
+
+Token Scanner::MakeToken(Tag tag) {
+  token_.SetTag(tag);
+  token_.SetStr(buffer_);
+  buffer_.clear();
+  return token_;
+}
+
+void Scanner::MarkLocation() { token_.SetLoc(loc_); }
+
 Token Scanner::Scan() {
   SkipSpace();
 
@@ -152,11 +218,10 @@ Token Scanner::Scan() {
           return MakeToken(Tag::kEllipsis);
         } else {
           PutBack();
-          return MakeToken(Tag::kPeriod);
         }
-      } else {
-        return MakeToken(Tag::kPeriod);
       }
+
+      return MakeToken(Tag::kPeriod);
     case '+':
       if (Try('+')) {
         return MakeToken(Tag::kPlusPlus);
@@ -191,6 +256,13 @@ Token Scanner::Scan() {
       return MakeToken(Try('=') ? Tag::kExclaimEqual : Tag::kExclaim);
     case '/':
       return MakeToken(Try('=') ? Tag::kSlashEqual : Tag::kSlash);
+      // 替用记号
+      // {	<%
+      // }	%>
+      // [	<:
+      // ]	:>
+      // #	%:
+      // ##	%:%:
     case '%':
       if (Try('=')) {
         return MakeToken(Tag::kPercentEqual);
@@ -202,11 +274,9 @@ Token Scanner::Scan() {
             return MakeToken(Tag::kSharpSharp);
           } else {
             PutBack();
-            return MakeToken(Tag::kSharp);
           }
-        } else {
-          return MakeToken(Tag::kSharp);
         }
+        return MakeToken(Tag::kSharp);
       } else {
         return MakeToken(Tag::kPercent);
       }
@@ -250,7 +320,7 @@ Token Scanner::Scan() {
     case ',':
       return MakeToken(Tag::kComma);
     case '#':
-      SkipComment();
+      SkipLineDirectives();
       return Scan();
     case '0':
     case '1':
@@ -285,57 +355,8 @@ Token Scanner::Scan() {
       if (Test('u') || Test('U')) {
         return SkipIdentifier();
       } else {
-        Error(loc_, "Invalid input: {}", ch);
+        Error(loc_, "Invalid input: {}", static_cast<char>(ch));
       }
-    case 'a':
-    case 'b':
-    case 'c':
-    case 'd':
-    case 'e':
-    case 'f':
-    case 'g':
-    case 'h':
-    case 'i':
-    case 'j':
-    case 'k':
-    case 'l':
-    case 'm':
-    case 'n':
-    case 'o':
-    case 'p':
-    case 'q':
-    case 'r':
-    case 's':
-    case 't':
-    case 'v':
-    case 'w':
-    case 'x':
-    case 'y':
-    case 'z':
-    case 'A':
-    case 'B':
-    case 'C':
-    case 'D':
-    case 'E':
-    case 'F':
-    case 'G':
-    case 'H':
-    case 'I':
-    case 'J':
-    case 'K':
-    case 'M':
-    case 'N':
-    case 'O':
-    case 'P':
-    case 'Q':
-    case 'R':
-    case 'S':
-    case 'T':
-    case 'V':
-    case 'W':
-    case 'X':
-    case 'Y':
-    case 'Z':
     case '_':
       // 扩展
     case '$':
@@ -345,7 +366,7 @@ Token Scanner::Scan() {
       return MakeToken(Tag::kEof);
     default: {
       // 字节 0xFE 和 0xFF 在 UTF-8 编码中从未用到
-      if (ch >= 0x80 && ch <= 0xfd) {
+      if (std::isalpha(ch) || (ch >= 0x80 && ch <= 0xfd)) {
         return SkipIdentifier();
       } else {
         Error(loc_, "Invalid input: {}", static_cast<char>(ch));
@@ -354,78 +375,14 @@ Token Scanner::Scan() {
   }
 }
 
-bool Scanner::HasNext() { return curr_index_ < std::size(source_); }
-
-std::int32_t Scanner::Peek() {
-  // 注意 C++11 起, 若 curr_index_ == size() 则返回空字符
-  auto ret{source_[curr_index_]};
-  // 可能是 UTF-8 编码的非 ascii 字符, 此时值为负
-  return ret >= 0 ? ret : ret + 256;
-}
-
-std::int32_t Scanner::Next(bool push) {
-  auto ch{Peek()};
-  ++curr_index_;
-
-  if (push) {
-    buffer_.push_back(ch);
-  }
-
-  if (ch == '\n') {
-    loc_.NextRow(curr_index_);
-  } else {
-    loc_.NextColumn();
-  }
-
-  return ch;
-}
-
-void Scanner::PutBack() {
-  assert(curr_index_ > 0);
-  auto ch{source_[--curr_index_]};
-
-  assert(!std::empty(buffer_));
-  buffer_.pop_back();
-
-  if (ch == '\n') {
-    loc_.PrevRow();
-  } else {
-    loc_.PrevColumn();
-  }
-}
-
-bool Scanner::Test(std::int32_t c) { return Peek() == c; }
-
-bool Scanner::Try(std::int32_t c) {
-  if (Peek() == c) {
-    Next();
-    return true;
-  } else {
-    return false;
-  }
-}
-
-bool Scanner::IsUCN(std::int32_t ch) {
-  return ch == '\\' && (Test('u') || Test('U'));
-}
-
-Token Scanner::MakeToken(Tag tag) {
-  curr_token_.SetTag(tag);
-  curr_token_.SetStr(buffer_);
-  buffer_.clear();
-  return curr_token_;
-}
-
-void Scanner::MarkLocation() { curr_token_.SetLoc(loc_); }
-
 void Scanner::SkipSpace() {
   while (std::isspace(Peek())) {
     Next(false);
   }
 }
 
-void Scanner::SkipComment() {
-  // clear #
+void Scanner::SkipLineDirectives() {
+  // clear '#'
   buffer_.clear();
   // eat space
   Next(false);
@@ -444,6 +401,7 @@ void Scanner::SkipComment() {
   loc_.SetFileName(file_name.substr(1, std::size(file_name) - 2));
 
   while (HasNext() && Next(false) != '\n') {
+    // 跳过该行后面的所有内容
   }
 
   buffer_.clear();
@@ -463,8 +421,10 @@ Token Scanner::SkipNumber() {
   bool saw_hex_prefix{false};
   auto tag{Tag::kInteger};
 
-  auto ch{buffer_.front()};
-  while (ch == '.' || std::isalnum(ch) || ch == '_' || IsUCN(ch)) {
+  // 第一个字符不能是 identifier-nondigit, 并不需要加 256
+  std::int32_t ch{buffer_.front()};
+  while (ch == '.' || std::isalnum(ch) || ch == '_' || IsUCN(ch) ||
+         (ch >= 0x80 && ch <= 0xfd)) {
     // 注意有 e 不一定是浮点数
     if (ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') {
       if (!Try('-')) {
@@ -482,7 +442,7 @@ Token Scanner::SkipNumber() {
     } else if (ch == '.') {
       tag = Tag::kFloatingPoint;
     } else if (ch == 'x' || ch == 'X') {
-      // 这里如果前面是其他数字或 . 也会执行下面的语句, 在后面处理
+      // 这里如果前面是其他数字或 . 也会执行下面的语句, 在语法分析
       // 过程中, 如 2x541, 将 x541 视为后缀, 也是不合法的
       saw_hex_prefix = true;
     }
@@ -624,7 +584,7 @@ std::int32_t Scanner::HandleEscape() {
       return '\t';
     case 'v':
       return '\v';
-      // GNU 扩展
+      // gcc 扩展
     case 'e':
       return '\033';
     case 'X':
@@ -654,13 +614,12 @@ std::int32_t Scanner::HandleEscape() {
 //  hexadecimal-escape-sequence hexadecimal-digit
 std::int32_t Scanner::HandleHexEscape() {
   std::int32_t value{};
-  auto ch{Peek()};
+  auto ch{Next()};
 
   if (!std::isxdigit(ch)) {
     Error(loc_, "\\x used with no following hex digits: '{}'", ch);
   }
 
-  ch = Next();
   while (std::isxdigit(ch)) {
     value = (static_cast<std::uint32_t>(value) << 4U) + CharToDigit(ch);
     ch = Next();

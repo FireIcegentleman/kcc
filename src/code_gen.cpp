@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "error.h"
-#include "util.h"
+#include "llvm_common.h"
 
 namespace kcc {
 

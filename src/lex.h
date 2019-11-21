@@ -5,6 +5,7 @@
 #ifndef KCC_SRC_LEX_H_
 #define KCC_SRC_LEX_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -12,6 +13,7 @@
 
 #include "dict.h"
 #include "encoding.h"
+#include "location.h"
 #include "token.h"
 
 namespace kcc {
@@ -19,6 +21,8 @@ namespace kcc {
 class Scanner {
  public:
   explicit Scanner(std::string preprocessed_code);
+  // for parser
+  Scanner(std::string code, const Location& loc);
 
   std::vector<Token> Tokenize();
 
@@ -27,8 +31,6 @@ class Scanner {
   std::pair<std::string, Encoding> HandleStringLiteral();
 
  private:
-  Token Scan();
-
   bool HasNext();
   std::int32_t Peek();
   std::int32_t Next(bool push = true);
@@ -40,8 +42,10 @@ class Scanner {
   Token MakeToken(Tag tag);
   void MarkLocation();
 
+  Token Scan();
+
   void SkipSpace();
-  void SkipComment();
+  void SkipLineDirectives();
 
   Token SkipNumber();
   Token SkipIdentifier();
@@ -55,12 +59,14 @@ class Scanner {
   std::int32_t HandleUCN(std::int32_t length);
 
   std::string source_;
-  std::string::size_type curr_index_{};
+  std::string::size_type index_{};
 
   Location loc_;
 
-  Token curr_token_;
+  Token token_;
   std::string buffer_;
+
+  constexpr static std::size_t kTokenReserve{1024};
 
   inline static KeywordsDictionary Keywords;
 };
