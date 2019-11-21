@@ -1871,7 +1871,7 @@ void Parser::ParseStructDeclList(StructType* type) {
         //};
         if (std::empty(tok.GetStr())) {
           // 此时该 struct / union 不能有名字
-          if (copy->IsStructOrUnionTy() && !copy->StructOrUnionHasName()) {
+          if (copy->IsStructOrUnionTy() && !copy->StructHasName()) {
             auto anonymous{MakeAstNode<ObjectExpr>("", copy, 0, kNone, true)};
             type->MergeAnonymous(anonymous);
             continue;

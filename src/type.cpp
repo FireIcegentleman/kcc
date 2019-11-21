@@ -65,6 +65,8 @@ QualType Type::MayCast(QualType type) {
 }
 
 std::string Type::ToString() const {
+  assert(llvm_type_ != nullptr);
+
   auto s{LLVMTypeToStr(llvm_type_)};
 
   if (IsLongTy()) {
@@ -80,7 +82,50 @@ std::string Type::ToString() const {
   return s;
 }
 
-llvm::Type* Type::GetLLVMType() const { return llvm_type_; }
+llvm::Type* Type::GetLLVMType() const {
+  assert(llvm_type_ != nullptr);
+  return llvm_type_;
+}
+
+VoidType* Type::ToVoidType() { return dynamic_cast<VoidType*>(this); }
+
+ArithmeticType* Type::ToArithmeticType() {
+  return dynamic_cast<ArithmeticType*>(this);
+}
+
+PointerType* Type::ToPointerType() { return dynamic_cast<PointerType*>(this); }
+
+ArrayType* Type::ToArrayType() { return dynamic_cast<ArrayType*>(this); }
+
+StructType* Type::ToStructType() { return dynamic_cast<StructType*>(this); }
+
+FunctionType* Type::ToFunctionType() {
+  return dynamic_cast<FunctionType*>(this);
+}
+
+const VoidType* Type::ToVoidType() const {
+  return dynamic_cast<const VoidType*>(this);
+}
+
+const ArithmeticType* Type::ToArithmeticType() const {
+  return dynamic_cast<const ArithmeticType*>(this);
+}
+
+const PointerType* Type::ToPointerType() const {
+  return dynamic_cast<const PointerType*>(this);
+}
+
+const ArrayType* Type::ToArrayType() const {
+  return dynamic_cast<const ArrayType*>(this);
+}
+
+const StructType* Type::ToStructType() const {
+  return dynamic_cast<const StructType*>(this);
+}
+
+const FunctionType* Type::ToFunctionType() const {
+  return dynamic_cast<const FunctionType*>(this);
+}
 
 bool Type::IsComplete() const { return complete_; }
 
@@ -89,9 +134,6 @@ void Type::SetComplete(bool complete) {
 
   if (IsStructOrUnionTy()) {
     StructFinish();
-  } else if (IsArrayTy()) {
-    assert(ArrayGetNumElements() != 0);
-    ArrayFinish();
   }
 }
 
@@ -103,92 +145,86 @@ bool Type::IsUnsigned() const {
   if (!IsIntegerTy()) {
     return false;
   } else {
-    auto p{dynamic_cast<const ArithmeticType*>(this)};
-    return p->type_spec_ & kUnsigned;
+    return ToArithmeticType()->type_spec_ & kUnsigned;
   }
 }
 
-bool Type::IsVoidTy() const { return dynamic_cast<const VoidType*>(this); }
+bool Type::IsVoidTy() const { return ToVoidType(); }
 
 bool Type::IsBoolTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p && (p->type_spec_ == kBool);
 }
 
 bool Type::IsShortTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p &&
          ((p->type_spec_ == kShort) || (p->type_spec_ == (kShort | kUnsigned)));
 }
 
 bool Type::IsIntTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p &&
          ((p->type_spec_ == kInt) || (p->type_spec_ == (kInt | kUnsigned)));
 }
 
 bool Type::IsLongTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p &&
          ((p->type_spec_ == kLong) || (p->type_spec_ == (kLong | kUnsigned)));
 }
 
 bool Type::IsLongLongTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p && ((p->type_spec_ == kLongLong) ||
                (p->type_spec_ == (kLongLong | kUnsigned)));
 }
 
 bool Type::IsFloatTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p && (p->type_spec_ == kFloat);
 }
 
 bool Type::IsDoubleTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p && (p->type_spec_ == kDouble);
 }
 
 bool Type::IsLongDoubleTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p && (p->type_spec_ == (kLong | kDouble));
 }
 
 bool Type::IsTypeName() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p && (p->type_spec_ & kTypedefName);
 }
 
-bool Type::IsPointerTy() const {
-  return dynamic_cast<const PointerType*>(this);
-}
+bool Type::IsPointerTy() const { return ToPointerType(); }
 
-bool Type::IsArrayTy() const { return dynamic_cast<const ArrayType*>(this); }
+bool Type::IsArrayTy() const { return ToArrayType(); }
 
 bool Type::IsStructTy() const {
-  auto p{dynamic_cast<const StructType*>(this)};
+  auto p{ToStructType()};
   return p && p->is_struct_;
 }
 
 bool Type::IsUnionTy() const {
-  auto p{dynamic_cast<const StructType*>(this)};
+  auto p{ToStructType()};
   return p && !p->IsStructTy();
 }
 
 bool Type::IsStructOrUnionTy() const { return IsStructTy() || IsUnionTy(); }
 
-bool Type::IsFunctionTy() const {
-  return dynamic_cast<const FunctionType*>(this);
-}
+bool Type::IsFunctionTy() const { return ToFunctionType(); }
 
 bool Type::IsCharacterTy() const {
-  auto p{dynamic_cast<const ArithmeticType*>(this)};
+  auto p{ToArithmeticType()};
   return p && (p->type_spec_ & kChar);
 }
 
 bool Type::IsIntegerTy() const {
-  return dynamic_cast<const ArithmeticType*>(this) && !IsFloatPointTy() &&
-         !IsBoolTy();
+  return ToArithmeticType() && !IsFloatPointTy() && !IsBoolTy();
 }
 
 bool Type::IsRealTy() const { return IsIntegerTy() || IsRealFloatPointTy(); }
@@ -213,108 +249,133 @@ bool Type::IsFloatPointTy() const {
 PointerType* Type::GetPointerTo() { return PointerType::Get(this); }
 
 std::int32_t Type::ArithmeticRank() const {
-  return dynamic_cast<const ArithmeticType*>(this)->Rank();
+  assert(IsArithmeticTy());
+  return ToArithmeticType()->Rank();
 }
 
 std::uint64_t Type::ArithmeticMaxIntegerValue() const {
-  return dynamic_cast<const ArithmeticType*>(this)->MaxIntegerValue();
+  assert(IsArithmeticTy());
+  return ToArithmeticType()->MaxIntegerValue();
 }
 
 QualType Type::PointerGetElementType() const {
-  return dynamic_cast<const PointerType*>(this)->GetElementType();
+  assert(IsPointerTy());
+  return ToPointerType()->GetElementType();
 }
 
 void Type::ArraySetNumElements(std::size_t num_elements) {
-  dynamic_cast<ArrayType*>(this)->SetNumElements(num_elements);
+  assert(IsArrayTy());
+  ToArrayType()->SetNumElements(num_elements);
 }
 
 std::size_t Type::ArrayGetNumElements() const {
-  return dynamic_cast<const ArrayType*>(this)->GetNumElements();
+  assert(IsArrayTy());
+  return ToArrayType()->GetNumElements();
 }
 
 QualType Type::ArrayGetElementType() const {
-  return dynamic_cast<const ArrayType*>(this)->GetElementType();
+  assert(IsArrayTy());
+  return ToArrayType()->GetElementType();
 }
 
-void Type::ArrayFinish() { dynamic_cast<ArrayType*>(this)->Finish(); }
-
-bool Type::StructOrUnionHasName() const {
-  return dynamic_cast<const StructType*>(this)->HasName();
+bool Type::StructHasName() const {
+  assert(IsStructOrUnionTy());
+  return ToStructType()->HasName();
 }
 
 void Type::StructSetName(const std::string& name) {
-  dynamic_cast<StructType*>(this)->SetName(name);
+  assert(IsStructOrUnionTy());
+  ToStructType()->SetName(name);
 }
 
 std::string Type::StructGetName() const {
-  return dynamic_cast<const StructType*>(this)->GetName();
+  assert(IsStructOrUnionTy());
+  return ToStructType()->GetName();
 }
 
 std::vector<ObjectExpr*>& Type::StructGetMembers() {
-  return dynamic_cast<StructType*>(this)->GetMembers();
+  assert(IsStructOrUnionTy());
+  return ToStructType()->GetMembers();
 }
 
 ObjectExpr* Type::StructGetMember(const std::string& name) const {
-  return dynamic_cast<const StructType*>(this)->GetMember(name);
+  assert(IsStructOrUnionTy());
+  return ToStructType()->GetMember(name);
 }
 
 QualType Type::StructGetMemberType(std::int32_t i) const {
-  return dynamic_cast<const StructType*>(this)->GetMemberType(i);
+  assert(IsStructOrUnionTy());
+  return ToStructType()->GetMemberType(i);
 }
 
 Scope* Type::StructGetScope() {
-  return dynamic_cast<StructType*>(this)->GetScope();
+  assert(IsStructOrUnionTy());
+  return ToStructType()->GetScope();
 }
 
 void Type::StructAddMember(ObjectExpr* member) {
-  dynamic_cast<StructType*>(this)->AddMember(member);
+  assert(IsStructOrUnionTy());
+  ToStructType()->AddMember(member);
 }
 
 void Type::StructMergeAnonymous(ObjectExpr* anonymous) {
-  dynamic_cast<StructType*>(this)->MergeAnonymous(anonymous);
+  assert(IsStructOrUnionTy());
+  ToStructType()->MergeAnonymous(anonymous);
 }
 
 std::int32_t Type::StructGetOffset() const {
-  return dynamic_cast<const StructType*>(this)->GetOffset();
+  assert(IsStructOrUnionTy());
+  return ToStructType()->GetOffset();
 }
 
-void Type::StructFinish() { dynamic_cast<StructType*>(this)->Finish(); }
+void Type::StructFinish() {
+  assert(IsStructOrUnionTy());
+  ToStructType()->Finish();
+}
 
 bool Type::StructHasFlexibleArray() const {
   assert(IsStructTy());
-  return dynamic_cast<const StructType*>(this)->HasFlexibleArray();
+  return ToStructType()->HasFlexibleArray();
 }
 
 bool Type::FuncIsVarArgs() const {
-  return dynamic_cast<const FunctionType*>(this)->IsVarArgs();
+  assert(IsFunctionTy());
+  return ToFunctionType()->IsVarArgs();
 }
 
 QualType Type::FuncGetReturnType() const {
-  return dynamic_cast<const FunctionType*>(this)->GetReturnType();
+  assert(IsFunctionTy());
+  return ToFunctionType()->GetReturnType();
 }
 
 std::vector<ObjectExpr*>& Type::FuncGetParams() {
-  return dynamic_cast<FunctionType*>(this)->GetParams();
+  assert(IsFunctionTy());
+  return ToFunctionType()->GetParams();
 }
 
 void Type::FuncSetFuncSpec(std::uint32_t func_spec) {
-  return dynamic_cast<FunctionType*>(this)->SetFuncSpec(func_spec);
+  assert(IsFunctionTy());
+  return ToFunctionType()->SetFuncSpec(func_spec);
 }
 
 bool Type::FuncIsInline() const {
-  return dynamic_cast<const FunctionType*>(this)->IsInline();
+  assert(IsFunctionTy());
+  return ToFunctionType()->IsInline();
 }
 
 bool Type::FuncIsNoreturn() const {
-  return dynamic_cast<const FunctionType*>(this)->IsNoreturn();
+  assert(IsFunctionTy());
+  return ToFunctionType()->IsNoreturn();
 }
 
 void Type::FuncSetName(const std::string& name) {
-  dynamic_cast<FunctionType*>(this)->SetName(name);
+  assert(IsFunctionTy());
+  ToFunctionType()->SetName(name);
 }
 
 std::string Type::FuncGetName() const {
-  return dynamic_cast<const FunctionType*>(this)->GetName();
+  assert(IsFunctionTy());
+  return ToFunctionType()->GetName();
 }
 
 Type::Type(bool complete) : complete_{complete} {}
@@ -328,7 +389,7 @@ VoidType* VoidType::Get() {
 }
 
 std::int32_t VoidType::GetWidth() const {
-  // GNU 扩展
+  // GCC 扩展
   return 1;
 }
 
@@ -344,43 +405,66 @@ VoidType::VoidType() : Type{false} { llvm_type_ = Builder.getVoidTy(); }
  * ArithmeticType
  */
 ArithmeticType* ArithmeticType::Get(std::uint32_t type_spec) {
+  static auto bool_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kBool}};
+  static auto char_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kChar}};
+  static auto uchar_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kChar | kUnsigned}};
+  static auto short_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kShort}};
+  static auto ushort_type{new (ArithmeticTypePool.Allocate())
+                              ArithmeticType{kShort | kUnsigned}};
+  static auto int_type{new (ArithmeticTypePool.Allocate())
+                           ArithmeticType{kInt}};
+  static auto uint_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kInt | kUnsigned}};
+  static auto long_type{new (ArithmeticTypePool.Allocate())
+                            ArithmeticType{kLong}};
+  static auto ulong_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kLong | kUnsigned}};
+  static auto long_long_type{new (ArithmeticTypePool.Allocate())
+                                 ArithmeticType{kLongLong}};
+  static auto ulong_long_type{new (ArithmeticTypePool.Allocate())
+                                  ArithmeticType{kLongLong | kUnsigned}};
+  static auto float_type{new (ArithmeticTypePool.Allocate())
+                             ArithmeticType{kFloat}};
+  static auto double_type{new (ArithmeticTypePool.Allocate())
+                              ArithmeticType{kDouble}};
+  static auto long_double_type{new (ArithmeticTypePool.Allocate())
+                                   ArithmeticType{kDouble | kLong}};
+
   type_spec = ArithmeticType::DealWithTypeSpec(type_spec);
 
   switch (type_spec) {
     case kBool:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kBool};
+      return bool_type;
     case kChar:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kChar};
+      return char_type;
     case kChar | kUnsigned:
-      return new (ArithmeticTypePool.Allocate())
-          ArithmeticType{kChar | kUnsigned};
+      return uchar_type;
     case kShort:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kShort};
+      return short_type;
     case kShort | kUnsigned:
-      return new (ArithmeticTypePool.Allocate())
-          ArithmeticType{kShort | kUnsigned};
+      return ushort_type;
     case kInt:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kInt};
+      return int_type;
     case kInt | kUnsigned:
-      return new (ArithmeticTypePool.Allocate())
-          ArithmeticType{kInt | kUnsigned};
+      return uint_type;
     case kLong:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kLong};
+      return long_type;
     case kLong | kUnsigned:
-      return new (ArithmeticTypePool.Allocate())
-          ArithmeticType{kLong | kUnsigned};
+      return ulong_type;
     case kLongLong:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kLongLong};
+      return long_long_type;
     case kLongLong | kUnsigned:
-      return new (ArithmeticTypePool.Allocate())
-          ArithmeticType{kLongLong | kUnsigned};
+      return ulong_long_type;
     case kFloat:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kFloat};
+      return float_type;
     case kDouble:
-      return new (ArithmeticTypePool.Allocate()) ArithmeticType{kDouble};
+      return double_type;
     case kDouble | kLong:
-      return new (ArithmeticTypePool.Allocate())
-          ArithmeticType{kDouble | kLong};
+      return long_double_type;
     default:
       assert(false);
       return nullptr;
@@ -391,6 +475,7 @@ Type* ArithmeticType::IntegerPromote(Type* type) {
   assert(type->IsIntegerTy() || type->IsBoolTy());
 
   static auto int_type{ArithmeticType::Get(kInt)};
+
   if (type->ArithmeticRank() < int_type->Rank()) {
     return int_type;
   } else {
@@ -424,8 +509,7 @@ Type* ArithmeticType::MaxType(Type* lhs, Type* rhs) {
           return signed_type;
         } else {
           auto new_type{ArithmeticType::Get(
-              dynamic_cast<ArithmeticType*>(signed_type)->type_spec_ |
-              kUnsigned)};
+              signed_type->ToArithmeticType()->type_spec_ | kUnsigned)};
           return new_type;
         }
       }
@@ -675,11 +759,6 @@ void ArrayType::SetNumElements(std::size_t num_elements) {
 std::size_t ArrayType::GetNumElements() const { return num_elements_; }
 
 QualType ArrayType::GetElementType() const { return contained_type_; }
-
-void ArrayType::Finish() {
-  llvm_type_ =
-      llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
-}
 
 ArrayType::ArrayType(QualType contained_type, std::size_t num_elements)
     : Type{num_elements > 0},

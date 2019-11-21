@@ -69,7 +69,12 @@ enum TypeSpecCompatibility {
 };
 
 class Type;
+class VoidType;
+class ArithmeticType;
 class PointerType;
+class ArrayType;
+class StructType;
+class FunctionType;
 class ObjectExpr;
 class Scope;
 
@@ -117,6 +122,20 @@ class Type {
   std::string ToString() const;
   llvm::Type* GetLLVMType() const;
 
+  VoidType* ToVoidType();
+  ArithmeticType* ToArithmeticType();
+  PointerType* ToPointerType();
+  ArrayType* ToArrayType();
+  StructType* ToStructType();
+  FunctionType* ToFunctionType();
+
+  const VoidType* ToVoidType() const;
+  const ArithmeticType* ToArithmeticType() const;
+  const PointerType* ToPointerType() const;
+  const ArrayType* ToArrayType() const;
+  const StructType* ToStructType() const;
+  const FunctionType* ToFunctionType() const;
+
   bool IsComplete() const;
   void SetComplete(bool complete);
 
@@ -159,9 +178,8 @@ class Type {
   void ArraySetNumElements(std::size_t num_elements);
   std::size_t ArrayGetNumElements() const;
   QualType ArrayGetElementType() const;
-  void ArrayFinish();
 
-  bool StructOrUnionHasName() const;
+  bool StructHasName() const;
   void StructSetName(const std::string& name);
   std::string StructGetName() const;
   std::vector<ObjectExpr*>& StructGetMembers();
@@ -218,12 +236,12 @@ class ArithmeticType : public Type {
   virtual bool Compatible(const Type* other) const override;
   virtual bool Equal(const Type* other) const override;
 
-  std::uint64_t MaxIntegerValue() const;
-
  private:
   explicit ArithmeticType(std::uint32_t type_spec);
 
   std::int32_t Rank() const;
+  std::uint64_t MaxIntegerValue() const;
+
   static std::uint32_t DealWithTypeSpec(std::uint32_t type_spec);
 
   std::uint32_t type_spec_{};
@@ -258,7 +276,6 @@ class ArrayType : public Type {
   void SetNumElements(std::size_t num_elements);
   std::size_t GetNumElements() const;
   QualType GetElementType() const;
-  void Finish();
 
  private:
   ArrayType(QualType contained_type, std::size_t num_elements);
