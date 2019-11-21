@@ -2721,7 +2721,9 @@ Expr* Parser::ParseTypeid() {
   auto expr{ParseExpr()};
   Expect(Tag::kRightParen);
 
-  return MakeAstNode<StringLiteralExpr>(expr->GetType()->ToString());
+  auto str{expr->GetType()->ToString()};
+  str += '\0';
+  return MakeAstNode<StringLiteralExpr>(str);
 }
 
 /*

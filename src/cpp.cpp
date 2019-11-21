@@ -12,21 +12,20 @@
 #include <clang/Basic/TargetOptions.h>
 #include <clang/Frontend/FrontendOptions.h>
 #include <clang/Frontend/LangStandard.h>
+#include <clang/Frontend/PreprocessorOutputOptions.h>
 #include <clang/Frontend/Utils.h>
 #include <clang/Lex/DirectoryLookup.h>
-#include <clang/Lex/HeaderSearch.h>
 #include <fmt/format.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include "error.h"
 
 namespace kcc {
 
-// TODO 禁用警告
 Preprocessor::Preprocessor() {
-  // 初始化
   llvm::InitializeAllTargetInfos();
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
@@ -35,19 +34,20 @@ Preprocessor::Preprocessor() {
 
   auto pto{std::make_shared<clang::TargetOptions>()};
   pto->Triple = llvm::sys::getDefaultTargetTriple();
-
   auto pti{clang::TargetInfo::CreateTargetInfo(ci_.getDiagnostics(), pto)};
+
   ci_.setTarget(pti);
 
   ci_.getInvocation().setLangDefaults(
       ci_.getLangOpts(), clang::InputKind::C, llvm::Triple{pto->Triple},
       ci_.getPreprocessorOpts(), clang::LangStandard::lang_c17);
 
-  ci_.getLangOpts().C17 = true;
-  ci_.getLangOpts().Digraphs = true;
-  ci_.getLangOpts().Trigraphs = true;
-  ci_.getLangOpts().GNUMode = true;
-  ci_.getLangOpts().GNUKeywords = true;
+  auto &lang_opt{ci_.getLangOpts()};
+  lang_opt.C17 = true;
+  lang_opt.Digraphs = true;
+  lang_opt.Trigraphs = true;
+  lang_opt.GNUMode = true;
+  lang_opt.GNUKeywords = true;
 
   ci_.createFileManager();
   ci_.createSourceManager(ci_.getFileManager());
@@ -55,29 +55,12 @@ Preprocessor::Preprocessor() {
   ci_.createPreprocessor(clang::TranslationUnitKind::TU_Complete);
 
   pp_ = &ci_.getPreprocessor();
-  auto &header_search{pp_->getHeaderSearchInfo()};
+  header_search_ = &pp_->getHeaderSearchInfo();
 
-  header_search.AddSearchPath(
-      clang::DirectoryLookup(
-          ci_.getFileManager().getDirectory(
-              "/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include"),
-          clang::SrcMgr::C_System, false),
-      true);
-  header_search.AddSearchPath(
-      clang::DirectoryLookup(
-          ci_.getFileManager().getDirectory("/usr/local/include"),
-          clang::SrcMgr::C_System, false),
-      true);
-  header_search.AddSearchPath(
-      clang::DirectoryLookup(
-          ci_.getFileManager().getDirectory(
-              "/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include-fixed"),
-          clang::SrcMgr::C_System, false),
-      true);
-  header_search.AddSearchPath(
-      clang::DirectoryLookup(ci_.getFileManager().getDirectory("/usr/include"),
-                             clang::SrcMgr::C_System, false),
-      true);
+  AddIncludePath("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include", true);
+  AddIncludePath("/usr/local/include", true);
+  AddIncludePath("/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include-fixed", true);
+  AddIncludePath("/usr/include", true);
 
   pp_->setPredefines(pp_->getPredefines() +
                      "#define __STDC_NO_ATOMICS__ 1\n"
@@ -91,10 +74,7 @@ Preprocessor::Preprocessor() {
 void Preprocessor::SetIncludePaths(
     const std::vector<std::string> &include_paths) {
   for (const auto &path : include_paths) {
-    pp_->getHeaderSearchInfo().AddSearchPath(
-        clang::DirectoryLookup(ci_.getFileManager().getDirectory(path),
-                               clang::SrcMgr::C_User, false),
-        false);
+    AddIncludePath(path, false);
   }
 }
 
@@ -118,9 +98,9 @@ std::string Preprocessor::Cpp(const std::string &input_file) {
   ci_.getDiagnosticClient().BeginSourceFile(ci_.getLangOpts(), pp_);
 
   std::string code;
-  code.reserve(4096);
-
+  code.reserve(Preprocessor::kStrReserve);
   llvm::raw_string_ostream os{code};
+
   clang::PreprocessorOutputOptions opts;
   opts.ShowCPP = true;
 
@@ -134,6 +114,18 @@ std::string Preprocessor::Cpp(const std::string &input_file) {
   ci_.getDiagnosticClient().EndSourceFile();
 
   return code;
+}
+
+void Preprocessor::AddIncludePath(const std::string &path, bool is_system) {
+  if (is_system) {
+    clang::DirectoryLookup directory{ci_.getFileManager().getDirectory(path),
+                                     clang::SrcMgr::C_System, false};
+    header_search_->AddSearchPath(directory, true);
+  } else {
+    clang::DirectoryLookup directory{ci_.getFileManager().getDirectory(path),
+                                     clang::SrcMgr::C_User, false};
+    header_search_->AddSearchPath(directory, false);
+  }
 }
 
 }  // namespace kcc
