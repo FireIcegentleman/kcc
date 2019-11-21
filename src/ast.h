@@ -123,7 +123,7 @@ class Expr : public AstNode {
 class UnaryOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -152,7 +152,7 @@ class UnaryOpExpr : public Expr {
 class TypeCastExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -183,7 +183,7 @@ class TypeCastExpr : public Expr {
 class BinaryOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -218,7 +218,7 @@ class BinaryOpExpr : public Expr {
 class ConditionOpExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -264,7 +264,7 @@ class FuncCallExpr : public Expr {
 class ConstantExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -293,7 +293,7 @@ class ConstantExpr : public Expr {
 class StringLiteralExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -358,7 +358,7 @@ class IdentifierExpr : public Expr {
 class EnumeratorExpr : public IdentifierExpr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 
@@ -389,7 +389,7 @@ class EnumeratorExpr : public IdentifierExpr {
 // 可选项，表示该对象的标识符
 class ObjectExpr : public IdentifierExpr {
   friend class JsonGen;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class CodeGen;
 
  public:
@@ -446,7 +446,7 @@ class ObjectExpr : public IdentifierExpr {
 class StmtExpr : public Expr {
   template <typename T>
   friend class CalcExpr;
-  friend class ConstantInitExpr;
+  friend class CalcConstantExpr;
   friend class JsonGen;
   friend class CodeGen;
 

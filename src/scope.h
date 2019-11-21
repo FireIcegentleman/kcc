@@ -13,19 +13,18 @@
 
 namespace kcc {
 
-// C 拥有四种作用域：
+// C 拥有四种作用域:
 // 块作用域
 // 文件作用域
 // 函数作用域
 // 函数原型作用域
 enum ScopeType { kBlock, kFile, kFunc, kFuncProto };
 
-// 1) 标号命名空间：所有声明为标号的标识符。
-// 2) 标签名：所有声明为 struct 、 union 及枚举类型名称的标识符。
-//    注意所有这三种标签共享同一命名空间。
-// 3) 成员名：所有声明为至少为一个 struct 或 union 成员的标识符。
-//    每个结构体和联合体引入它自己的这种命名空间。
-// 4) 所有其他标识符，称之为通常标识符以别于 (1-3)
+// 标号命名空间:所有声明为标号的标识符
+// 标签名:所有声明为 struct union enum 类型名称的标识符
+// 成员名:所有声明为至少为一个 struct 或 union 成员的标识符
+// 每个结构体和联合体引入它自己的这种命名空间
+// 所有其他标识符, 称之为通常标识符以别于 (1-3)
 //    （函数名、对象名、 typedef 名、枚举常量）。
 
 // 在查找点，根据使用方式确定标识符所属的命名空间：
@@ -38,13 +37,11 @@ class Scope {
  public:
   static Scope* Get(Scope* parent, enum ScopeType type);
 
-#ifdef DEV
-  void PrintCurrScope() const;
-#endif
-
   auto begin() { return std::begin(normal_); }
   auto end() { return std::end(normal_); }
 
+  void InsertTag(IdentifierExpr* ident);
+  void InsertNormal(IdentifierExpr* ident);
   void InsertTag(const std::string& name, IdentifierExpr* ident);
   void InsertNormal(const std::string& name, IdentifierExpr* ident);
 

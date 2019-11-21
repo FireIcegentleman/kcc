@@ -5,7 +5,9 @@
 #ifndef KCC_SRC_LLVM_COMMON_H_
 #define KCC_SRC_LLVM_COMMON_H_
 
+#include <cstdint>
 #include <memory>
+#include <string>
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
@@ -13,6 +15,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
+#include <llvm/IR/Value.h>
 #include <llvm/Target/TargetMachine.h>
 
 namespace kcc {
@@ -30,7 +33,28 @@ inline std::unique_ptr<llvm::TargetMachine> TargetMachine;
 
 enum class OptLevel { kO0, kO1, kO2, kO3 };
 
+std::string LLVMTypeToStr(llvm::Type *type);
+
+std::string LLVMConstantToStr(llvm::Constant *type);
+
 llvm::Constant *GetConstantZero(llvm::Type *type);
+
+std::int32_t FloatPointRank(llvm::Type *type);
+
+bool IsArrCastToPtr(llvm::Value *value, llvm::Type *type);
+
+bool IsIntegerTy(llvm::Value *value);
+
+bool IsFloatingPointTy(llvm::Value *value);
+
+bool IsPointerTy(llvm::Value *value);
+
+llvm::Constant *ConstantCastToBool(llvm::Constant *value);
+
+llvm::Constant *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
+                               bool is_unsigned);
+
+llvm::ConstantInt *GetInt32Constant(std::int32_t value);
 
 }  // namespace kcc
 

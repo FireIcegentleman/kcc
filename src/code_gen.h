@@ -68,9 +68,6 @@ class CodeGen : public Visitor {
   llvm::Value *GetPtr(const AstNode &node);
   llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
                       std::int32_t align);
-  void VisitForNoInc(const ForStmt &node);
-  void VisitForNoCond(const ForStmt &node);
-  void VisitForNoIncCond(const ForStmt &node);
   llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
   llvm::Value *LogicNotOp(llvm::Value *value);
   std::string LLVMTypeToStr(llvm::Type *type) const;

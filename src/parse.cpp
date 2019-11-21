@@ -1287,7 +1287,7 @@ Stmt* Parser::ParseCaseStmt() {
   if (!expr->GetType()->IsIntegerTy()) {
     Error(expr, "expect integer");
   }
-  auto val{CalcExpr<std::int64_t>{}.Calc(expr)};
+  auto val{CalcConstantExpr{}.CalcInteger(expr)};
 
   if (val > std::numeric_limits<std::int32_t>::max() ||
       val < std::numeric_limits<std::int32_t>::min()) {
@@ -1302,7 +1302,7 @@ Stmt* Parser::ParseCaseStmt() {
     if (!expr2->GetType()->IsIntegerTy()) {
       Error(expr2, "expect integer");
     }
-    auto val2{CalcExpr<std::int64_t>{}.Calc(expr2)};
+    auto val2{CalcConstantExpr{}.CalcInteger(expr2)};
     if (val2 > std::numeric_limits<std::int32_t>::max() ||
         val2 < std::numeric_limits<std::int32_t>::min()) {
       Error(loc_, "case range exceed range of int");
@@ -1553,7 +1553,7 @@ void Parser::ParseStaticAssertDecl() {
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
-  if (!CalcExpr<std::int32_t>{}.Calc(expr)) {
+  if (!CalcConstantExpr{}.CalcInteger(expr)) {
     Error(expr, "static_assert failed \"{}\"", msg);
   }
 }
@@ -1983,7 +1983,7 @@ void Parser::ParseEnumerator() {
 
     if (Try(Tag::kEqual)) {
       auto expr{ParseConstantExpr()};
-      val = CalcExpr<std::int32_t>{}.Calc(expr);
+      val = CalcConstantExpr{}.CalcInteger(expr);
     }
 
     auto enumer{MakeAstNode<EnumeratorExpr>(tok.GetIdentifier(), val)};
@@ -2005,7 +2005,7 @@ std::int32_t Parser::ParseAlignas() {
     align = type->GetAlign();
   } else {
     auto expr{ParseConstantExpr()};
-    align = CalcExpr<std::int32_t>{}.Calc(expr);
+    align = CalcConstantExpr{}.CalcInteger(expr);
   }
 
   Expect(Tag::kRightParen);
@@ -2182,7 +2182,7 @@ std::size_t Parser::ParseArrayLength() {
   }
 
   // 不支持变长数组
-  auto len{CalcExpr<std::int32_t>{}.Calc(expr)};
+  auto len{CalcConstantExpr{}.CalcInteger(expr)};
 
   // TODO 允许分配大小为 0 的数组
   if (len <= 0) {
@@ -2382,7 +2382,7 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
         Error(expr, "expect integer type");
       }
 
-      index = CalcExpr<std::int32_t>{}.Calc(expr);
+      index = CalcConstantExpr{}.CalcInteger(expr);
       Expect(Tag::kRightSquare);
 
       if (index < 0 ||
@@ -2768,7 +2768,7 @@ llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
       Expect(Tag::kRightBrace);
     }
 
-    return ConstantCastTo(ConstantInitExpr{}.Calc(expr), type->GetLLVMType(),
+    return ConstantCastTo(CalcConstantExpr{}.Calc(expr), type->GetLLVMType(),
                           expr->GetType()->IsUnsigned());
   }
 
@@ -2807,7 +2807,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
         Error(expr, "expect integer type");
       }
 
-      index = CalcExpr<std::int32_t>{}.Calc(expr);
+      index = CalcConstantExpr{}.CalcInteger(expr);
       Expect(Tag::kRightSquare);
 
       if (index < 0 ||

@@ -29,7 +29,7 @@ class Preprocessor {
   constexpr static std::size_t kStrReserve{4096};
 
   clang::CompilerInstance ci_;
-  clang::Preprocessor *pp_{};
+  clang::Preprocessor *pp_;
   clang::HeaderSearch *header_search_;
 };
 

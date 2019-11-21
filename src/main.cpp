@@ -55,7 +55,6 @@ int main(int argc, char *argv[]) try {
   }
 #endif
 
-  // FIXME 编译多文件时行为不正确
   for (const auto &item : InputFilePaths) {
     auto pid{fork()};
     if (pid < 0) {
