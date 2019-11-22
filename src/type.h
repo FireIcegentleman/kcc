@@ -86,6 +86,8 @@ class QualType {
   QualType() = default;
   QualType(Type* type, std::uint32_t type_qual = 0);
 
+  std::string ToString() const;
+
   Type* operator->();
   const Type* operator->() const;
 

@@ -52,6 +52,11 @@ void Location::SetRow(std::int32_t row) {
   row_ = row;
 }
 
+std::string Location::GetFileName() const {
+  assert(!std::empty(file_name_));
+  return file_name_;
+}
+
 std::string Location::ToLocStr() const {
   assert(!std::empty(file_name_));
   return fmt::format(fmt("{}:{}:{}"), file_name_, row_, column_);

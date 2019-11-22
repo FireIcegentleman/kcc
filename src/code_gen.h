@@ -50,18 +50,6 @@ class CodeGen : public Visitor {
   llvm::Value *GreaterOp(llvm::Value *lhs, llvm::Value *rhs, bool is_unsigned);
   llvm::Value *EqualOp(llvm::Value *lhs, llvm::Value *rhs);
   llvm::Value *NotEqualOp(llvm::Value *lhs, llvm::Value *rhs);
-
-  llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned);
-  llvm::Value *CastToBool(llvm::Value *value);
-  bool IsArithmeticTy(llvm::Value *value) const;
-  bool IsIntegerTy(llvm::Value *value) const;
-  bool IsFloatingPointTy(llvm::Value *value) const;
-  bool IsPointerTy(llvm::Value *value) const;
-  bool IsFloatTy(llvm::Value *value) const;
-  bool IsDoubleTy(llvm::Value *value) const;
-  bool IsLongDoubleTy(llvm::Value *value) const;
-  llvm::Value *GetZero(llvm::Type *type);
-  std::int32_t FloatPointRank(llvm::Type *type) const;
   llvm::Value *LogicOrOp(const BinaryOpExpr &node);
   llvm::Value *LogicAndOp(const BinaryOpExpr &node);
   llvm::Value *AssignOp(const BinaryOpExpr &node);
@@ -70,9 +58,7 @@ class CodeGen : public Visitor {
                       std::int32_t align);
   llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
   llvm::Value *LogicNotOp(llvm::Value *value);
-  std::string LLVMTypeToStr(llvm::Type *type) const;
   llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
-  bool IsArrCastToPtr(llvm::Value *value, llvm::Type *type);
   void EnterFunc();
   void ExitFunc();
 
@@ -110,7 +96,7 @@ class CodeGen : public Visitor {
   llvm::BasicBlock *CreateBasicBlock(const std::string &name = "",
                                      llvm::Function *parent = nullptr,
                                      llvm::BasicBlock *insert_before = nullptr);
-  void EmitBranchOnBoolExpr(Expr *expr, llvm::BasicBlock *true_block,
+  void EmitBranchOnBoolExpr(const Expr *expr, llvm::BasicBlock *true_block,
                             llvm::BasicBlock *false_block);
   void EmitBlock(llvm::BasicBlock *bb, bool is_finished = false);
   void EmitBranch(llvm::BasicBlock *target);
@@ -145,7 +131,7 @@ class CodeGen : public Visitor {
     llvm::BasicBlock *continue_block;
   };
   std::vector<BreakContinue> break_continue_stack_;
-  llvm::Value *EvaluateExprAsBool(Expr *expr);
+  llvm::Value *EvaluateExprAsBool(const Expr *expr);
   llvm::SwitchInst *switch_inst_{};
   std::map<const LabelStmt *, llvm::BasicBlock *> label_map_;
   llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
