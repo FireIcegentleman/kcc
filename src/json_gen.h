@@ -17,6 +17,7 @@ namespace kcc {
 
 class JsonGen : public Visitor {
  public:
+  explicit JsonGen(const std::string& filter = "");
   void GenJson(const TranslationUnit* root, const std::string& file_name);
 
  private:
@@ -51,6 +52,9 @@ class JsonGen : public Visitor {
   virtual void Visit(const Declaration& node) override;
   virtual void Visit(const FuncDef& node) override;
 
+  bool CheckFileName(const AstNode& node) const;
+
+  std::string filter_;
   QJsonObject result_;
 
   constexpr static std::string_view kBefore{

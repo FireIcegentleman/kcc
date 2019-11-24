@@ -110,7 +110,7 @@ class CodeGen : public Visitor {
   llvm::BasicBlock *CreateBasicBlock(const std::string &name = "",
                                      llvm::Function *parent = nullptr,
                                      llvm::BasicBlock *insert_before = nullptr);
-  void EmitBranchOnBoolExpr(Expr *expr, llvm::BasicBlock *true_block,
+  void EmitBranchOnBoolExpr(const Expr *expr, llvm::BasicBlock *true_block,
                             llvm::BasicBlock *false_block);
   void EmitBlock(llvm::BasicBlock *bb, bool is_finished = false);
   void EmitBranch(llvm::BasicBlock *target);
@@ -145,7 +145,7 @@ class CodeGen : public Visitor {
     llvm::BasicBlock *continue_block;
   };
   std::vector<BreakContinue> break_continue_stack_;
-  llvm::Value *EvaluateExprAsBool(Expr *expr);
+  llvm::Value *EvaluateExprAsBool(const Expr *expr);
   llvm::SwitchInst *switch_inst_{};
   std::map<const LabelStmt *, llvm::BasicBlock *> label_map_;
   llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);

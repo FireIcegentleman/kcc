@@ -20,6 +20,7 @@ class Location {
   void PrevRow();
   void PrevColumn();
   void SetRow(std::int32_t row);
+  std::string GetFileName() const;
 
   std::string ToLocStr() const;
   std::string GetLineContent() const;

@@ -60,7 +60,7 @@ template <typename... Args>
 }
 
 template <typename... Args>
-[[noreturn]] void Error(Expr *expr, std::string_view format_str,
+[[noreturn]] void Error(const Expr *expr, std::string_view format_str,
                         const Args &... args) {
   Error(expr->GetLoc(), format_str, args...);
 }

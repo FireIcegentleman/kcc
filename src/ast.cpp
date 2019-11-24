@@ -57,7 +57,7 @@ QString AstNodeTypes::ToString(AstNodeTypes::Type type) {
 /*
  * AstNode
  */
-QString AstNode::KindStr() const { return AstNodeTypes::ToString(Kind()); }
+QString AstNode::KindQStr() const { return AstNodeTypes::ToString(Kind()); }
 
 Location AstNode::GetLoc() const { return loc_; }
 
@@ -161,6 +161,10 @@ void UnaryOpExpr::Check() {
 }
 
 bool UnaryOpExpr::IsLValue() const { return op_ == Tag::kStar; }
+
+Tag UnaryOpExpr::GetOp() const { return op_; }
+
+const Expr* UnaryOpExpr::GetExpr() const { return expr_; }
 
 UnaryOpExpr::UnaryOpExpr(Tag tag, Expr* expr) : op_(tag) {
   if (op_ == Tag::kAmp) {
@@ -269,6 +273,10 @@ void TypeCastExpr::Check() {
 
 bool TypeCastExpr::IsLValue() const { return false; }
 
+const Expr* TypeCastExpr::GetExpr() const { return expr_; }
+
+QualType TypeCastExpr::GetCastToType() const { return to_; }
+
 TypeCastExpr::TypeCastExpr(Expr* expr, QualType to)
     : Expr(to), expr_{expr}, to_{to} {}
 
@@ -341,6 +349,12 @@ bool BinaryOpExpr::IsLValue() const {
       return false;
   }
 }
+
+Tag BinaryOpExpr::GetOp() const { return op_; }
+
+const Expr* BinaryOpExpr::GetLHS() const { return lhs_; }
+
+const Expr* BinaryOpExpr::GetRHS() const { return rhs_; }
 
 BinaryOpExpr::BinaryOpExpr(Tag tag, Expr* lhs, Expr* rhs) : op_(tag) {
   if (tag != Tag::kPeriod) {
@@ -576,6 +590,12 @@ bool ConditionOpExpr::IsLValue() const {
   return false;
 }
 
+const Expr* ConditionOpExpr::GetCond() const { return cond_; }
+
+const Expr* ConditionOpExpr::GetLHS() const { return lhs_; }
+
+const Expr* ConditionOpExpr::GetRHS() const { return rhs_; }
+
 ConditionOpExpr::ConditionOpExpr(Expr* cond, Expr* lhs, Expr* rhs)
     : cond_(Expr::MayCast(cond)),
       lhs_(Expr::MayCast(lhs)),
@@ -645,6 +665,12 @@ Type* FuncCallExpr::GetFuncType() const {
   }
 }
 
+Expr* FuncCallExpr::GetCallee() const { return callee_; }
+
+std::vector<Expr*> FuncCallExpr::GetArgs() const { return args_; }
+
+Type* FuncCallExpr::GetVaArgType() const { return va_arg_type_; }
+
 FuncCallExpr::FuncCallExpr(Expr* callee, std::vector<Expr*> args)
     : callee_{callee}, args_{std::move(args)} {}
 
@@ -671,7 +697,7 @@ bool ConstantExpr::IsLValue() const { return false; }
 
 long ConstantExpr::GetIntegerVal() const { return integer_val_; }
 
-double ConstantExpr::GetFloatPointVal() const { return float_point_val_; }
+long double ConstantExpr::GetFloatPointVal() const { return float_point_val_; }
 
 ConstantExpr::ConstantExpr(std::int32_t val)
     : Expr(ArithmeticType::Get(kInt)), integer_val_(val) {}
@@ -701,11 +727,16 @@ void StringLiteralExpr::Check() {}
 
 bool StringLiteralExpr::IsLValue() const { return false; }
 
-std::string StringLiteralExpr::GetVal() const { return val_; }
+std::string StringLiteralExpr::GetStr() const { return str_; }
+
+llvm::Constant* StringLiteralExpr::GetConstant() const {
+  assert(constant_ != nullptr);
+  return constant_;
+}
 
 StringLiteralExpr::StringLiteralExpr(Type* type, const std::string& val)
     : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth())},
-      val_{val} {}
+      str_{val} {}
 
 /*
  * Identifier
@@ -833,6 +864,10 @@ std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() {
   return indexs_;
 }
 
+std::list<std::pair<Type*, std::int32_t>> ObjectExpr::GetIndexs() const {
+  return indexs_;
+}
+
 void ObjectExpr::SetIndexs(
     const std::list<std::pair<Type*, std::int32_t>>& indexs) {
   indexs_ = indexs;
@@ -881,6 +916,8 @@ void StmtExpr::Check() {
 
 bool StmtExpr::IsLValue() const { return false; }
 
+const CompoundStmt* StmtExpr::GetBlock() const { return block_; }
+
 StmtExpr::StmtExpr(CompoundStmt* block) : block_{block} {}
 
 /*
@@ -897,6 +934,10 @@ void LabelStmt::Check() {}
 void LabelStmt::SetHasGoto(bool has_goto) { has_goto_ = has_goto; }
 
 std::string LabelStmt::GetIdent() const { return ident_; }
+
+Stmt* LabelStmt::GetStmt() const { return stmt_; }
+
+std::string LabelStmt::GetName() const { return ident_; }
 
 LabelStmt::LabelStmt(const std::string& ident, Stmt* stmt)
     : stmt_{stmt}, ident_{ident} {}
@@ -937,6 +978,8 @@ AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
 
 void DefaultStmt::Check() {}
 
+const Stmt* DefaultStmt::GetStmt() const { return block_; }
+
 DefaultStmt::DefaultStmt(Stmt* block) : block_{block} {}
 
 /*
@@ -956,7 +999,7 @@ void CompoundStmt::Check() {}
 
 Scope* CompoundStmt::GetScope() { return scope_; }
 
-std::vector<Stmt*> CompoundStmt::GetStmts() { return stmts_; }
+std::vector<Stmt*> CompoundStmt::GetStmts() const { return stmts_; }
 
 void CompoundStmt::AddStmt(Stmt* stmt) {
   // 非 typedef
@@ -998,6 +1041,12 @@ void IfStmt::Check() {
   }
 }
 
+const Expr* IfStmt::GetCond() const { return cond_; }
+
+const Stmt* IfStmt::GetThenBlock() const { return then_block_; }
+
+const Stmt* IfStmt::GetElseBlock() const { return else_block_; }
+
 IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
     : cond_{cond}, then_block_{then_block}, else_block_{else_block} {}
 
@@ -1028,6 +1077,10 @@ void SwitchStmt::SetBlock(Stmt* block) { block_ = block; }
 
 void SwitchStmt::SetHasCase(bool flag) { has_case_ = flag; }
 
+const Expr* SwitchStmt::GetCond() const { return cond_; }
+
+const Stmt* SwitchStmt::GetBlock() const { return block_; }
+
 void SwitchStmt::SetHasDefault(bool flag) { has_default_ = flag; }
 
 SwitchStmt::SwitchStmt() {}
@@ -1049,6 +1102,10 @@ void WhileStmt::Check() {
   }
 }
 
+const Expr* WhileStmt::GetCond() const { return cond_; }
+
+const Stmt* WhileStmt::GetBlock() const { return block_; }
+
 WhileStmt::WhileStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
 
 /*
@@ -1065,6 +1122,10 @@ void DoWhileStmt::Check() {
     Error(cond_->GetLoc(), "expect scalar");
   }
 }
+
+const Expr* DoWhileStmt::GetCond() const { return cond_; }
+
+const Stmt* DoWhileStmt::GetBlock() const { return block_; }
 
 DoWhileStmt::DoWhileStmt(Expr* cond, Stmt* block)
     : cond_{cond}, block_{block} {}
@@ -1084,6 +1145,16 @@ void ForStmt::Check() {
     Error(cond_->GetLoc(), "expect scalar");
   }
 }
+
+const Expr* ForStmt::GetInit() const { return init_; }
+
+const Expr* ForStmt::GetCond() const { return cond_; }
+
+const Expr* ForStmt::GetInc() const { return inc_; }
+
+const Stmt* ForStmt::GetBlock() const { return block_; }
+
+const Stmt* ForStmt::GetDecl() const { return decl_; }
 
 ForStmt::ForStmt(Expr* init, Expr* cond, Expr* inc, Stmt* block, Stmt* decl)
     : init_{init}, cond_{cond}, inc_{inc}, block_{block}, decl_{decl} {}
@@ -1106,6 +1177,8 @@ void GotoStmt::Check() {}
 void GotoStmt::SetLabel(LabelStmt* label) { label_ = label; }
 
 std::string GotoStmt::GetName() const { return name_; }
+
+const LabelStmt* GotoStmt::GetLabel() const { return label_; }
 
 GotoStmt::GotoStmt(const std::string& name) : name_{name} {}
 
@@ -1143,6 +1216,8 @@ ReturnStmt* ReturnStmt::Get(Expr* expr) {
 AstNodeType ReturnStmt::Kind() const { return AstNodeType::kReturnStmt; }
 
 void ReturnStmt::Check() {}
+
+const Expr* ReturnStmt::GetExpr() const { return expr_; }
 
 ReturnStmt::ReturnStmt(Expr* expr) : expr_{expr} {}
 

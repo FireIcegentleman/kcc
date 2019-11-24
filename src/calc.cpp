@@ -11,14 +11,14 @@
 
 namespace kcc {
 
-llvm::Constant* CalcConstantExpr::Calc(Expr* expr) {
+llvm::Constant* CalcConstantExpr::Calc(const Expr* expr) {
   assert(expr != nullptr);
   expr->Accept(*this);
   assert(val_ != nullptr);
   return val_;
 }
 
-std::int64_t CalcConstantExpr::CalcInteger(Expr* expr) {
+std::int64_t CalcConstantExpr::CalcInteger(const Expr* expr) {
   auto val{Calc(expr)};
   if (auto p{llvm::dyn_cast<llvm::ConstantInt>(val)}) {
     return p->getValue().getSExtValue();
@@ -29,23 +29,24 @@ std::int64_t CalcConstantExpr::CalcInteger(Expr* expr) {
 }
 
 void CalcConstantExpr::Visit(const UnaryOpExpr& node) {
-  switch (node.op_) {
+  switch (node.GetOp()) {
     case Tag::kPlus:
-      val_ = CalcConstantExpr{}.Calc(node.expr_);
+      val_ = CalcConstantExpr{}.Calc(node.GetExpr());
       break;
     case Tag::kMinus:
-      val_ = NegOp(CalcConstantExpr{}.Calc(node.expr_),
+      val_ = NegOp(CalcConstantExpr{}.Calc(node.GetExpr()),
                    node.GetType()->IsUnsigned());
       break;
     case Tag::kTilde:
-      val_ = llvm::ConstantExpr::getNot(CalcConstantExpr{}.Calc(node.expr_));
+      val_ =
+          llvm::ConstantExpr::getNot(CalcConstantExpr{}.Calc(node.GetExpr()));
       break;
     case Tag::kExclaim:
-      val_ = LogicNotOp(CalcConstantExpr{}.Calc(node.expr_));
+      val_ = LogicNotOp(CalcConstantExpr{}.Calc(node.GetExpr()));
       break;
     case Tag::kAmp: {
       // 运算对象只能是一个全局变量
-      auto p{dynamic_cast<ObjectExpr*>(node.expr_)};
+      auto p{dynamic_cast<const ObjectExpr*>(node.GetExpr())};
       assert(p != nullptr);
       val_ = p->GetGlobalPtr();
     } break;
@@ -55,18 +56,18 @@ void CalcConstantExpr::Visit(const UnaryOpExpr& node) {
 }
 
 void CalcConstantExpr::Visit(const TypeCastExpr& node) {
-  val_ = ConstantCastTo(CalcConstantExpr{}.Calc(node.expr_),
-                        node.to_->GetLLVMType(),
-                        node.expr_->GetType()->IsUnsigned());
+  val_ = ConstantCastTo(CalcConstantExpr{}.Calc(node.GetExpr()),
+                        node.GetCastToType()->GetLLVMType(),
+                        node.GetExpr()->GetType()->IsUnsigned());
 }
 
 void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
-#define L CalcConstantExpr{}.Calc(node.lhs_)
-#define R CalcConstantExpr{}.Calc(node.rhs_)
+#define L CalcConstantExpr{}.Calc(node.GetLHS())
+#define R CalcConstantExpr{}.Calc(node.GetRHS())
 
   auto is_unsigned{node.GetType()->IsUnsigned()};
 
-  switch (node.op_) {
+  switch (node.GetOp()) {
     case Tag::kPlus:
       val_ = AddOp(L, R, is_unsigned);
       break;
@@ -80,7 +81,7 @@ void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
       auto lhs{L};
       auto rhs{R};
       if (rhs->isZeroValue()) {
-        Error(node.rhs_, "division by zero");
+        Error(node.GetRHS(), "division by zero");
       }
       val_ = DivOp(lhs, rhs, is_unsigned);
       break;
@@ -89,7 +90,7 @@ void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
       auto lhs{L};
       auto rhs{R};
       if (rhs->isZeroValue()) {
-        Error(node.rhs_, "division by zero");
+        Error(node.GetRHS(), "division by zero");
       }
       val_ = ModOp(lhs, rhs, is_unsigned);
       break;
@@ -144,34 +145,34 @@ void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
 }
 
 void CalcConstantExpr::Visit(const ConditionOpExpr& node) {
-  auto flag{CalcConstantExpr{}.Calc(node.cond_)};
+  auto flag{CalcConstantExpr{}.Calc(node.GetCond())};
 
   if (flag->isZeroValue()) {
-    val_ = CalcConstantExpr{}.Calc(node.rhs_);
+    val_ = CalcConstantExpr{}.Calc(node.GetRHS());
   } else {
-    val_ = CalcConstantExpr{}.Calc(node.lhs_);
+    val_ = CalcConstantExpr{}.Calc(node.GetLHS());
   }
 }
 
 void CalcConstantExpr::Visit(const ConstantExpr& node) {
   if (node.GetType()->IsIntegerTy()) {
     val_ = llvm::ConstantInt::get(node.GetType()->GetLLVMType(),
-                                  node.integer_val_);
+                                  node.GetIntegerVal());
   } else if (node.GetType()->IsFloatPointTy()) {
     val_ = llvm::ConstantFP::get(node.GetType()->GetLLVMType(),
-                                 node.float_point_val_);
+                                 node.GetFloatPointVal());
   } else {
     assert(false);
   }
 }
 
 void CalcConstantExpr::Visit(const EnumeratorExpr& node) {
-  val_ = llvm::ConstantInt::get(node.GetType()->GetLLVMType(), node.val_);
+  val_ = llvm::ConstantInt::get(node.GetType()->GetLLVMType(), node.GetVal());
 }
 
 void CalcConstantExpr::Visit(const StmtExpr& node) {
   if (!node.GetType()->IsVoidTy()) {
-    auto last{node.block_->GetStmts().back()};
+    auto last{node.GetBlock()->GetStmts().back()};
     assert(last->Kind() == AstNodeType::kExprStmt);
     val_ = CalcConstantExpr{}.Calc(dynamic_cast<ExprStmt*>(last)->GetExpr());
   } else {
@@ -182,7 +183,7 @@ void CalcConstantExpr::Visit(const StmtExpr& node) {
 void CalcConstantExpr::Visit(const StringLiteralExpr& node) {
   auto width{node.GetType()->ArrayGetElementType()->GetWidth()};
   auto size{node.GetType()->ArrayGetNumElements()};
-  auto temp{node.GetVal()};
+  auto temp{node.GetStr()};
   auto str{temp.c_str()};
   llvm::Constant* arr{};
 
@@ -546,9 +547,9 @@ llvm::Constant* CalcConstantExpr::NotEqualOp(llvm::Constant* lhs,
 }
 
 llvm::Constant* CalcConstantExpr::LogicOrOp(const BinaryOpExpr& node) {
-  auto lhs{CalcConstantExpr{}.Calc(node.lhs_)};
+  auto lhs{CalcConstantExpr{}.Calc(node.GetLHS())};
   if (lhs->isZeroValue()) {
-    auto rhs{CalcConstantExpr{}.Calc(node.rhs_)};
+    auto rhs{CalcConstantExpr{}.Calc(node.GetRHS())};
     return GetInt32Constant(!rhs->isZeroValue());
   } else {
     return GetInt32Constant(1);
@@ -556,11 +557,11 @@ llvm::Constant* CalcConstantExpr::LogicOrOp(const BinaryOpExpr& node) {
 }
 
 llvm::Constant* CalcConstantExpr::LogicAndOp(const BinaryOpExpr& node) {
-  auto lhs{CalcConstantExpr{}.Calc(node.lhs_)};
+  auto lhs{CalcConstantExpr{}.Calc(node.GetLHS())};
   if (lhs->isZeroValue()) {
     return GetInt32Constant(0);
   } else {
-    auto rhs{CalcConstantExpr{}.Calc(node.rhs_)};
+    auto rhs{CalcConstantExpr{}.Calc(node.GetRHS())};
     return GetInt32Constant(!rhs->isZeroValue());
   }
 }

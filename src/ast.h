@@ -80,7 +80,7 @@ class AstNode {
   virtual void Accept(Visitor& visitor) const = 0;
   virtual void Check() = 0;
 
-  QString KindStr() const;
+  QString KindQStr() const;
   Location GetLoc() const;
   void SetLoc(const Location& loc);
 
@@ -120,10 +120,6 @@ class Expr : public AstNode {
  * * &
  */
 class UnaryOpExpr : public Expr {
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static UnaryOpExpr* Get(Tag tag, Expr* expr);
 
@@ -131,6 +127,9 @@ class UnaryOpExpr : public Expr {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
   virtual bool IsLValue() const override;
+
+  Tag GetOp() const;
+  const Expr* GetExpr() const;
 
  private:
   UnaryOpExpr(Tag tag, Expr* expr);
@@ -147,10 +146,6 @@ class UnaryOpExpr : public Expr {
 };
 
 class TypeCastExpr : public Expr {
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static TypeCastExpr* Get(Expr* expr, QualType to);
 
@@ -158,6 +153,9 @@ class TypeCastExpr : public Expr {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
   virtual bool IsLValue() const override;
+
+  const Expr* GetExpr() const;
+  QualType GetCastToType() const;
 
  private:
   TypeCastExpr(Expr* expr, QualType to);
@@ -176,10 +174,6 @@ class TypeCastExpr : public Expr {
  */
 // 复合赋值运算符, [] , -> 均做了转换
 class BinaryOpExpr : public Expr {
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static BinaryOpExpr* Get(Tag tag, Expr* lhs, Expr* rhs);
 
@@ -187,6 +181,10 @@ class BinaryOpExpr : public Expr {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
   virtual bool IsLValue() const override;
+
+  Tag GetOp() const;
+  const Expr* GetLHS() const;
+  const Expr* GetRHS() const;
 
  private:
   BinaryOpExpr(Tag tag, Expr* lhs, Expr* rhs);
@@ -209,12 +207,6 @@ class BinaryOpExpr : public Expr {
 };
 
 class ConditionOpExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static ConditionOpExpr* Get(Expr* cond, Expr* lhs, Expr* rhs);
 
@@ -222,6 +214,10 @@ class ConditionOpExpr : public Expr {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
   virtual bool IsLValue() const override;
+
+  const Expr* GetCond() const;
+  const Expr* GetLHS() const;
+  const Expr* GetRHS() const;
 
  private:
   ConditionOpExpr(Expr* cond, Expr* lhs, Expr* rhs);
@@ -232,9 +228,6 @@ class ConditionOpExpr : public Expr {
 };
 
 class FuncCallExpr : public Expr {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static FuncCallExpr* Get(Expr* callee, std::vector<Expr*> args = {});
 
@@ -246,6 +239,10 @@ class FuncCallExpr : public Expr {
   Type* GetFuncType() const;
   void SetVaArgType(Type* va_arg_type) { va_arg_type_ = va_arg_type; }
 
+  Expr* GetCallee() const;
+  std::vector<Expr*> GetArgs() const;
+  Type* GetVaArgType() const;
+
  private:
   explicit FuncCallExpr(Expr* callee, std::vector<Expr*> args = {});
 
@@ -255,12 +252,6 @@ class FuncCallExpr : public Expr {
 };
 
 class ConstantExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static ConstantExpr* Get(std::int32_t val);
   static ConstantExpr* Get(Type* type, std::uint64_t val);
@@ -272,7 +263,7 @@ class ConstantExpr : public Expr {
   virtual bool IsLValue() const override;
 
   long GetIntegerVal() const;
-  double GetFloatPointVal() const;
+  long double GetFloatPointVal() const;
 
  private:
   ConstantExpr(std::int32_t val);
@@ -284,12 +275,6 @@ class ConstantExpr : public Expr {
 };
 
 class StringLiteralExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static StringLiteralExpr* Get(const std::string& val);
   static StringLiteralExpr* Get(Type* type, const std::string& val);
@@ -299,12 +284,14 @@ class StringLiteralExpr : public Expr {
   virtual void Check() override;
   virtual bool IsLValue() const override;
 
-  std::string GetVal() const;
+  std::string GetStr() const;
+  llvm::Constant* GetConstant() const;
 
  private:
   StringLiteralExpr(Type* type, const std::string& val);
 
-  std::string val_;
+  std::string str_;
+  llvm::Constant* constant_{};
 };
 
 enum Linkage { kNone, kInternal, kExternal };
@@ -321,9 +308,6 @@ enum Linkage { kNone, kInternal, kExternal };
 // 宏形参名
 // 宏名或宏形参名以外的每个标识符都拥有作用域，并且可以拥有链接
 class IdentifierExpr : public Expr {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static IdentifierExpr* Get(const std::string& name, QualType type,
                              enum Linkage linkage, bool is_type_name);
@@ -349,12 +333,6 @@ class IdentifierExpr : public Expr {
 };
 
 class EnumeratorExpr : public IdentifierExpr {
-  template <typename T>
-  friend class CalcExpr;
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static EnumeratorExpr* Get(const std::string& name, std::int32_t val);
 
@@ -381,10 +359,6 @@ class EnumeratorExpr : public IdentifierExpr {
 // 值（可以是不确定的）
 // 可选项，表示该对象的标识符
 class ObjectExpr : public IdentifierExpr {
-  friend class JsonGen;
-  friend class CalcConstantExpr;
-  friend class CodeGen;
-
  public:
   static ObjectExpr* Get(const std::string& name, QualType type,
                          std::uint32_t storage_class_spec = 0,
@@ -414,6 +388,7 @@ class ObjectExpr : public IdentifierExpr {
   llvm::GlobalVariable* GetGlobalPtr() const;
   bool HasGlobalPtr() const;
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
+  std::list<std::pair<Type*, std::int32_t>> GetIndexs() const;
   void SetIndexs(const std::list<std::pair<Type*, std::int32_t>>& indexs);
   const std::string& GetStaticName() const;
   void SetStaticName(const std::string& func_name);
@@ -437,12 +412,6 @@ class ObjectExpr : public IdentifierExpr {
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式
 class StmtExpr : public Expr {
-  template <typename T>
-  friend class CalcExpr;
-  friend class CalcConstantExpr;
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static StmtExpr* Get(CompoundStmt* block);
 
@@ -450,6 +419,8 @@ class StmtExpr : public Expr {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
   virtual bool IsLValue() const override;
+
+  const CompoundStmt* GetBlock() const;
 
  private:
   StmtExpr(CompoundStmt* block);
@@ -460,9 +431,6 @@ class StmtExpr : public Expr {
 class Stmt : public AstNode {};
 
 class LabelStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static LabelStmt* Get(const std::string& ident, Stmt* stmt);
 
@@ -473,20 +441,20 @@ class LabelStmt : public Stmt {
   std::string GetIdent() const;
   void SetMove(bool flag) { has_to_move_ = flag; }
 
+  Stmt* GetStmt() const;
+  std::string GetName() const;
+
  private:
   explicit LabelStmt(const std::string& ident, Stmt* stmt);
 
   Stmt* stmt_;
   std::string ident_;
   bool has_goto_{false};
-  mutable llvm::BasicBlock* label_{};
+//  mutable llvm::BasicBlock* label_{};
   bool has_to_move_{false};
 };
 
 class CaseStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static CaseStmt* Get(std::int32_t case_value, Stmt* block);
   static CaseStmt* Get(std::int32_t case_value, std::int32_t case_value2,
@@ -496,7 +464,7 @@ class CaseStmt : public Stmt {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
- private:
+  // private:
   CaseStmt(std::int32_t case_value, Stmt* block);
   CaseStmt(std::int32_t case_value, std::int32_t case_value2, Stmt* block);
 
@@ -508,15 +476,14 @@ class CaseStmt : public Stmt {
 };
 
 class DefaultStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static DefaultStmt* Get(Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+
+  const Stmt* GetStmt() const;
 
  private:
   DefaultStmt(Stmt* block);
@@ -525,9 +492,6 @@ class DefaultStmt : public Stmt {
 };
 
 class CompoundStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static CompoundStmt* Get();
   static CompoundStmt* Get(std::vector<Stmt*> stmts, Scope* scope);
@@ -537,7 +501,7 @@ class CompoundStmt : public Stmt {
   virtual void Check() override;
 
   Scope* GetScope();
-  std::vector<Stmt*> GetStmts();
+  std::vector<Stmt*> GetStmts() const;
   void AddStmt(Stmt* stmt);
 
  private:
@@ -549,9 +513,6 @@ class CompoundStmt : public Stmt {
 };
 
 class ExprStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static ExprStmt* Get(Expr* expr = nullptr);
 
@@ -568,15 +529,16 @@ class ExprStmt : public Stmt {
 };
 
 class IfStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static IfStmt* Get(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+
+  const Expr* GetCond() const;
+  const Stmt* GetThenBlock() const;
+  const Stmt* GetElseBlock() const;
 
  private:
   IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);
@@ -587,9 +549,6 @@ class IfStmt : public Stmt {
 };
 
 class SwitchStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static SwitchStmt* Get();
   static SwitchStmt* Get(Expr* cond, Stmt* block);
@@ -602,7 +561,10 @@ class SwitchStmt : public Stmt {
   void SetCond(Expr* cond);
   void SetBlock(Stmt* block);
 
- private:
+  const Expr* GetCond() const;
+  const Stmt* GetBlock() const;
+
+  // private:
   SwitchStmt();
   SwitchStmt(Expr* cond, Stmt* block);
 
@@ -614,15 +576,15 @@ class SwitchStmt : public Stmt {
 };
 
 class WhileStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static WhileStmt* Get(Expr* cond, Stmt* block);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+
+  const Expr* GetCond() const;
+  const Stmt* GetBlock() const;
 
  private:
   WhileStmt(Expr* cond, Stmt* block);
@@ -642,6 +604,9 @@ class DoWhileStmt : public Stmt {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
+  const Expr* GetCond() const;
+  const Stmt* GetBlock() const;
+
  private:
   DoWhileStmt(Expr* cond, Stmt* block);
 
@@ -660,6 +625,12 @@ class ForStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+
+  const Expr* GetInit() const;
+  const Expr* GetCond() const;
+  const Expr* GetInc() const;
+  const Stmt* GetBlock() const;
+  const Stmt* GetDecl() const;
 
  private:
   ForStmt(Expr* init, Expr* cond, Expr* inc, Stmt* block, Stmt* decl);
@@ -682,6 +653,8 @@ class GotoStmt : public Stmt {
   virtual void Check() override;
   void SetLabel(LabelStmt* label);
   std::string GetName() const;
+
+  const LabelStmt* GetLabel() const;
 
  private:
   explicit GotoStmt(const std::string& name);
@@ -726,6 +699,8 @@ class ReturnStmt : public Stmt {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
+  const Expr* GetExpr() const;
+
  private:
   explicit ReturnStmt(Expr* expr = nullptr);
 
@@ -735,9 +710,6 @@ class ReturnStmt : public Stmt {
 using ExtDecl = AstNode;
 
 class TranslationUnit : public AstNode {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static TranslationUnit* Get();
 

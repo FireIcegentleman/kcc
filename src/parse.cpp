@@ -1549,7 +1549,7 @@ void Parser::ParseStaticAssertDecl() {
   Expect(Tag::kComma);
 
   // TODO 不处理转义序列
-  auto msg{ParseStringLiteral()->GetVal()};
+  auto msg{ParseStringLiteral()->GetStr()};
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
@@ -2459,7 +2459,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
 
   auto width{type->ArrayGetElementType()->GetWidth()};
   auto size{str_node->GetType()->ArrayGetNumElements()};
-  auto temp{str_node->GetVal()};
+  auto temp{str_node->GetStr()};
   auto str{temp.c_str()};
 
   switch (width) {
@@ -2901,7 +2901,8 @@ llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
 
   auto width{type->ArrayGetElementType()->GetWidth()};
   auto size{str_node->GetType()->ArrayGetNumElements()};
-  auto str{str_node->GetVal().c_str()};
+  auto temp{str_node->GetStr()};
+  auto str{temp.c_str()};
 
   switch (width) {
     case 1: {
