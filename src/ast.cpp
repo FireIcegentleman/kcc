@@ -769,6 +769,15 @@ bool IdentifierExpr::IsEnumerator() const {
   return dynamic_cast<const EnumeratorExpr*>(this);
 }
 
+ObjectExpr* IdentifierExpr::ToObjectExpr() {
+  return dynamic_cast<ObjectExpr*>(this);
+}
+
+const ObjectExpr* IdentifierExpr::ToObjectExpr() const {
+  return dynamic_cast<const ObjectExpr*>(this);
+}
+
+
 IdentifierExpr::IdentifierExpr(const std::string& name, QualType type,
                                enum Linkage linkage, bool is_type_name)
     : Expr{type}, name_{name}, linkage_{linkage}, is_type_name_{is_type_name} {}

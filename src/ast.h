@@ -322,6 +322,8 @@ class IdentifierExpr : public Expr {
   bool IsTypeName() const;
   bool IsObject() const;
   bool IsEnumerator() const;
+  ObjectExpr* ToObjectExpr();
+  const ObjectExpr* ToObjectExpr() const;
 
  protected:
   IdentifierExpr(const std::string& name, QualType type, enum Linkage linkage,

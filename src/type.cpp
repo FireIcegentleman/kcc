@@ -4,7 +4,9 @@
 
 #include "type.h"
 
+#include <algorithm>
 #include <cassert>
+#include <limits>
 
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/Support/raw_os_ostream.h>
@@ -22,6 +24,25 @@ namespace kcc {
  */
 QualType::QualType(Type* type, std::uint32_t type_qual)
     : type_{type}, type_qual_{type_qual} {}
+
+std::string QualType::ToString() const {
+  std::string str;
+
+  if (type_qual_ & kConst) {
+    str += "const ";
+  }
+  if (type_qual_ & kRestrict) {
+    str += "restrict ";
+  }
+  if (type_qual_ & kVolatile) {
+    str += "volatile ";
+  }
+  if (type_qual_ & kAtomic) {
+    str += "atomic ";
+  }
+
+  return str + type_->ToString();
+}
 
 Type* QualType::operator->() {
   assert(type_ != nullptr);
@@ -472,6 +493,7 @@ ArithmeticType* ArithmeticType::Get(std::uint32_t type_spec) {
 }
 
 Type* ArithmeticType::IntegerPromote(Type* type) {
+  assert(type != nullptr);
   assert(type->IsIntegerTy() || type->IsBoolTy());
 
   static auto int_type{ArithmeticType::Get(kInt)};
@@ -484,6 +506,7 @@ Type* ArithmeticType::IntegerPromote(Type* type) {
 }
 
 Type* ArithmeticType::MaxType(Type* lhs, Type* rhs) {
+  assert(lhs != nullptr && rhs != nullptr);
   assert(lhs->IsArithmeticTy() && rhs->IsArithmeticTy());
 
   if ((!lhs->IsIntegerTy() || !rhs->IsIntegerTy()) &&
@@ -508,9 +531,8 @@ Type* ArithmeticType::MaxType(Type* lhs, Type* rhs) {
             unsigned_type->ArithmeticMaxIntegerValue()) {
           return signed_type;
         } else {
-          auto new_type{ArithmeticType::Get(
-              signed_type->ToArithmeticType()->type_spec_ | kUnsigned)};
-          return new_type;
+          return ArithmeticType::Get(
+              signed_type->ToArithmeticType()->type_spec_ | kUnsigned);
         }
       }
     }
@@ -552,12 +574,15 @@ std::int32_t ArithmeticType::GetAlign() const { return GetWidth(); }
 // 它们是同一类型(同名或由 typedef 引入的别名)
 // 类型 char 不与 signed char 兼容, 且不与 unsigned char 兼容
 bool ArithmeticType::Compatible(const Type* other) const {
+  assert(other != nullptr);
   return Equal(other);
 }
 
-bool ArithmeticType::Equal(const Type* type) const {
-  if (type->IsArithmeticTy()) {
-    return type_spec_ == dynamic_cast<const ArithmeticType*>(type)->type_spec_;
+bool ArithmeticType::Equal(const Type* other) const {
+  assert(other != nullptr);
+
+  if (other->IsArithmeticTy()) {
+    return type_spec_ == other->ToArithmeticType()->type_spec_;
   } else {
     return false;
   }
@@ -673,6 +698,8 @@ std::int32_t PointerType::GetAlign() const { return GetWidth(); }
 
 // 指向兼容类型
 bool PointerType::Compatible(const Type* other) const {
+  assert(other != nullptr);
+
   if (other->IsPointerTy()) {
     return element_type_->Compatible(
         dynamic_cast<const PointerType*>(other)->element_type_.GetType());
@@ -682,6 +709,8 @@ bool PointerType::Compatible(const Type* other) const {
 }
 
 bool PointerType::Equal(const Type* other) const {
+  assert(other != nullptr);
+
   if (other->IsPointerTy()) {
     return element_type_->Equal(
         dynamic_cast<const PointerType*>(other)->element_type_.GetType());
@@ -717,10 +746,11 @@ std::int32_t ArrayType::GetAlign() const { return contained_type_->GetAlign(); }
 // 其元素类型兼容, 且
 // 若都拥有常量大小, 则大小相同
 // 注意: 未知边界数组与任何兼容元素类型的数组兼容
-// VLA 与任何兼容元素类型的数组兼容
 bool ArrayType::Compatible(const Type* other) const {
+  assert(other != nullptr);
+
   if (other->IsArrayTy()) {
-    auto other_arr{dynamic_cast<const ArrayType*>(other)};
+    auto other_arr{other->ToArrayType()};
     if (!contained_type_->Compatible(other_arr->contained_type_.GetType())) {
       return false;
     }
@@ -735,8 +765,10 @@ bool ArrayType::Compatible(const Type* other) const {
 }
 
 bool ArrayType::Equal(const Type* other) const {
+  assert(other != nullptr);
+
   if (other->IsArrayTy()) {
-    auto other_arr{dynamic_cast<const ArrayType*>(other)};
+    auto other_arr{other->ToArrayType()};
     if (!contained_type_->Equal(other_arr->contained_type_.GetType())) {
       return false;
     }
@@ -752,6 +784,8 @@ bool ArrayType::Equal(const Type* other) const {
 
 void ArrayType::SetNumElements(std::size_t num_elements) {
   num_elements_ = num_elements;
+  // 在对元素数量未知的全局或静态数组初始化时, 如果不及时更新 LLVM 类型,
+  // 将会导致用于初始化的 llvm::Constant 类型不正确
   llvm_type_ =
       llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
 }
@@ -790,10 +824,11 @@ std::int32_t StructType::GetAlign() const {
 // 若它们都是完整类型, 则其成员必须在数量上准确对应, 以兼容类型声明,
 // 并拥有匹配的名称 另外, 若它们都是枚举, 则对应成员亦必须拥有相同值。 另外,
 // 若它们是结构体或联合体, 则 对应的元素必须以同一顺序声明(仅结构体)
-// 对应的位域必须有相同宽度
 bool StructType::Compatible(const Type* other) const {
+  assert(other != nullptr);
+
   if (other->IsStructOrUnionTy() && IsStruct() == other->IsStructTy()) {
-    auto other_struct{dynamic_cast<const StructType*>(other)};
+    auto other_struct{other->ToStructType()};
     if (HasName() && other_struct->HasName()) {
       if (name_ != other_struct->name_) {
         return false;
@@ -815,8 +850,10 @@ bool StructType::Compatible(const Type* other) const {
 }
 
 bool StructType::Equal(const Type* other) const {
+  assert(other != nullptr);
+
   if (other->IsStructOrUnionTy() && IsStruct() == other->IsStructTy()) {
-    auto other_struct{dynamic_cast<const StructType*>(other)};
+    auto other_struct{other->ToStructType()};
     if (HasName() && other_struct->HasName()) {
       if (name_ != other_struct->name_) {
         return false;
@@ -843,8 +880,8 @@ bool StructType::HasName() const { return !std::empty(name_); }
 
 void StructType::SetName(const std::string& name) {
   name_ = name;
-  std::string pre{is_struct_ ? "struct." : "union."};
-  llvm::cast<llvm::StructType>(llvm_type_)->setName(pre + name);
+  std::string prefix{is_struct_ ? "struct." : "union."};
+  llvm::cast<llvm::StructType>(llvm_type_)->setName(prefix + name);
 }
 
 std::string StructType::GetName() const { return name_; }
@@ -854,11 +891,12 @@ std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 std::vector<ObjectExpr*>& StructType::GetMembers() { return members_; }
 
 ObjectExpr* StructType::GetMember(const std::string& name) const {
-  auto iter{scope_->FindUsualInCurrScope(name)};
-  if (iter == nullptr) {
+  auto ident{scope_->FindUsualInCurrScope(name)};
+  if (ident == nullptr) {
     return nullptr;
   } else {
-    return dynamic_cast<ObjectExpr*>(iter);
+    assert(ident->IsObject());
+    return ident->ToObjectExpr();
   }
 }
 
@@ -878,40 +916,41 @@ void StructType::AddMember(ObjectExpr* member) {
   auto offset{MakeAlign(offset_, member->GetAlign())};
   member->SetOffset(offset);
 
-  members_.push_back(member);
-
-  scope_->InsertUsual(member->GetName(), member);
   member->GetIndexs().push_front({this, index_++});
+
+  members_.push_back(member);
+  scope_->InsertUsual(member);
 
   align_ = std::max(align_, member->GetAlign());
 
   if (is_struct_) {
-    offset_ = offset + member->GetQualType()->GetWidth();
+    offset_ = offset + member->GetType()->GetWidth();
     width_ = MakeAlign(offset_, align_);
   } else {
     assert(offset_ == 0);
-    width_ = std::max(width_, member->GetQualType()->GetWidth());
+    width_ = std::max(width_, member->GetType()->GetWidth());
     width_ = MakeAlign(width_, align_);
   }
 }
 
+// 匿名 struct / union
 void StructType::MergeAnonymous(ObjectExpr* anonymous) {
-  // 匿名 struct / union
-  auto annoy_type{dynamic_cast<const StructType*>(anonymous->GetType())};
-  assert(annoy_type != nullptr);
+  assert(anonymous->GetType()->IsStructOrUnionTy());
+  auto anonymous_type{anonymous->GetType()->ToStructType()};
 
   auto offset{MakeAlign(offset_, anonymous->GetAlign())};
   anonymous->SetOffset(offset);
+
   anonymous->GetIndexs().push_front({this, index_});
 
   members_.push_back(anonymous);
 
-  for (auto& [name, obj] : *annoy_type->scope_) {
-    if (auto member{dynamic_cast<ObjectExpr*>(obj)}; !member) {
+  for (auto&& [name, obj] : *anonymous_type->scope_) {
+    if (auto member{obj->ToObjectExpr()}; !member) {
       continue;
     } else {
       if (GetMember(name)) {
-        Error(member->GetLoc(), "duplicated member: {}", name);
+        Error(member->GetLoc(), "duplicated member: '{}'", name);
       }
 
       member->SetOffset(offset + member->GetOffset());
@@ -922,14 +961,15 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
   }
 
   ++index_;
+
   align_ = std::max(align_, anonymous->GetAlign());
 
   if (is_struct_) {
-    offset_ = offset + annoy_type->GetWidth();
+    offset_ = offset + anonymous_type->GetWidth();
     width_ = MakeAlign(offset_, align_);
   } else {
     assert(offset_ == 0);
-    width_ = std::max(width_, annoy_type->GetWidth());
+    width_ = std::max(width_, anonymous_type->GetWidth());
     width_ = MakeAlign(width_, align_);
   }
 }
@@ -942,7 +982,7 @@ void StructType::Finish() {
       members.push_back(item->GetType()->GetLLVMType());
     }
   } else {
-    if (std::size(members_) >= 1) {
+    if (std::size(members_) > 0) {
       Type* max_type{members_.front()->GetType()};
       for (const auto& item : members_) {
         if (item->GetType()->GetWidth() > max_type->GetWidth()) {
@@ -963,18 +1003,20 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
       is_struct_{is_struct},
       name_{name},
       scope_{Scope::Get(parent, kBlock)} {
-  std::string pre{is_struct ? "struct." : "union."};
+  std::string prefix{is_struct ? "struct." : "union."};
+
   if (HasName()) {
+    auto new_name{prefix + name};
     for (const auto& item : Module->getIdentifiedStructTypes()) {
-      if (item->getName() == pre + name) {
+      if (item->getName() == new_name) {
         llvm_type_ = item;
         return;
       }
     }
 
-    llvm_type_ = llvm::StructType::create(Context, pre + name);
+    llvm_type_ = llvm::StructType::create(Context, new_name);
   } else {
-    llvm_type_ = llvm::StructType::create(Context, pre + "anon");
+    llvm_type_ = llvm::StructType::create(Context, prefix + "anon");
   }
 }
 
@@ -999,7 +1041,7 @@ FunctionType* FunctionType::Get(QualType return_type,
 }
 
 std::int32_t FunctionType::GetWidth() const {
-  // GNU 扩展
+  // GCC 扩展
   return 1;
 }
 
@@ -1013,7 +1055,7 @@ std::int32_t FunctionType::GetAlign() const {
 // 在应用数组到指针和函数到指针类型调整, 及剥除顶层限定符后, 拥有相同类型
 bool FunctionType::Compatible(const Type* other) const {
   if (other->IsFunctionTy()) {
-    auto other_func{dynamic_cast<const FunctionType*>(other)};
+    auto other_func{other->ToFunctionType()};
     if (!return_type_->Compatible(other_func->return_type_.GetType())) {
       return false;
     }
@@ -1037,7 +1079,7 @@ bool FunctionType::Compatible(const Type* other) const {
 
 bool FunctionType::Equal(const Type* other) const {
   if (other->IsFunctionTy()) {
-    auto other_func{dynamic_cast<const FunctionType*>(other)};
+    auto other_func{other->ToFunctionType()};
     if (!return_type_->Equal(other_func->return_type_.GetType())) {
       return false;
     }
