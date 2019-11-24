@@ -7,9 +7,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
+#include <set>
 #include <stack>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -25,10 +26,13 @@ namespace kcc {
 
 class Parser {
  public:
-  explicit Parser(std::vector<Token> tokens, const std::string& file_name);
+  explicit Parser(std::vector<Token> tokens);
   TranslationUnit* ParseTranslationUnit();
 
  private:
+  template <typename T, typename... Args>
+  T* MakeAstNode(Args&&... args);
+
   bool HasNext();
   Token Peek();
   Token Next();
@@ -36,6 +40,7 @@ class Parser {
   bool Test(Tag tag);
   bool Try(Tag tag);
   Token Expect(Tag tag);
+  void MarkLoc();
 
   void EnterBlock(Type* func_type = nullptr);
   void ExitBlock();
@@ -45,10 +50,7 @@ class Parser {
   void ExitProto();
   bool IsTypeName(const Token& tok);
   bool IsDecl(const Token& tok);
-  bool InGlobal() const;
-  std::int32_t ParseInt32Constant();
-  LabelStmt* FindLabel(const std::string& name) const;
-  Declaration* MakeDeclaration(const Token& token, QualType type,
+  Declaration* MakeDeclaration(const std::string& name, QualType type,
                                std::uint32_t storage_class_spec,
                                std::uint32_t func_spec, std::int32_t align);
 
@@ -125,7 +127,7 @@ class Parser {
   QualType ParseDeclSpec(std::uint32_t* storage_class_spec,
                          std::uint32_t* func_spec, std::int32_t* align);
   Type* ParseStructUnionSpec(bool is_struct);
-  void ParseStructDeclList(Type* type);
+  void ParseStructDeclList(StructType* type);
   Type* ParseEnumSpec();
   void ParseEnumerator();
   std::int32_t ParseAlignas();
@@ -159,13 +161,15 @@ class Parser {
   /*
    * Init
    */
-  std::vector<Initializer> ParseInitDeclaratorSub(IdentifierExpr* ident);
-  void ParseInitializer(std::vector<Initializer>& inits, QualType type,
+  Initializers ParseInitDeclaratorSub(IdentifierExpr* ident);
+  void ParseInitializer(Initializers& inits, QualType type, std::int32_t offset,
                         bool designated, bool force_brace);
-  void ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
-                             std::int32_t designated);
-  void ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
-                              bool designated);
+  void ParseArrayInitializer(Initializers& inits, Type* type,
+                             std::int32_t offset, std::int32_t designated);
+  bool ParseLiteralInitializer(Initializers& inits, Type* type,
+                               std::int32_t offset);
+  void ParseStructInitializer(Initializers& inits, Type* type,
+                              std::int32_t offset, bool designated);
   static auto ParseStructDesignator(Type* type, const std::string& name)
       -> decltype(std::begin(type->StructGetMembers()));
 
@@ -191,7 +195,6 @@ class Parser {
   QualType ParseTypeof();
   Expr* ParseStmtExpr();
   Expr* ParseTypeid();
-  Expr* TryParseStmtExpr();
 
   /*
    * built in
@@ -199,23 +202,31 @@ class Parser {
   Expr* ParseOffsetof();
   void AddBuiltin();
 
-  TranslationUnit* unit_;
+  LabelStmt* FindLabel(const std::string& name) const;
 
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
-  FuncDef* func_def_{};
-  Scope* scope_{Scope::Get(nullptr, kFile)};
+  Location loc_;
 
-  std::unordered_map<std::string, LabelStmt*> labels_;
-  std::vector<GotoStmt*> gotos_;
-
-  // 用于将块作用与的复合字面量加入块中
+  FuncDef* curr_func_def_{};
+  Scope* curr_scope_{Scope::Get(nullptr, kFile)};
+  std::list<std::pair<Type*, std::int32_t>> indexs_;
+  std::stack<SwitchStmt*> switch_stmts_;
+  std::vector<LabelStmt*> labels_;
+  std::vector<GotoStmt*> unresolved_gotos_;
   std::stack<CompoundStmt*> compound_stmt_;
 
-  // 非常量初始化时记录索引
-  std::list<std::pair<Type*, std::int32_t>> indexs_;
+  TranslationUnit* unit_{MakeAstNode<TranslationUnit>()};
 };
+
+template <typename T, typename... Args>
+T* Parser::MakeAstNode(Args&&... args) {
+  auto t{T::Get(std::forward<Args>(args)...)};
+  t->SetLoc(loc_);
+  t->Check();
+  return t;
+}
 
 }  // namespace kcc
 

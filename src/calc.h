@@ -16,8 +16,8 @@ namespace kcc {
 
 class CalcConstantExpr : public Visitor {
  public:
-  llvm::Constant* Calc(const Expr* expr);
-  std::int64_t CalcInteger(const Expr* expr);
+  llvm::Constant* Calc(Expr* expr);
+  std::int64_t CalcInteger(Expr* expr);
 
  private:
   virtual void Visit(const UnaryOpExpr& node) override;
