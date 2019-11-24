@@ -146,4 +146,107 @@ llvm::ConstantInt *GetInt32Constant(std::int32_t value) {
   return llvm::ConstantInt::get(Builder.getInt32Ty(), value);
 }
 
+llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned) {
+  if (to->isIntegerTy(1)) {
+    return CastToBool(value);
+  }
+
+  if (IsIntegerTy(value) && to->isIntegerTy()) {
+    if (is_unsigned) {
+      return Builder.CreateZExtOrTrunc(value, to);
+    } else {
+      return Builder.CreateSExtOrTrunc(value, to);
+    }
+  } else if (IsIntegerTy(value) && to->isFloatingPointTy()) {
+    if (is_unsigned) {
+      return Builder.CreateUIToFP(value, to);
+    } else {
+      return Builder.CreateSIToFP(value, to);
+    }
+  } else if (IsFloatingPointTy(value) && to->isIntegerTy()) {
+    if (is_unsigned) {
+      return Builder.CreateFPToUI(value, to);
+    } else {
+      return Builder.CreateFPToSI(value, to);
+    }
+  } else if (IsFloatingPointTy(value) && to->isFloatingPointTy()) {
+    if (FloatPointRank(value->getType()) > FloatPointRank(to)) {
+      return Builder.CreateFPTrunc(value, to);
+    } else {
+      return Builder.CreateFPExt(value, to);
+    }
+  } else if (IsPointerTy(value) && to->isIntegerTy()) {
+    return Builder.CreatePtrToInt(value, to);
+  } else if (IsIntegerTy(value) && to->isPointerTy()) {
+    return Builder.CreateIntToPtr(value, to);
+  } else if (to->isVoidTy() || value->getType() == to) {
+    return value;
+  } else if (IsArrCastToPtr(value, to)) {
+    return Builder.CreateInBoundsGEP(
+        value, {Builder.getInt64(0), Builder.getInt64(0)});
+  } else if (IsPointerTy(value) && to->isPointerTy()) {
+    return Builder.CreatePointerCast(value, to);
+  } else {
+    Error("{} to {}", LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
+  }
+}
+
+llvm::Value *CastToBool(llvm::Value *value) {
+  if (value->getType()->isIntegerTy(1)) {
+    return value;
+  }
+
+  if (IsIntegerTy(value) || IsPointerTy(value)) {
+    return Builder.CreateICmpNE(value, GetZero(value->getType()));
+  } else if (IsFloatingPointTy(value)) {
+    return Builder.CreateFCmpONE(value, GetZero(value->getType()));
+  } else {
+    Error("{}", LLVMTypeToStr(value->getType()));
+  }
+}
+
+llvm::Value *GetZero(llvm::Type *type) {
+  if (type->isIntegerTy()) {
+    return llvm::ConstantInt::get(type, 0);
+  } else if (type->isFloatingPointTy()) {
+    return llvm::ConstantFP::get(type, 0.0);
+  } else if (type->isPointerTy()) {
+    return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
+  } else {
+    assert(false);
+    return nullptr;
+  }
+}
+
+llvm::GlobalVariable *CreateGlobalCompoundLiteral(QualType type,
+                                                  llvm::Constant *init) {
+  auto var{new llvm::GlobalVariable(
+      *Module, type->GetLLVMType(), type.IsConst(),
+      llvm::GlobalValue::InternalLinkage, init, ".compoundliteral")};
+  var->setAlignment(type->GetAlign());
+
+  return var;
+}
+
+llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
+                                         std::int32_t align) {
+  auto var{new llvm::GlobalVariable(*Module, init->getType(), true,
+                                    llvm::GlobalValue::PrivateLinkage, init,
+                                    ".str")};
+  var->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+  var->setAlignment(align);
+
+  return var;
+}
+
+llvm::GlobalVariable *CreateGlobalVar(QualType type, llvm::Constant *init,
+                                      Linkage linkage,
+                                      const std::string &name) {
+  return new llvm::GlobalVariable(*Module, type->GetLLVMType(), type.IsConst(),
+                                  linkage == kInternal
+                                      ? llvm::GlobalValue::InternalLinkage
+                                      : llvm::GlobalValue::ExternalLinkage,
+                                  init, name);
+}
+
 }  // namespace kcc

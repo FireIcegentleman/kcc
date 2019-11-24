@@ -34,6 +34,7 @@ add_definitions(-DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
 
 add_executable(${PROJECT_NAME} ${cppsrc})
 
+add_definitions(-DDEV)
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   add_definitions(-DDEV)
   message(STATUS "cmake-format found")

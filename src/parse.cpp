@@ -893,14 +893,14 @@ Expr* Parser::ParsePrimaryExpr() {
     if (curr_func_def_ == nullptr) {
       Error(loc_, "Not allowed to use __func__ or __FUNCTION__ here");
     }
-    return MakeAstNode<StringLiteralExpr>(curr_func_def_->GetName());
+    return MakeAstNode<StringLiteralExpr>(curr_func_def_->GetName() + '\0');
   } else if (Try(Tag::kFuncSignature)) {
     if (curr_func_def_ == nullptr) {
       Error(loc_, "Not allowed to use __PRETTY_FUNCTION__ here");
     }
     return MakeAstNode<StringLiteralExpr>(
         curr_func_def_->GetFuncType()->ToString() + ": " +
-        curr_func_def_->GetFuncType()->FuncGetName());
+        curr_func_def_->GetFuncType()->FuncGetName() + '\0');
   } else {
     Error(loc_, "{} unexpected", Peek().GetStr());
   }
@@ -2463,39 +2463,42 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
   auto str{temp.c_str()};
 
   switch (width) {
-    case 1:
-      for (std::size_t i{}; i < size; ++i) {
+    case 1: {
+      auto char_type{ArithmeticType::Get(kChar | kUnsigned)};
+      std::size_t i{};
+      for (; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
-        auto char_type{ArithmeticType::Get(kChar | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
         inits.AddInit({char_type, offset, value, {{type, i}}});
         offset += 1;
         str += 1;
       }
-      break;
-    case 2:
-      for (std::size_t i{}; i < size; ++i) {
+    } break;
+    case 2: {
+      auto char_type{ArithmeticType::Get(kShort | kUnsigned)};
+      std::size_t i{};
+      for (; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
-        auto char_type{ArithmeticType::Get(kShort | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
         inits.AddInit({char_type, offset, value, {{type, i}}});
         offset += 2;
         str += 2;
       }
-      break;
-    case 4:
-      for (std::size_t i{}; i < size; ++i) {
+    } break;
+    case 4: {
+      auto char_type{ArithmeticType::Get(kInt | kUnsigned)};
+      std::size_t i{};
+      for (; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
-        auto char_type{ArithmeticType::Get(kInt | kUnsigned)};
         auto value{
             ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
         inits.AddInit({char_type, offset, value, {{type, i}}});
         offset += 4;
         str += 4;
       }
-      break;
+    } break;
     default:
       assert(false);
   }
@@ -2899,43 +2902,7 @@ llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
           type->ArrayGetElementType()->ToString());
   }
 
-  auto width{type->ArrayGetElementType()->GetWidth()};
-  auto size{str_node->GetType()->ArrayGetNumElements()};
-  auto temp{str_node->GetStr()};
-  auto str{temp.c_str()};
-
-  switch (width) {
-    case 1: {
-      std::vector<std::uint8_t> val;
-      for (std::size_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
-        val.push_back(*ptr);
-        str += 1;
-      }
-      return llvm::ConstantDataArray::get(Context, val);
-    } break;
-    case 2: {
-      std::vector<std::uint16_t> val;
-      for (std::size_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
-        val.push_back(*ptr);
-        str += 2;
-      }
-      return llvm::ConstantDataArray::get(Context, val);
-    } break;
-    case 4: {
-      std::vector<std::uint32_t> val;
-      for (std::size_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
-        val.push_back(*ptr);
-        str += 4;
-      }
-      return llvm::ConstantDataArray::get(Context, val);
-    } break;
-    default:
-      assert(false);
-      return nullptr;
-  }
+  return str_node->GetArr();
 }
 
 llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,

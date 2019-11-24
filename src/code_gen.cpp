@@ -52,8 +52,7 @@ CodeGen::CodeGen(const std::string&) {
       target->createTargetMachine(target_triple, cpu, features, opt, rm)};
 
   // 配置模块以指定目标机器和数据布局, 这不是必需的, 但有利于优化
-  DataLayout = TargetMachine->createDataLayout();
-  Module->setDataLayout(DataLayout);
+  Module->setDataLayout(TargetMachine->createDataLayout());
   Module->setTargetTriple(target_triple);
 }
 
@@ -339,62 +338,8 @@ void CodeGen::Visit(const StringLiteralExpr& node) {
   if (!HaveInsertPoint()) {
     return;
   }
-  auto width{node.GetType()->ArrayGetElementType()->GetWidth()};
-  auto size{node.GetType()->ArrayGetNumElements()};
-  auto temp{node.GetStr()};
-  auto str{temp.c_str()};
-  llvm::Constant* arr{};
 
-  switch (width) {
-    case 1: {
-      std::vector<std::uint8_t> values;
-      for (std::size_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
-        values.push_back(static_cast<std::uint64_t>(*ptr));
-        str += 1;
-      }
-      arr = llvm::ConstantDataArray::get(Context, values);
-    } break;
-    case 2: {
-      std::vector<std::uint16_t> values;
-      for (std::size_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
-        values.push_back(static_cast<std::uint64_t>(*ptr));
-        str += 2;
-      }
-      arr = llvm::ConstantDataArray::get(Context, values);
-    } break;
-    case 4: {
-      std::vector<std::uint32_t> values;
-      for (std::size_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
-        values.push_back(static_cast<std::uint64_t>(*ptr));
-        str += 4;
-      }
-      arr = llvm::ConstantDataArray::get(Context, values);
-    } break;
-    default:
-      assert(false);
-  }
-
-  if (auto iter{strings_.find(arr)}; iter != std::end(strings_)) {
-    result_ = iter->second;
-    return;
-  }
-
-  auto global_var{new llvm::GlobalVariable(*Module, arr->getType(), true,
-                                           llvm::GlobalValue::PrivateLinkage,
-                                           arr, ".str")};
-  global_var->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-  global_var->setAlignment(width);
-
-  auto zero{llvm::ConstantInt::get(llvm::Type::getInt64Ty(Context), 0)};
-  auto ptr{llvm::ConstantExpr::getInBoundsGetElementPtr(
-      global_var->getValueType(), global_var,
-      llvm::ArrayRef<llvm::Constant*>{zero, zero})};
-
-  strings_[arr] = ptr;
-  result_ = ptr;
+  result_ = node.GetPtr();
 }
 
 void CodeGen::Visit(const IdentifierExpr& node) {
@@ -814,8 +759,9 @@ llvm::Value* CodeGen::SubOp(llvm::Value* lhs, llvm::Value* rhs,
     rhs = CastTo(rhs, Builder.getInt64Ty(), true);
 
     auto value{SubOp(lhs, rhs, true)};
-    return DivOp(value, Builder.getInt64(DataLayout.getTypeAllocSize(type)),
-                 true);
+    return DivOp(
+        value, Builder.getInt64(Module->getDataLayout().getTypeAllocSize(type)),
+        true);
   } else {
     assert(false);
     return nullptr;

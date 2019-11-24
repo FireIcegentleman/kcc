@@ -6,9 +6,10 @@
 
 #include <algorithm>
 
-#include "calc.h"
 #include "error.h"
+#include "llvm_common.h"
 #include "memory_pool.h"
+#include "util.h"
 #include "visitor.h"
 
 namespace kcc {
@@ -723,15 +724,79 @@ AstNodeType StringLiteralExpr::Kind() const {
   return AstNodeType::kStringLiteralExpr;
 }
 
-void StringLiteralExpr::Check() {}
+void StringLiteralExpr::Check() {
+  if (!TestMode) {
+    auto iter{Map.find(str_)};
+    if (iter != std::end(Map)) {
+      arr_ = iter->second.first;
+      ptr_ = iter->second.second;
+      return;
+    }
+  }
+
+  auto width{type_->ArrayGetElementType()->GetWidth()};
+  auto size{type_->ArrayGetNumElements()};
+  auto str{str_.c_str()};
+
+  switch (width) {
+    case 1: {
+      std::vector<std::uint8_t> values;
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
+        values.push_back(*ptr);
+        str += 1;
+      }
+      // 空字符
+      // values.push_back(0);
+      arr_ = llvm::ConstantDataArray::get(Context, values);
+    } break;
+    case 2: {
+      std::vector<std::uint16_t> values;
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
+        values.push_back(*ptr);
+        str += 2;
+      }
+      // values.push_back(0);
+      arr_ = llvm::ConstantDataArray::get(Context, values);
+    } break;
+    case 4: {
+      std::vector<std::uint32_t> values;
+      for (std::size_t i{}; i < size; ++i) {
+        auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
+        values.push_back(*ptr);
+        str += 4;
+      }
+      // values.push_back(0);
+      arr_ = llvm::ConstantDataArray::get(Context, values);
+    } break;
+    default:
+      assert(false);
+  }
+
+  auto var{CreateGlobalString(arr_, width)};
+
+  auto zero{llvm::ConstantInt::get(Builder.getInt64Ty(), 0)};
+  ptr_ = llvm::ConstantExpr::getInBoundsGetElementPtr(
+      nullptr, var, llvm::ArrayRef<llvm::Constant*>{zero, zero});
+
+  if (!TestMode) {
+    Map[str] = {arr_, ptr_};
+  }
+}
 
 bool StringLiteralExpr::IsLValue() const { return false; }
 
 std::string StringLiteralExpr::GetStr() const { return str_; }
 
-llvm::Constant* StringLiteralExpr::GetConstant() const {
-  assert(constant_ != nullptr);
-  return constant_;
+llvm::Constant* StringLiteralExpr::GetArr() const {
+  assert(arr_ != nullptr);
+  return arr_;
+}
+
+llvm::Constant* StringLiteralExpr::GetPtr() const {
+  assert(ptr_ != nullptr);
+  return ptr_;
 }
 
 StringLiteralExpr::StringLiteralExpr(Type* type, const std::string& val)
@@ -776,7 +841,6 @@ ObjectExpr* IdentifierExpr::ToObjectExpr() {
 const ObjectExpr* IdentifierExpr::ToObjectExpr() const {
   return dynamic_cast<const ObjectExpr*>(this);
 }
-
 
 IdentifierExpr::IdentifierExpr(const std::string& name, QualType type,
                                enum Linkage linkage, bool is_type_name)

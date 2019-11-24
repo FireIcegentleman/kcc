@@ -285,13 +285,15 @@ class StringLiteralExpr : public Expr {
   virtual bool IsLValue() const override;
 
   std::string GetStr() const;
-  llvm::Constant* GetConstant() const;
+  llvm::Constant* GetArr() const;
+  llvm::Constant* GetPtr() const;
 
  private:
   StringLiteralExpr(Type* type, const std::string& val);
 
   std::string str_;
-  llvm::Constant* constant_{};
+  llvm::Constant* arr_{};
+  llvm::Constant* ptr_{};
 };
 
 enum Linkage { kNone, kInternal, kExternal };
@@ -452,7 +454,7 @@ class LabelStmt : public Stmt {
   Stmt* stmt_;
   std::string ident_;
   bool has_goto_{false};
-//  mutable llvm::BasicBlock* label_{};
+  //  mutable llvm::BasicBlock* label_{};
   bool has_to_move_{false};
 };
 
