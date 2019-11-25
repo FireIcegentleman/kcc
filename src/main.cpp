@@ -157,7 +157,7 @@ void RunKcc(const std::string &file_name) {
     return;
   }
 
-  CodeGen code_gen{file_name};
+  CodeGen code_gen;
   code_gen.GenCode(unit);
   Optimization(OptimizationLevel);
 
@@ -226,7 +226,7 @@ void Run(const std::string &file) {
   }
 
   if (!ParseOnly) {
-    CodeGen code_gen{file};
+    CodeGen code_gen;
     code_gen.GenCode(unit);
 
     Optimization(OptimizationLevel);

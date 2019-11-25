@@ -27,6 +27,14 @@ void JsonGen::GenJson(const TranslationUnit* root,
       << std::flush;
 }
 
+bool JsonGen::CheckFileName(const AstNode& node) const {
+  if (std::empty(filter_)) {
+    return true;
+  } else {
+    return node.GetLoc().GetFileName() == filter_;
+  }
+}
+
 void JsonGen::Visit(const UnaryOpExpr& node) {
   QJsonObject root;
   root["name"] =
@@ -526,14 +534,6 @@ void JsonGen::Visit(const FuncDef& node) {
   root["children"] = children;
 
   result_ = root;
-}
-
-bool JsonGen::CheckFileName(const AstNode& node) const {
-  if (std::empty(filter_)) {
-    return true;
-  } else {
-    return node.GetLoc().GetFileName() == filter_;
-  }
 }
 
 }  // namespace kcc

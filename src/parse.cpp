@@ -2314,8 +2314,7 @@ void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
       index = CalcConstantExpr{}.CalcInteger(expr);
       Expect(Tag::kRightSquare);
 
-      if (index < 0 ||
-          (type->IsComplete() && index >= type->ArrayGetNumElements())) {
+      if (type->IsComplete() && index >= type->ArrayGetNumElements()) {
         Error(expr, "array designator index {} exceeds array bounds", index);
       }
     }
@@ -2535,8 +2534,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
       index = CalcConstantExpr{}.CalcInteger(expr);
       Expect(Tag::kRightSquare);
 
-      if (index < 0 ||
-          (type->IsComplete() && index >= type->ArrayGetNumElements())) {
+      if (type->IsComplete() && index >= type->ArrayGetNumElements()) {
         Error(expr, "array designator index {} exceeds array bounds", index);
       }
     }

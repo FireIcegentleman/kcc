@@ -31,215 +31,6 @@ std::int64_t CalcConstantExpr::CalcInteger(const Expr* expr) {
   }
 }
 
-void CalcConstantExpr::Visit(const UnaryOpExpr& node) {
-  switch (node.GetOp()) {
-    case Tag::kPlus:
-      val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr());
-      break;
-    case Tag::kMinus:
-      val_ = NegOp(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()),
-                   node.GetExpr()->GetType()->IsUnsigned());
-      break;
-    case Tag::kTilde:
-      val_ = llvm::ConstantExpr::getNot(
-          CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()));
-      break;
-    case Tag::kExclaim:
-      val_ = LogicNotOp(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()));
-      break;
-    case Tag::kAmp: {
-      // 运算对象只能是一个全局变量
-      auto p{dynamic_cast<const ObjectExpr*>(node.GetExpr())};
-      assert(p != nullptr);
-      val_ = p->GetGlobalPtr();
-    } break;
-    default:
-      Error(node.GetLoc(), "expect constant expression");
-  }
-}
-
-void CalcConstantExpr::Visit(const TypeCastExpr& node) {
-  val_ = ConstantCastTo(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()),
-                        node.GetCastToType()->GetLLVMType(),
-                        node.GetExpr()->GetType()->IsUnsigned());
-}
-
-void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
-#define L CalcConstantExpr{node.GetLoc()}.Calc(node.GetLHS())
-#define R CalcConstantExpr{node.GetLoc()}.Calc(node.GetRHS())
-
-  // 有时左右两边符号性可能不同
-  // 如指针 + 整数
-  auto is_unsigned{node.GetLHS()->GetType()->IsUnsigned()};
-
-  switch (node.GetOp()) {
-    case Tag::kPlus:
-      val_ = AddOp(L, R, is_unsigned);
-      break;
-    case Tag::kMinus:
-      val_ = SubOp(L, R, is_unsigned);
-      break;
-    case Tag::kStar:
-      val_ = MulOp(L, R, is_unsigned);
-      break;
-    case Tag::kSlash: {
-      auto lhs{L};
-      auto rhs{R};
-      if (rhs->isZeroValue()) {
-        Error(node.GetRHS(), "division by zero");
-      }
-      val_ = DivOp(lhs, rhs, is_unsigned);
-      break;
-    }
-    case Tag::kPercent: {
-      auto lhs{L};
-      auto rhs{R};
-      if (rhs->isZeroValue()) {
-        Error(node.GetRHS(), "division by zero");
-      }
-      val_ = ModOp(lhs, rhs, is_unsigned);
-      break;
-    }
-    case Tag::kAmp:
-      val_ = AndOp(L, R);
-      break;
-    case Tag::kPipe:
-      val_ = OrOp(L, R);
-      break;
-    case Tag::kCaret:
-      val_ = XorOp(L, R);
-      break;
-    case Tag::kLessLess:
-      val_ = ShlOp(L, R);
-      break;
-    case Tag::kGreaterGreater:
-      val_ = ShrOp(L, R, is_unsigned);
-      break;
-    case Tag::kAmpAmp:
-      val_ = LogicAndOp(node);
-      break;
-    case Tag::kPipePipe:
-      val_ = LogicOrOp(node);
-      break;
-    case Tag::kEqualEqual:
-      val_ = EqualOp(L, R);
-      break;
-    case Tag::kExclaimEqual:
-      val_ = NotEqualOp(L, R);
-      break;
-    case Tag::kLess:
-      val_ = LessOp(L, R, is_unsigned);
-      break;
-    case Tag::kGreater:
-      val_ = GreaterOp(L, R, is_unsigned);
-      break;
-    case Tag::kLessEqual:
-      val_ = LessEqualOp(L, R, is_unsigned);
-      break;
-    case Tag::kGreaterEqual:
-      val_ = GreaterEqualOp(L, R, is_unsigned);
-      break;
-    default:
-      Error(node.GetLoc(), "expect constant expression");
-  }
-
-#undef L
-#undef R
-#undef I_L
-#undef I_R
-}
-
-void CalcConstantExpr::Visit(const ConditionOpExpr& node) {
-  auto flag{CalcConstantExpr{node.GetLoc()}.Calc(node.GetCond())};
-
-  if (flag->isZeroValue()) {
-    val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetRHS());
-  } else {
-    val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetLHS());
-  }
-}
-
-void CalcConstantExpr::Visit(const ConstantExpr& node) {
-  if (node.GetType()->IsIntegerTy()) {
-    val_ = llvm::ConstantInt::get(node.GetType()->GetLLVMType(),
-                                  node.GetIntegerVal());
-  } else if (node.GetType()->IsFloatPointTy()) {
-    val_ = llvm::ConstantFP::get(node.GetType()->GetLLVMType(),
-                                 node.GetFloatPointVal());
-  } else {
-    assert(false);
-  }
-}
-
-void CalcConstantExpr::Visit(const EnumeratorExpr& node) {
-  val_ = llvm::ConstantInt::get(node.GetType()->GetLLVMType(), node.GetVal());
-}
-
-void CalcConstantExpr::Visit(const StmtExpr& node) {
-  if (!node.GetType()->IsVoidTy()) {
-    auto last{node.GetBlock()->GetStmts().back()};
-    assert(last->Kind() == AstNodeType::kExprStmt);
-    val_ = CalcConstantExpr{node.GetLoc()}.Calc(
-        dynamic_cast<ExprStmt*>(last)->GetExpr());
-  } else {
-    Error(node.GetLoc(), "expect constant expression");
-  }
-}
-
-void CalcConstantExpr::Visit(const StringLiteralExpr& node) {
-  val_ = node.GetPtr();
-}
-
-void CalcConstantExpr::Visit(const FuncCallExpr& node) {
-  Error(node.GetLoc(), "expect constant expression");
-}
-
-void CalcConstantExpr::Visit(const IdentifierExpr& node) {
-  Error(node.GetLoc(), "expect constant expression");
-}
-
-void CalcConstantExpr::Visit(const ObjectExpr& node) {
-  if (node.GetType()->IsArrayTy()) {
-    val_ = node.GetGlobalPtr();
-  } else {
-    Error(loc_, "expect constant expression");
-  }
-}
-
-void CalcConstantExpr::Visit(const LabelStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const CaseStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const DefaultStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const CompoundStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const ExprStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const IfStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const SwitchStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const WhileStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const DoWhileStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const ForStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const GotoStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const ContinueStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const BreakStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const ReturnStmt&) { assert(false); }
-
-void CalcConstantExpr::Visit(const TranslationUnit&) { assert(false); }
-
-void CalcConstantExpr::Visit(const Declaration&) { assert(false); }
-
-void CalcConstantExpr::Visit(const FuncDef&) { assert(false); }
-
 llvm::Constant* CalcConstantExpr::NegOp(llvm::Constant* value,
                                         bool is_unsigned) {
   if (value->getType()->isIntegerTy()) {
@@ -526,5 +317,214 @@ llvm::Constant* CalcConstantExpr::LogicAndOp(const BinaryOpExpr& node) {
     return GetInt32Constant(!rhs->isZeroValue());
   }
 }
+
+void CalcConstantExpr::Visit(const UnaryOpExpr& node) {
+  switch (node.GetOp()) {
+    case Tag::kPlus:
+      val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr());
+      break;
+    case Tag::kMinus:
+      val_ = NegOp(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()),
+                   node.GetExpr()->GetType()->IsUnsigned());
+      break;
+    case Tag::kTilde:
+      val_ = llvm::ConstantExpr::getNot(
+          CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()));
+      break;
+    case Tag::kExclaim:
+      val_ = LogicNotOp(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()));
+      break;
+    case Tag::kAmp: {
+      // 运算对象只能是一个全局变量
+      auto p{dynamic_cast<const ObjectExpr*>(node.GetExpr())};
+      assert(p != nullptr);
+      val_ = p->GetGlobalPtr();
+    } break;
+    default:
+      Error(node.GetLoc(), "expect constant expression");
+  }
+}
+
+void CalcConstantExpr::Visit(const TypeCastExpr& node) {
+  val_ = ConstantCastTo(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()),
+                        node.GetCastToType()->GetLLVMType(),
+                        node.GetExpr()->GetType()->IsUnsigned());
+}
+
+void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
+#define L CalcConstantExpr{node.GetLoc()}.Calc(node.GetLHS())
+#define R CalcConstantExpr{node.GetLoc()}.Calc(node.GetRHS())
+
+  // 有时左右两边符号性可能不同
+  // 如指针 + 整数
+  auto is_unsigned{node.GetLHS()->GetType()->IsUnsigned()};
+
+  switch (node.GetOp()) {
+    case Tag::kPlus:
+      val_ = AddOp(L, R, is_unsigned);
+      break;
+    case Tag::kMinus:
+      val_ = SubOp(L, R, is_unsigned);
+      break;
+    case Tag::kStar:
+      val_ = MulOp(L, R, is_unsigned);
+      break;
+    case Tag::kSlash: {
+      auto lhs{L};
+      auto rhs{R};
+      if (rhs->isZeroValue()) {
+        Error(node.GetRHS(), "division by zero");
+      }
+      val_ = DivOp(lhs, rhs, is_unsigned);
+      break;
+    }
+    case Tag::kPercent: {
+      auto lhs{L};
+      auto rhs{R};
+      if (rhs->isZeroValue()) {
+        Error(node.GetRHS(), "division by zero");
+      }
+      val_ = ModOp(lhs, rhs, is_unsigned);
+      break;
+    }
+    case Tag::kAmp:
+      val_ = AndOp(L, R);
+      break;
+    case Tag::kPipe:
+      val_ = OrOp(L, R);
+      break;
+    case Tag::kCaret:
+      val_ = XorOp(L, R);
+      break;
+    case Tag::kLessLess:
+      val_ = ShlOp(L, R);
+      break;
+    case Tag::kGreaterGreater:
+      val_ = ShrOp(L, R, is_unsigned);
+      break;
+    case Tag::kAmpAmp:
+      val_ = LogicAndOp(node);
+      break;
+    case Tag::kPipePipe:
+      val_ = LogicOrOp(node);
+      break;
+    case Tag::kEqualEqual:
+      val_ = EqualOp(L, R);
+      break;
+    case Tag::kExclaimEqual:
+      val_ = NotEqualOp(L, R);
+      break;
+    case Tag::kLess:
+      val_ = LessOp(L, R, is_unsigned);
+      break;
+    case Tag::kGreater:
+      val_ = GreaterOp(L, R, is_unsigned);
+      break;
+    case Tag::kLessEqual:
+      val_ = LessEqualOp(L, R, is_unsigned);
+      break;
+    case Tag::kGreaterEqual:
+      val_ = GreaterEqualOp(L, R, is_unsigned);
+      break;
+    default:
+      Error(node.GetLoc(), "expect constant expression");
+  }
+
+#undef L
+#undef R
+#undef I_L
+#undef I_R
+}
+
+void CalcConstantExpr::Visit(const ConditionOpExpr& node) {
+  auto flag{CalcConstantExpr{node.GetLoc()}.Calc(node.GetCond())};
+
+  if (flag->isZeroValue()) {
+    val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetRHS());
+  } else {
+    val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetLHS());
+  }
+}
+
+void CalcConstantExpr::Visit(const ConstantExpr& node) {
+  if (node.GetType()->IsIntegerTy()) {
+    val_ = llvm::ConstantInt::get(node.GetType()->GetLLVMType(),
+                                  node.GetIntegerVal());
+  } else if (node.GetType()->IsFloatPointTy()) {
+    val_ = llvm::ConstantFP::get(node.GetType()->GetLLVMType(),
+                                 node.GetFloatPointVal());
+  } else {
+    assert(false);
+  }
+}
+
+void CalcConstantExpr::Visit(const EnumeratorExpr& node) {
+  val_ = llvm::ConstantInt::get(node.GetType()->GetLLVMType(), node.GetVal());
+}
+
+void CalcConstantExpr::Visit(const StmtExpr& node) {
+  if (!node.GetType()->IsVoidTy()) {
+    auto last{node.GetBlock()->GetStmts().back()};
+    assert(last->Kind() == AstNodeType::kExprStmt);
+    val_ = CalcConstantExpr{node.GetLoc()}.Calc(
+        dynamic_cast<ExprStmt*>(last)->GetExpr());
+  } else {
+    Error(node.GetLoc(), "expect constant expression");
+  }
+}
+
+void CalcConstantExpr::Visit(const StringLiteralExpr& node) {
+  val_ = node.GetPtr();
+}
+
+void CalcConstantExpr::Visit(const FuncCallExpr& node) {
+  Error(node.GetLoc(), "expect constant expression");
+}
+
+void CalcConstantExpr::Visit(const IdentifierExpr& node) {
+  Error(node.GetLoc(), "expect constant expression");
+}
+
+void CalcConstantExpr::Visit(const ObjectExpr& node) {
+  if (node.GetType()->IsArrayTy()) {
+    val_ = node.GetGlobalPtr();
+  } else {
+    Error(loc_, "expect constant expression");
+  }
+}
+
+void CalcConstantExpr::Visit(const LabelStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const CaseStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const DefaultStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const CompoundStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const ExprStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const IfStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const SwitchStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const WhileStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const DoWhileStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const ForStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const GotoStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const ContinueStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const BreakStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const ReturnStmt&) { assert(false); }
+
+void CalcConstantExpr::Visit(const TranslationUnit&) { assert(false); }
+
+void CalcConstantExpr::Visit(const Declaration&) { assert(false); }
+
+void CalcConstantExpr::Visit(const FuncDef&) { assert(false); }
 
 }  // namespace kcc

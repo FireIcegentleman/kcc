@@ -4,14 +4,18 @@
 
 #include "code_gen.h"
 
+#include <cassert>
+#include <memory>
+#include <vector>
+
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/Optional.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/CodeGen.h>
@@ -21,17 +25,13 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
-#include <cassert>
-#include <memory>
-#include <vector>
-
 #include "error.h"
 #include "llvm_common.h"
 #include "util.h"
 
 namespace kcc {
 
-CodeGen::CodeGen(const std::string&) {
+CodeGen::CodeGen() {
   // 获取当前计算机的目标三元组
   auto target_triple{llvm::sys::getDefaultTargetTriple()};
 
@@ -490,11 +490,11 @@ void CodeGen::Visit(const SwitchStmt& node) {
   Builder.ClearInsertionPoint();
   llvm::BasicBlock* continue_block{};
   if (!std::empty(break_continue_stack_)) {
-    continue_block = break_continue_stack_.back().continue_block;
+    continue_block = break_continue_stack_.top().continue_block;
   }
-  break_continue_stack_.push_back({end_block, continue_block});
+  PushBlock(end_block, continue_block);
   EmitStmt(node.GetStmt());
-  break_continue_stack_.pop_back();
+  PopBlock();
 
   if (!default_block->getParent()) {
     default_block->replaceAllUsesWith(end_block);
@@ -513,14 +513,14 @@ void CodeGen::Visit(const WhileStmt& node) {
   auto end_block{CreateBasicBlock("while.end")};
   auto body_block{CreateBasicBlock("while.body")};
 
-  break_continue_stack_.push_back({end_block, cond_block});
+  PushBlock(end_block, cond_block);
 
   auto cond_val{EvaluateExprAsBool(node.GetCond())};
   Builder.CreateCondBr(cond_val, body_block, end_block);
 
   EmitBlock(body_block);
   EmitStmt(node.GetBlock());
-  break_continue_stack_.pop_back();
+  PopBlock();
 
   EmitBranch(cond_block);
   EmitBlock(end_block, true);
@@ -532,9 +532,9 @@ void CodeGen::Visit(const DoWhileStmt& node) {
   auto end_block{CreateBasicBlock("do.while.end")};
 
   EmitBlock(body_block);
-  break_continue_stack_.push_back({end_block, cond_block});
+  PushBlock(end_block, cond_block);
   EmitStmt(node.GetBlock());
-  break_continue_stack_.pop_back();
+  PopBlock();
 
   EmitBlock(cond_block);
   auto cond_val{EvaluateExprAsBool(node.GetCond())};
@@ -568,9 +568,9 @@ void CodeGen::Visit(const ForStmt& node) {
     continue_block = cond_block;
   }
 
-  break_continue_stack_.push_back({end_block, continue_block});
+  PushBlock(end_block, continue_block);
   EmitStmt(node.GetBlock());
-  break_continue_stack_.pop_back();
+  PopBlock();
 
   if (node.GetInc()) {
     EmitBlock(continue_block);
@@ -597,7 +597,7 @@ void CodeGen::Visit(const ContinueStmt& node) {
     if (!HaveInsertPoint()) {
       return;
     }
-    Builder.CreateBr(break_continue_stack_.back().continue_block);
+    Builder.CreateBr(break_continue_stack_.top().continue_block);
     Builder.ClearInsertionPoint();
   }
 }
@@ -609,7 +609,7 @@ void CodeGen::Visit(const BreakStmt& node) {
     if (!HaveInsertPoint()) {
       return;
     }
-    Builder.CreateBr(break_continue_stack_.back().break_block);
+    Builder.CreateBr(break_continue_stack_.top().break_block);
     Builder.ClearInsertionPoint();
   }
 }
@@ -658,7 +658,7 @@ void CodeGen::Visit(const FuncDef& node) {
         func_name, Module.get());
   }
 
-  curr_func_ = func;
+  func_ = func;
 
   // TODO Attribute DSOLocal 用法
   // TODO 实现 inline
@@ -677,7 +677,6 @@ void CodeGen::Visit(const FuncDef& node) {
 
   auto entry{llvm::BasicBlock::Create(Context, "", func)};
   Builder.SetInsertPoint(entry);
-  EnterFunc();
 
   auto iter{std::begin(func_type->FuncGetParams())};
   for (auto&& arg : func->args()) {
@@ -703,7 +702,6 @@ void CodeGen::Visit(const FuncDef& node) {
       }
     }
   }
-  ExitFunc();
 
   // 验证生成的代码, 检查一致性
   llvm::verifyFunction(*func);
@@ -1060,10 +1058,10 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
 
 void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
                         llvm::BasicBlock* continue_block) {
-  break_continue_stack_.push_back({break_stack, continue_block});
+  break_continue_stack_.push({break_stack, continue_block});
 }
 
-void CodeGen::PopBlock() { break_continue_stack_.pop_back(); }
+void CodeGen::PopBlock() { break_continue_stack_.pop(); }
 
 llvm::Value* CodeGen::NegOp(llvm::Value* value, bool is_unsigned) {
   if (IsIntegerTy(value)) {
@@ -1117,10 +1115,6 @@ llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
 
   return is_postfix ? lhs_value : rhs_value;
 }
-
-void CodeGen::EnterFunc() { PushBlock(nullptr, nullptr); }
-
-void CodeGen::ExitFunc() { PopBlock(); }
 
 void CodeGen::InitLocalAggregate(const Declaration& node) {
   auto obj{node.GetObject()};
@@ -1442,7 +1436,7 @@ void CodeGen::EmitBlock(llvm::BasicBlock* bb, bool is_finished) {
     return;
   }
 
-  curr_func_->getBasicBlockList().push_back(bb);
+  func_->getBasicBlockList().push_back(bb);
   Builder.SetInsertPoint(bb);
 }
 
@@ -1458,12 +1452,13 @@ void CodeGen::EmitBranch(llvm::BasicBlock* target) {
 }
 
 llvm::Value* CodeGen::EvaluateExprAsBool(const Expr* expr) {
+  assert(expr != nullptr);
   expr->Accept(*this);
   return CastToBool(result_);
 }
 
 llvm::BasicBlock* CodeGen::GetBasicBlockForLabel(const LabelStmt* label) {
-  auto& bb{label_map_[label]};
+  auto& bb{labels_[label]};
   if (bb) {
     return bb;
   }

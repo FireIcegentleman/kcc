@@ -23,38 +23,6 @@ class CalcConstantExpr : public Visitor {
   std::int64_t CalcInteger(const Expr* expr);
 
  private:
-  virtual void Visit(const UnaryOpExpr& node) override;
-  virtual void Visit(const TypeCastExpr& node) override;
-  virtual void Visit(const BinaryOpExpr& node) override;
-  virtual void Visit(const ConditionOpExpr& node) override;
-  virtual void Visit(const ConstantExpr& node) override;
-  virtual void Visit(const EnumeratorExpr& node) override;
-  virtual void Visit(const StmtExpr& node) override;
-
-  virtual void Visit(const StringLiteralExpr& node) override;
-  virtual void Visit(const FuncCallExpr& node) override;
-  virtual void Visit(const IdentifierExpr& node) override;
-  virtual void Visit(const ObjectExpr& node) override;
-
-  virtual void Visit(const LabelStmt& node) override;
-  virtual void Visit(const CaseStmt& node) override;
-  virtual void Visit(const DefaultStmt& node) override;
-  virtual void Visit(const CompoundStmt& node) override;
-  virtual void Visit(const ExprStmt& node) override;
-  virtual void Visit(const IfStmt& node) override;
-  virtual void Visit(const SwitchStmt& node) override;
-  virtual void Visit(const WhileStmt& node) override;
-  virtual void Visit(const DoWhileStmt& node) override;
-  virtual void Visit(const ForStmt& node) override;
-  virtual void Visit(const GotoStmt& node) override;
-  virtual void Visit(const ContinueStmt& node) override;
-  virtual void Visit(const BreakStmt& node) override;
-  virtual void Visit(const ReturnStmt& node) override;
-
-  virtual void Visit(const TranslationUnit& node) override;
-  virtual void Visit(const Declaration& node) override;
-  virtual void Visit(const FuncDef& node) override;
-
   static llvm::Constant* NegOp(llvm::Constant* value, bool is_unsigned);
   static llvm::Constant* LogicNotOp(llvm::Constant* value);
 
@@ -86,6 +54,38 @@ class CalcConstantExpr : public Visitor {
   static llvm::Constant* NotEqualOp(llvm::Constant* lhs, llvm::Constant* rhs);
   static llvm::Constant* LogicOrOp(const BinaryOpExpr& node);
   static llvm::Constant* LogicAndOp(const BinaryOpExpr& node);
+
+  virtual void Visit(const UnaryOpExpr& node) override;
+  virtual void Visit(const TypeCastExpr& node) override;
+  virtual void Visit(const BinaryOpExpr& node) override;
+  virtual void Visit(const ConditionOpExpr& node) override;
+  virtual void Visit(const ConstantExpr& node) override;
+  virtual void Visit(const EnumeratorExpr& node) override;
+  virtual void Visit(const StmtExpr& node) override;
+
+  virtual void Visit(const StringLiteralExpr& node) override;
+  virtual void Visit(const FuncCallExpr& node) override;
+  virtual void Visit(const IdentifierExpr& node) override;
+  virtual void Visit(const ObjectExpr& node) override;
+
+  virtual void Visit(const LabelStmt& node) override;
+  virtual void Visit(const CaseStmt& node) override;
+  virtual void Visit(const DefaultStmt& node) override;
+  virtual void Visit(const CompoundStmt& node) override;
+  virtual void Visit(const ExprStmt& node) override;
+  virtual void Visit(const IfStmt& node) override;
+  virtual void Visit(const SwitchStmt& node) override;
+  virtual void Visit(const WhileStmt& node) override;
+  virtual void Visit(const DoWhileStmt& node) override;
+  virtual void Visit(const ForStmt& node) override;
+  virtual void Visit(const GotoStmt& node) override;
+  virtual void Visit(const ContinueStmt& node) override;
+  virtual void Visit(const BreakStmt& node) override;
+  virtual void Visit(const ReturnStmt& node) override;
+
+  virtual void Visit(const TranslationUnit& node) override;
+  virtual void Visit(const Declaration& node) override;
+  virtual void Visit(const FuncDef& node) override;
 
   llvm::Constant* val_{};
   Location loc_;
