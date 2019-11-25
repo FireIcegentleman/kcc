@@ -4,7 +4,7 @@
 
 #include "llvm_common.h"
 
-#include <assert.h>
+#include <cassert>
 
 #include <llvm/Support/raw_ostream.h>
 

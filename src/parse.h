@@ -48,6 +48,8 @@ class Parser {
   bool InGlobal() const;
   std::int64_t ParseInt64Constant();
   LabelStmt* FindLabel(const std::string& name) const;
+  static auto GetStructDesignator(Type* type, const std::string& name)
+      -> decltype(std::begin(type->StructGetMembers()));
   Declaration* MakeDeclaration(const Token& token, QualType type,
                                std::uint32_t storage_class_spec,
                                std::uint32_t func_spec, std::int32_t align);
@@ -140,6 +142,7 @@ class Parser {
   Declaration* ParseInitDeclarator(QualType& base_type,
                                    std::uint32_t storage_class_spec,
                                    std::uint32_t func_spec, std::int32_t align);
+  void ParseInitDeclaratorSub(Declaration* decl);
   void ParseDeclarator(Token& tok, QualType& base_type);
   void ParsePointer(QualType& type);
   std::uint32_t ParseTypeQualList();
@@ -159,7 +162,6 @@ class Parser {
   /*
    * Init
    */
-  void ParseInitDeclaratorSub(Declaration* decl);
   llvm::Constant* ParseInitializer(std::vector<Initializer>& inits,
                                    QualType type, bool designated,
                                    bool force_brace);
@@ -168,8 +170,6 @@ class Parser {
   llvm::Constant* ParseLiteralInitializer(Type* type);
   void ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
                               bool designated);
-  static auto ParseStructDesignator(Type* type, const std::string& name)
-      -> decltype(std::begin(type->StructGetMembers()));
 
   /*
    * ConstantInit
@@ -191,9 +191,9 @@ class Parser {
   void ParseAttributeExprList();
   void TryParseAsm();
   QualType ParseTypeof();
+  Expr* TryParseStmtExpr();
   Expr* ParseStmtExpr();
   Expr* ParseTypeid();
-  Expr* TryParseStmtExpr();
 
   /*
    * built in

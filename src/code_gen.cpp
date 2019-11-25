@@ -768,22 +768,6 @@ llvm::Value* CodeGen::SubOp(llvm::Value* lhs, llvm::Value* rhs,
   }
 }
 
-bool CodeGen::IsArithmeticTy(llvm::Value* value) const {
-  return IsIntegerTy(value) || IsFloatingPointTy(value);
-}
-
-bool CodeGen::IsPointerTy(llvm::Value* value) const {
-  return value->getType()->isPointerTy();
-}
-
-bool CodeGen::IsIntegerTy(llvm::Value* value) const {
-  return value->getType()->isIntegerTy();
-}
-
-bool CodeGen::IsFloatingPointTy(llvm::Value* value) const {
-  return value->getType()->isFloatingPointTy();
-}
-
 llvm::Value* CodeGen::MulOp(llvm::Value* lhs, llvm::Value* rhs,
                             bool is_unsigned) {
   if (IsIntegerTy(lhs)) {
@@ -813,52 +797,6 @@ llvm::Value* CodeGen::DivOp(llvm::Value* lhs, llvm::Value* rhs,
   } else {
     assert(false);
     return nullptr;
-  }
-}
-
-llvm::Value* CodeGen::CastTo(llvm::Value* value, llvm::Type* to,
-                             bool is_unsigned) {
-  if (to->isIntegerTy(1)) {
-    return CastToBool(value);
-  }
-
-  if (IsIntegerTy(value) && to->isIntegerTy()) {
-    if (is_unsigned) {
-      return Builder.CreateZExtOrTrunc(value, to);
-    } else {
-      return Builder.CreateSExtOrTrunc(value, to);
-    }
-  } else if (IsIntegerTy(value) && to->isFloatingPointTy()) {
-    if (is_unsigned) {
-      return Builder.CreateUIToFP(value, to);
-    } else {
-      return Builder.CreateSIToFP(value, to);
-    }
-  } else if (IsFloatingPointTy(value) && to->isIntegerTy()) {
-    if (is_unsigned) {
-      return Builder.CreateFPToUI(value, to);
-    } else {
-      return Builder.CreateFPToSI(value, to);
-    }
-  } else if (IsFloatingPointTy(value) && to->isFloatingPointTy()) {
-    if (FloatPointRank(value->getType()) > FloatPointRank(to)) {
-      return Builder.CreateFPTrunc(value, to);
-    } else {
-      return Builder.CreateFPExt(value, to);
-    }
-  } else if (IsPointerTy(value) && to->isIntegerTy()) {
-    return Builder.CreatePtrToInt(value, to);
-  } else if (IsIntegerTy(value) && to->isPointerTy()) {
-    return Builder.CreateIntToPtr(value, to);
-  } else if (to->isVoidTy() || value->getType() == to) {
-    return value;
-  } else if (IsArrCastToPtr(value, to)) {
-    return Builder.CreateInBoundsGEP(
-        value, {Builder.getInt64(0), Builder.getInt64(0)});
-  } else if (IsPointerTy(value) && to->isPointerTy()) {
-    return Builder.CreatePointerCast(value, to);
-  } else {
-    Error("{} to {}", LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
   }
 }
 
@@ -1014,58 +952,6 @@ llvm::Value* CodeGen::NotEqualOp(llvm::Value* lhs, llvm::Value* rhs) {
   return CastTo(value, Builder.getInt32Ty(), true);
 }
 
-llvm::Value* CodeGen::CastToBool(llvm::Value* value) {
-  if (value->getType()->isIntegerTy(1)) {
-    return value;
-  }
-
-  if (IsIntegerTy(value) || IsPointerTy(value)) {
-    return Builder.CreateICmpNE(value, GetZero(value->getType()));
-  } else if (IsFloatingPointTy(value)) {
-    return Builder.CreateFCmpONE(value, GetZero(value->getType()));
-  } else {
-    Error("{}", LLVMTypeToStr(value->getType()));
-  }
-}
-
-bool CodeGen::IsFloatTy(llvm::Value* value) const {
-  return value->getType()->isFloatTy();
-}
-
-bool CodeGen::IsDoubleTy(llvm::Value* value) const {
-  return value->getType()->isDoubleTy();
-}
-
-bool CodeGen::IsLongDoubleTy(llvm::Value* value) const {
-  return value->getType()->isX86_FP80Ty();
-}
-
-llvm::Value* CodeGen::GetZero(llvm::Type* type) {
-  if (type->isIntegerTy()) {
-    return llvm::ConstantInt::get(type, 0);
-  } else if (type->isFloatingPointTy()) {
-    return llvm::ConstantFP::get(type, 0.0);
-  } else if (type->isPointerTy()) {
-    return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
-  } else {
-    assert(false);
-    return nullptr;
-  }
-}
-
-std::int32_t CodeGen::FloatPointRank(llvm::Type* type) const {
-  if (type->isFloatTy()) {
-    return 0;
-  } else if (type->isDoubleTy()) {
-    return 1;
-  } else if (type->isX86_FP80Ty()) {
-    return 2;
-  } else {
-    assert(false);
-    return 0;
-  }
-}
-
 llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
   auto end_block{CreateBasicBlock("logic.or.end")};
   auto rhs_block{CreateBasicBlock("logic.or.rhs")};
@@ -1201,13 +1087,6 @@ llvm::Value* CodeGen::LogicNotOp(llvm::Value* value) {
   return CastTo(value, Builder.getInt32Ty(), true);
 }
 
-std::string CodeGen::LLVMTypeToStr(llvm::Type* type) const {
-  std::string s;
-  llvm::raw_string_ostream rso{s};
-  type->print(rso);
-  return rso.str();
-}
-
 llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
   auto is_unsigned{expr.GetType()->IsUnsigned()};
   auto lhs_ptr{GetPtr(expr)};
@@ -1242,17 +1121,6 @@ llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
 void CodeGen::EnterFunc() { PushBlock(nullptr, nullptr); }
 
 void CodeGen::ExitFunc() { PopBlock(); }
-
-bool CodeGen::IsArrCastToPtr(llvm::Value* value, llvm::Type* type) {
-  auto value_type{value->getType()};
-
-  return value_type->isPointerTy() &&
-         value_type->getPointerElementType()->isArrayTy() &&
-         type->isPointerTy() &&
-         value_type->getPointerElementType()
-                 ->getArrayElementType()
-                 ->getPointerTo() == type;
-}
 
 void CodeGen::InitLocalAggregate(const Declaration& node) {
   auto obj{node.GetObject()};
@@ -1338,13 +1206,12 @@ void CodeGen::DealLocaleDecl(const Declaration& node) {
 
   if (obj->IsStatic()) {
     llvm::GlobalVariable* ptr;
-    auto static_name{obj->GetFuncName() + "." + obj->GetName()};
 
     if (obj->HasGlobalPtr()) {
       ptr = obj->GetGlobalPtr();
     } else {
-      Module->getOrInsertGlobal(static_name, type->GetLLVMType());
-      ptr = Module->getNamedGlobal(static_name);
+      Module->getOrInsertGlobal(obj->GetName(), type->GetLLVMType());
+      ptr = Module->getNamedGlobal(obj->GetName());
       obj->SetGlobalPtr(ptr);
     }
 

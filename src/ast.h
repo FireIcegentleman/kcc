@@ -333,6 +333,7 @@ class IdentifierExpr : public Expr {
 
   enum Linkage GetLinkage() const;
   const std::string& GetName() const;
+  void SetName(const std::string& name);
   bool IsTypeName() const;
   bool IsObject() const;
 
@@ -412,9 +413,6 @@ class ObjectExpr : public IdentifierExpr {
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
 
-  const std::string& GetFuncName() const;
-  void SetFuncName(const std::string& func_name);
-
  private:
   ObjectExpr(const std::string& name, QualType type,
              std::uint32_t storage_class_spec = 0, enum Linkage linkage = kNone,
@@ -433,9 +431,6 @@ class ObjectExpr : public IdentifierExpr {
 
   llvm::AllocaInst* local_ptr_{};
   llvm::GlobalVariable* global_ptr_{};
-
-  // TODO 更好的方法
-  std::string func_name_;
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式

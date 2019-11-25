@@ -787,6 +787,8 @@ enum Linkage IdentifierExpr::GetLinkage() const { return linkage_; }
 
 const std::string& IdentifierExpr::GetName() const { return name_; }
 
+void IdentifierExpr::SetName(const std::string& name) { name_ = name; }
+
 bool IdentifierExpr::IsTypeName() const { return is_type_name_; }
 
 bool IdentifierExpr::IsObject() const {
@@ -900,15 +902,6 @@ std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() {
 
 const std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() const {
   return indexs_;
-}
-
-const std::string& ObjectExpr::GetFuncName() const {
-  assert(!std::empty(func_name_));
-  return func_name_;
-}
-
-void ObjectExpr::SetFuncName(const std::string& func_name) {
-  func_name_ = func_name;
 }
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
