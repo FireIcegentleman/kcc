@@ -56,52 +56,9 @@ class CodeGen : public Visitor {
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
-
-  llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
-
-  bool MayCallBuiltinFunc(const FuncCallExpr &node);
-  llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
-
-  static void DealGlobalDecl(const Declaration &node);
-  void DealLocaleDecl(const Declaration &node);
-  void InitLocalAggregate(const Declaration &node);
-
-  static llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs,
-                            bool is_unsigned);
-  static llvm::Value *SubOp(llvm::Value *lhs, llvm::Value *rhs,
-                            bool is_unsigned);
-  static llvm::Value *MulOp(llvm::Value *lhs, llvm::Value *rhs,
-                            bool is_unsigned);
-  static llvm::Value *DivOp(llvm::Value *lhs, llvm::Value *rhs,
-                            bool is_unsigned);
-  static llvm::Value *ModOp(llvm::Value *lhs, llvm::Value *rhs,
-                            bool is_unsigned);
-  static llvm::Value *OrOp(llvm::Value *lhs, llvm::Value *rhs);
-  static llvm::Value *AndOp(llvm::Value *lhs, llvm::Value *rhs);
-  static llvm::Value *XorOp(llvm::Value *lhs, llvm::Value *rhs);
-  static llvm::Value *ShlOp(llvm::Value *lhs, llvm::Value *rhs);
-  static llvm::Value *ShrOp(llvm::Value *lhs, llvm::Value *rhs,
-                            bool is_unsigned);
-  static llvm::Value *LessEqualOp(llvm::Value *lhs, llvm::Value *rhs,
-                                  bool is_unsigned);
-  static llvm::Value *LessOp(llvm::Value *lhs, llvm::Value *rhs,
-                             bool is_unsigned);
-  static llvm::Value *GreaterEqualOp(llvm::Value *lhs, llvm::Value *rhs,
-                                     bool is_unsigned);
-  static llvm::Value *GreaterOp(llvm::Value *lhs, llvm::Value *rhs,
-                                bool is_unsigned);
-  static llvm::Value *EqualOp(llvm::Value *lhs, llvm::Value *rhs);
-  static llvm::Value *NotEqualOp(llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *GetPtr(const AstNode &node);
   static llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
                              std::int32_t align);
-  static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
-  static llvm::Value *LogicNotOp(llvm::Value *value);
-
-  llvm::Value *LogicOrOp(const BinaryOpExpr &node);
-  llvm::Value *LogicAndOp(const BinaryOpExpr &node);
-  llvm::Value *AssignOp(const BinaryOpExpr &node);
-  llvm::Value *GetPtr(const AstNode &node);
-  llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
@@ -133,6 +90,49 @@ class CodeGen : public Visitor {
   virtual void Visit(const TranslationUnit &node) override;
   virtual void Visit(const Declaration &node) override;
   virtual void Visit(const FuncDef &node) override;
+
+  llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
+  static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
+  static llvm::Value *LogicNotOp(llvm::Value *value);
+
+  static llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs,
+                            bool is_unsigned);
+  static llvm::Value *SubOp(llvm::Value *lhs, llvm::Value *rhs,
+                            bool is_unsigned);
+  static llvm::Value *MulOp(llvm::Value *lhs, llvm::Value *rhs,
+                            bool is_unsigned);
+  static llvm::Value *DivOp(llvm::Value *lhs, llvm::Value *rhs,
+                            bool is_unsigned);
+  static llvm::Value *ModOp(llvm::Value *lhs, llvm::Value *rhs,
+                            bool is_unsigned);
+  static llvm::Value *OrOp(llvm::Value *lhs, llvm::Value *rhs);
+  static llvm::Value *AndOp(llvm::Value *lhs, llvm::Value *rhs);
+  static llvm::Value *XorOp(llvm::Value *lhs, llvm::Value *rhs);
+  static llvm::Value *ShlOp(llvm::Value *lhs, llvm::Value *rhs);
+  static llvm::Value *ShrOp(llvm::Value *lhs, llvm::Value *rhs,
+                            bool is_unsigned);
+  static llvm::Value *LessEqualOp(llvm::Value *lhs, llvm::Value *rhs,
+                                  bool is_unsigned);
+  static llvm::Value *LessOp(llvm::Value *lhs, llvm::Value *rhs,
+                             bool is_unsigned);
+  static llvm::Value *GreaterEqualOp(llvm::Value *lhs, llvm::Value *rhs,
+                                     bool is_unsigned);
+  static llvm::Value *GreaterOp(llvm::Value *lhs, llvm::Value *rhs,
+                                bool is_unsigned);
+  static llvm::Value *EqualOp(llvm::Value *lhs, llvm::Value *rhs);
+  static llvm::Value *NotEqualOp(llvm::Value *lhs, llvm::Value *rhs);
+  llvm::Value *LogicOrOp(const BinaryOpExpr &node);
+  llvm::Value *LogicAndOp(const BinaryOpExpr &node);
+  llvm::Value *AssignOp(const BinaryOpExpr &node);
+
+  bool MayCallBuiltinFunc(const FuncCallExpr &node);
+  llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
+
+  llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
+
+  static void DealGlobalDecl(const Declaration &node);
+  void DealLocaleDecl(const Declaration &node);
+  void InitLocalAggregate(const Declaration &node);
 
   llvm::Value *result_{};
 

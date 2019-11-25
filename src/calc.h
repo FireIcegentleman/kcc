@@ -23,37 +23,7 @@ class CalcConstantExpr : public Visitor {
   std::int64_t CalcInteger(const Expr* expr);
 
  private:
-  static llvm::Constant* NegOp(llvm::Constant* value, bool is_unsigned);
-  static llvm::Constant* LogicNotOp(llvm::Constant* value);
-
-  static llvm::Constant* AddOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                               bool is_unsigned);
-  static llvm::Constant* SubOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                               bool is_unsigned);
-  static llvm::Constant* MulOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                               bool is_unsigned);
-  static llvm::Constant* DivOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                               bool is_unsigned);
-  static llvm::Constant* ModOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                               bool is_unsigned);
-  static llvm::Constant* OrOp(llvm::Constant* lhs, llvm::Constant* rhs);
-  static llvm::Constant* AndOp(llvm::Constant* lhs, llvm::Constant* rhs);
-  static llvm::Constant* XorOp(llvm::Constant* lhs, llvm::Constant* rhs);
-  static llvm::Constant* ShlOp(llvm::Constant* lhs, llvm::Constant* rhs);
-  static llvm::Constant* ShrOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                               bool is_unsigned);
-  static llvm::Constant* LessEqualOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                                     bool is_unsigned);
-  static llvm::Constant* LessOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                                bool is_unsigned);
-  static llvm::Constant* GreaterEqualOp(llvm::Constant* lhs,
-                                        llvm::Constant* rhs, bool is_unsigned);
-  static llvm::Constant* GreaterOp(llvm::Constant* lhs, llvm::Constant* rhs,
-                                   bool is_unsigned);
-  static llvm::Constant* EqualOp(llvm::Constant* lhs, llvm::Constant* rhs);
-  static llvm::Constant* NotEqualOp(llvm::Constant* lhs, llvm::Constant* rhs);
-  static llvm::Constant* LogicOrOp(const BinaryOpExpr& node);
-  static llvm::Constant* LogicAndOp(const BinaryOpExpr& node);
+  static llvm::Constant* Throw(llvm::Constant* value = nullptr);
 
   virtual void Visit(const UnaryOpExpr& node) override;
   virtual void Visit(const TypeCastExpr& node) override;
@@ -86,6 +56,38 @@ class CalcConstantExpr : public Visitor {
   virtual void Visit(const TranslationUnit& node) override;
   virtual void Visit(const Declaration& node) override;
   virtual void Visit(const FuncDef& node) override;
+
+  static llvm::Constant* NegOp(llvm::Constant* value, bool is_unsigned);
+  static llvm::Constant* LogicNotOp(llvm::Constant* value);
+
+  static llvm::Constant* AddOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                               bool is_unsigned);
+  static llvm::Constant* SubOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                               bool is_unsigned);
+  static llvm::Constant* MulOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                               bool is_unsigned);
+  static llvm::Constant* DivOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                               bool is_unsigned);
+  static llvm::Constant* ModOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                               bool is_unsigned);
+  static llvm::Constant* OrOp(llvm::Constant* lhs, llvm::Constant* rhs);
+  static llvm::Constant* AndOp(llvm::Constant* lhs, llvm::Constant* rhs);
+  static llvm::Constant* XorOp(llvm::Constant* lhs, llvm::Constant* rhs);
+  static llvm::Constant* ShlOp(llvm::Constant* lhs, llvm::Constant* rhs);
+  static llvm::Constant* ShrOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                               bool is_unsigned);
+  static llvm::Constant* LessEqualOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                                     bool is_unsigned);
+  static llvm::Constant* LessOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                                bool is_unsigned);
+  static llvm::Constant* GreaterEqualOp(llvm::Constant* lhs,
+                                        llvm::Constant* rhs, bool is_unsigned);
+  static llvm::Constant* GreaterOp(llvm::Constant* lhs, llvm::Constant* rhs,
+                                   bool is_unsigned);
+  static llvm::Constant* EqualOp(llvm::Constant* lhs, llvm::Constant* rhs);
+  static llvm::Constant* NotEqualOp(llvm::Constant* lhs, llvm::Constant* rhs);
+  static llvm::Constant* LogicOrOp(const BinaryOpExpr& node);
+  static llvm::Constant* LogicAndOp(const BinaryOpExpr& node);
 
   llvm::Constant* val_{};
   Location loc_;

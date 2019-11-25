@@ -2491,8 +2491,13 @@ llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
       Expect(Tag::kRightBrace);
     }
 
-    return ConstantCastTo(CalcConstantExpr{}.Calc(expr), type->GetLLVMType(),
-                          expr->GetType()->IsUnsigned());
+    auto constant{CalcConstantExpr{}.Calc(expr)};
+    if (constant) {
+      return ConstantCastTo(constant, type->GetLLVMType(),
+                            expr->GetType()->IsUnsigned());
+    } else {
+      Error(expr, "expect constant expression");
+    }
   }
 
   assert(false);
