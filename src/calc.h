@@ -10,12 +10,15 @@
 #include <llvm/IR/Constants.h>
 
 #include "ast.h"
+#include "location.h"
 #include "visitor.h"
 
 namespace kcc {
 
 class CalcConstantExpr : public Visitor {
  public:
+  explicit CalcConstantExpr(const Location& loc = {});
+
   llvm::Constant* Calc(const Expr* expr);
   std::int64_t CalcInteger(const Expr* expr);
 
@@ -85,6 +88,7 @@ class CalcConstantExpr : public Visitor {
   static llvm::Constant* LogicAndOp(const BinaryOpExpr& node);
 
   llvm::Constant* val_{};
+  Location loc_;
 };
 
 }  // namespace kcc

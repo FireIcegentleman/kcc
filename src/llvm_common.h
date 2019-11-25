@@ -36,7 +36,7 @@ enum class OptLevel { kO0, kO1, kO2, kO3 };
 
 std::string LLVMTypeToStr(llvm::Type *type);
 
-std::string LLVMConstantToStr(llvm::Constant *type);
+std::string LLVMConstantToStr(llvm::Constant *constant);
 
 llvm::Constant *GetConstantZero(llvm::Type *type);
 
@@ -71,10 +71,6 @@ llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
 
 llvm::GlobalVariable *CreateGlobalVar(QualType type, llvm::Constant *init,
                                       Linkage linkage, const std::string &name);
-
-inline static std::unordered_map<std::string,
-                                 std::pair<llvm::Constant *, llvm::Constant *>>
-    Map;
 
 }  // namespace kcc
 

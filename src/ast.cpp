@@ -10,44 +10,9 @@
 #include "error.h"
 #include "llvm_common.h"
 #include "memory_pool.h"
-#include "util.h"
 #include "visitor.h"
 
 namespace kcc {
-
-#define ACCEPT(ClassName) \
-  void ClassName::Accept(Visitor& visitor) const { visitor.Visit(*this); }
-
-ACCEPT(UnaryOpExpr)
-ACCEPT(TypeCastExpr)
-ACCEPT(BinaryOpExpr)
-ACCEPT(ConditionOpExpr)
-ACCEPT(FuncCallExpr)
-ACCEPT(ConstantExpr)
-ACCEPT(StringLiteralExpr)
-ACCEPT(IdentifierExpr)
-ACCEPT(EnumeratorExpr)
-ACCEPT(ObjectExpr)
-ACCEPT(StmtExpr)
-
-ACCEPT(LabelStmt)
-ACCEPT(CaseStmt)
-ACCEPT(DefaultStmt)
-ACCEPT(CompoundStmt)
-ACCEPT(ExprStmt)
-ACCEPT(IfStmt)
-ACCEPT(SwitchStmt)
-ACCEPT(WhileStmt)
-ACCEPT(DoWhileStmt)
-ACCEPT(ForStmt)
-ACCEPT(GotoStmt)
-ACCEPT(ContinueStmt)
-ACCEPT(BreakStmt)
-ACCEPT(ReturnStmt)
-
-ACCEPT(TranslationUnit)
-ACCEPT(Declaration)
-ACCEPT(FuncDef)
 
 /*
  * AstNodeTypes
@@ -94,10 +59,13 @@ void Expr::EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const {
 }
 
 void Expr::EnsureCompatibleConvertVoidPtr(Expr*& lhs, Expr*& rhs) {
-  if (lhs->GetType()->PointerGetElementType()->IsVoidTy()) {
-    lhs = Expr::MayCastTo(lhs, rhs->GetType());
-  } else if (rhs->GetType()->PointerGetElementType()->IsVoidTy()) {
-    rhs = Expr::MayCastTo(rhs, lhs->GetType());
+  auto lhs_type{lhs->GetQualType()};
+  auto rhs_type{rhs->GetQualType()};
+
+  if (lhs_type->PointerGetElementType()->IsVoidTy()) {
+    lhs = Expr::MayCastTo(lhs, rhs_type);
+  } else if (rhs_type->PointerGetElementType()->IsVoidTy()) {
+    rhs = Expr::MayCastTo(rhs, lhs_type);
   }
 
   EnsureCompatible(lhs->GetType(), rhs->GetType());
@@ -143,6 +111,8 @@ UnaryOpExpr* UnaryOpExpr::Get(Tag tag, Expr* expr) {
 }
 
 AstNodeType UnaryOpExpr::Kind() const { return AstNodeType::kUnaryOpExpr; }
+
+void UnaryOpExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void UnaryOpExpr::Check() {
   switch (op_) {
@@ -191,32 +161,26 @@ void UnaryOpExpr::IncDecOpCheck() {
   auto expr_type{expr_->GetQualType()};
 
   if (expr_->IsConst()) {
-    Error(
-        loc_,
-        "'{}': cannot assign to something with const-qualified type (got '{}')",
-        TokenTag::ToString(op_), expr_type.ToString());
+    Error(this, "cannot assign to something with const-qualified type");
   } else if (!expr_->IsLValue()) {
-    Error(loc_, "'{}': lvalue expression expected (got '{}')",
-          TokenTag::ToString(op_), expr_type.ToString());
+    Error(this, "lvalue expression expected");
   }
 
   if (expr_type->IsRealTy() || expr_type->IsPointerTy()) {
     type_ = expr_type;
   } else {
-    Error(loc_, "'{}' expect operand of real or pointer type (got '{}')",
-          TokenTag::ToString(op_), expr_type.ToString());
+    Error(this, "expect operand of real or pointer type");
   }
 }
 
 void UnaryOpExpr::UnaryAddSubOpCheck() {
   if (!expr_->GetType()->IsArithmeticTy()) {
-    Error(loc_, "'{}': expect operand of arithmetic type (got '{}')",
-          TokenTag::ToString(op_), expr_->GetQualType().ToString());
+    Error(this, "expect operand of arithmetic type");
   }
 
   if (expr_->GetType()->IsIntegerTy() || expr_->GetType()->IsBoolTy()) {
-    auto new_type{ArithmeticType::IntegerPromote(expr_->GetType())};
-    expr_ = Expr::MayCastTo(expr_, QualType{new_type});
+    expr_ = Expr::MayCastTo(expr_,
+                            ArithmeticType::IntegerPromote(expr_->GetType()));
   }
 
   type_ = expr_->GetQualType();
@@ -224,20 +188,18 @@ void UnaryOpExpr::UnaryAddSubOpCheck() {
 
 void UnaryOpExpr::NotOpCheck() {
   if (!expr_->GetType()->IsIntegerTy()) {
-    Error(loc_, "'{}': expect operand of arithmetic type (got '{}')",
-          TokenTag::ToString(op_), expr_->GetQualType().ToString());
+    Error(this, "expect operand of arithmetic type");
   }
 
-  expr_ = Expr::MayCastTo(
-      expr_, QualType{ArithmeticType::IntegerPromote(expr_->GetType())});
+  expr_ =
+      Expr::MayCastTo(expr_, ArithmeticType::IntegerPromote(expr_->GetType()));
 
   type_ = expr_->GetQualType();
 }
 
 void UnaryOpExpr::LogicNotOpCheck() {
   if (!expr_->GetType()->IsScalarTy()) {
-    Error(loc_, "'{}': expect operand of scalar type (got '{}')",
-          TokenTag::ToString(op_), expr_->GetQualType().ToString());
+    Error(this, "expect operand of scalar type");
   }
 
   type_ = ArithmeticType::Get(kInt);
@@ -245,8 +207,7 @@ void UnaryOpExpr::LogicNotOpCheck() {
 
 void UnaryOpExpr::DerefOpCheck() {
   if (!expr_->GetType()->IsPointerTy()) {
-    Error(loc_, "'{}': expect operand of pointer type (got '{}')",
-          TokenTag::ToString(op_), expr_->GetQualType().ToString());
+    Error(this, "expect operand of pointer type");
   }
 
   type_ = expr_->GetType()->PointerGetElementType();
@@ -254,8 +215,7 @@ void UnaryOpExpr::DerefOpCheck() {
 
 void UnaryOpExpr::AddrOpCheck() {
   if (!expr_->GetType()->IsFunctionTy() && !expr_->IsLValue()) {
-    Error(loc_, "'{}': expression must be an lvalue or function (got '{}')",
-          TokenTag::ToString(op_), expr_->GetQualType().ToString());
+    Error(this, "expression must be an lvalue or function");
   }
 
   type_ = PointerType::Get(expr_->GetQualType());
@@ -271,26 +231,25 @@ TypeCastExpr* TypeCastExpr::Get(Expr* expr, QualType to) {
 
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
 
-void TypeCastExpr::Check() {
-  if (to_->IsFloatPointTy() && expr_->GetType()->IsPointerTy()) {
-    Error(loc_, "cannot cast a pointer to float point ('{}' to '{}')",
-          expr_->GetQualType().ToString(), to_.ToString());
-  } else if (to_->IsPointerTy() && expr_->GetType()->IsFloatPointTy()) {
-    Error(loc_, "cannot cast a float point to pointer ('{}' to '{}')",
-          expr_->GetQualType().ToString(), to_.ToString());
-  }
+void TypeCastExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
-  type_ = to_;
+void TypeCastExpr::Check() {
+  if (type_->IsFloatPointTy() && expr_->GetType()->IsPointerTy()) {
+    Error(loc_, "cannot cast a pointer to float point ('{}' to '{}')",
+          expr_->GetQualType().ToString(), type_.ToString());
+  } else if (type_->IsPointerTy() && expr_->GetType()->IsFloatPointTy()) {
+    Error(loc_, "cannot cast a float point to pointer ('{}' to '{}')",
+          expr_->GetQualType().ToString(), type_.ToString());
+  }
 }
 
 bool TypeCastExpr::IsLValue() const { return false; }
 
 const Expr* TypeCastExpr::GetExpr() const { return expr_; }
 
-QualType TypeCastExpr::GetCastToType() const { return to_; }
+QualType TypeCastExpr::GetCastToType() const { return type_; }
 
-TypeCastExpr::TypeCastExpr(Expr* expr, QualType to)
-    : Expr(to), expr_{expr}, to_{to} {}
+TypeCastExpr::TypeCastExpr(Expr* expr, QualType to) : Expr(to), expr_{expr} {}
 
 /*
  * BinaryOpExpr
@@ -301,6 +260,8 @@ BinaryOpExpr* BinaryOpExpr::Get(Tag tag, Expr* lhs, Expr* rhs) {
 }
 
 AstNodeType BinaryOpExpr::Kind() const { return AstNodeType::kBinaryOpExpr; }
+
+void BinaryOpExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void BinaryOpExpr::Check() {
   switch (op_) {
@@ -417,10 +378,7 @@ void BinaryOpExpr::AddOpCheck() {
     rhs_ = Expr::MayCastTo(rhs_, ArithmeticType::Get(kLong | kUnsigned));
     type_ = lhs_type;
   } else {
-    Error(loc_,
-          "'{}' the operand should be integer or pointer type (got '{}' and "
-          "'{}')",
-          TokenTag::ToString(op_), lhs_type.ToString(), rhs_type.ToString());
+    Error(this, "the operand should be integer or pointer type");
   }
 }
 
@@ -439,10 +397,7 @@ void BinaryOpExpr::SubOpCheck() {
     // ptrdiff_t
     type_ = QualType{ArithmeticType::Get(kLong)};
   } else {
-    Error(loc_,
-          "'{}' the operand should be integer or pointer type (got '{}' and "
-          "'{}')",
-          TokenTag::ToString(op_), lhs_type->ToString(), rhs_type->ToString());
+    Error(this, "the operand should be integer or pointer type");
   }
 }
 
@@ -452,16 +407,11 @@ void BinaryOpExpr::MultiOpCheck() {
 
   if (op_ == Tag::kPercent) {
     if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
-      Error(
-          loc_, "'{}': the operand should be integer type (got '{}' and '{}')",
-          TokenTag::ToString(op_), lhs_type->ToString(), rhs_type->ToString());
+      Error(this, "the operand should be integer type");
     }
   } else {
     if (!lhs_type->IsArithmeticTy() || !rhs_type->IsArithmeticTy()) {
-      Error(loc_,
-            "'{}: the operand should be arithmetic type (got '{}' and '{}')",
-            TokenTag::ToString(op_), lhs_type->ToString(),
-            rhs_type->ToString());
+      Error(this, "the operand should be arithmetic type");
     }
   }
 
@@ -473,8 +423,7 @@ void BinaryOpExpr::BitwiseOpCheck() {
   auto rhs_type{rhs_->GetQualType()};
 
   if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
-    Error(loc_, "'{}': the operand should be Integer type (got '{}' and '{}')",
-          TokenTag::ToString(op_), lhs_type.ToString(), rhs_type.ToString());
+    Error(this, "the operand should be Integer type");
   }
 
   type_ = Expr::Convert(lhs_, rhs_);
@@ -485,8 +434,7 @@ void BinaryOpExpr::ShiftOpCheck() {
   auto rhs_type{rhs_->GetQualType()};
 
   if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
-    Error(loc_, "'{}': the operand should be integer type (got '{}' and '{}')",
-          TokenTag::ToString(op_), lhs_type.ToString(), rhs_type.ToString());
+    Error(this, "the operand should be Integer type");
   }
 
   lhs_ =
@@ -503,8 +451,7 @@ void BinaryOpExpr::LogicalOpCheck() {
   auto rhs_type{rhs_->GetQualType()};
 
   if (!lhs_type->IsScalarTy() || !rhs_type->IsScalarTy()) {
-    Error(loc_, "'{}': the operand should be scalar type (got '{}' and '{}')",
-          TokenTag::ToString(op_), lhs_type.ToString(), rhs_type.ToString());
+    Error(this, "the operand should be scalar type");
   }
 
   type_ = ArithmeticType::Get(kInt);
@@ -519,8 +466,7 @@ void BinaryOpExpr::EqualityOpCheck() {
   } else if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     Expr::Convert(lhs_, rhs_);
   } else {
-    Error(loc_, "'{}': the operand should be integer type (got '{}' and '{}')",
-          TokenTag::ToString(op_), lhs_type->ToString(), rhs_type->ToString());
+    Error(this, "the operand should be pointer or arithmetic type");
   }
 
   type_ = ArithmeticType::Get(kInt);
@@ -535,8 +481,7 @@ void BinaryOpExpr::RelationalOpCheck() {
   } else if (lhs_type->IsRealTy() && rhs_type->IsRealTy()) {
     Expr::Convert(lhs_, rhs_);
   } else {
-    Error(loc_, "'{}': the operand should be integer type (got '{}' and '{}')",
-          TokenTag::ToString(op_), lhs_type.ToString(), rhs_type.ToString());
+    Error(this, "the operand should be pointer or real type");
   }
 
   type_ = ArithmeticType::Get(kInt);
@@ -557,6 +502,8 @@ ConditionOpExpr* ConditionOpExpr::Get(Expr* cond, Expr* lhs, Expr* rhs) {
 AstNodeType ConditionOpExpr::Kind() const {
   return AstNodeType::kConditionOpExpr;
 }
+
+void ConditionOpExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void ConditionOpExpr::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -607,15 +554,13 @@ ConditionOpExpr::ConditionOpExpr(Expr* cond, Expr* lhs, Expr* rhs)
  */
 FuncCallExpr* FuncCallExpr::Get(Expr* callee, std::vector<Expr*> args) {
   assert(callee != nullptr);
-  for (const auto& item : args) {
-    assert(item != nullptr);
-    (void)item;
-  }
-
-  return new (FuncCallExprPool.Allocate()) FuncCallExpr{callee, args};
+  return new (FuncCallExprPool.Allocate())
+      FuncCallExpr{callee, std::move(args)};
 }
 
 AstNodeType FuncCallExpr::Kind() const { return AstNodeType::kFuncCallExpr; }
+
+void FuncCallExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void FuncCallExpr::Check() {
   if (callee_->GetType()->IsPointerTy()) {
@@ -631,6 +576,8 @@ void FuncCallExpr::Check() {
   auto args_iter{std::begin(args_)};
 
   for (const auto& param : callee_->GetType()->FuncGetParams()) {
+    assert(param != nullptr);
+
     if (args_iter == std::end(args_)) {
       Error(loc_, "too few arguments for function call");
     }
@@ -644,6 +591,7 @@ void FuncCallExpr::Check() {
   }
 
   while (args_iter != std::end(args_)) {
+    assert(*args_iter != nullptr);
     // 浮点提升
     if ((*args_iter)->GetType()->IsFloatTy()) {
       *args_iter = Expr::MayCastTo(
@@ -673,7 +621,7 @@ Type* FuncCallExpr::GetFuncType() const {
 
 Expr* FuncCallExpr::GetCallee() const { return callee_; }
 
-std::vector<Expr*> FuncCallExpr::GetArgs() const { return args_; }
+const std::vector<Expr*>& FuncCallExpr::GetArgs() const { return args_; }
 
 void FuncCallExpr::SetVaArgType(Type* va_arg_type) {
   va_arg_type_ = va_arg_type;
@@ -703,6 +651,8 @@ ConstantExpr* ConstantExpr::Get(Type* type, long double val) {
 
 AstNodeType ConstantExpr::Kind() const { return AstNodeType::kConstantExpr; }
 
+void ConstantExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void ConstantExpr::Check() {}
 
 bool ConstantExpr::IsLValue() const { return false; }
@@ -728,6 +678,7 @@ StringLiteralExpr* StringLiteralExpr::Get(const std::string& val) {
 }
 
 StringLiteralExpr* StringLiteralExpr::Get(Type* type, const std::string& val) {
+  assert(type != nullptr);
   return new (StringLiteralExprPool.Allocate()) StringLiteralExpr{type, val};
 }
 
@@ -735,17 +686,18 @@ AstNodeType StringLiteralExpr::Kind() const {
   return AstNodeType::kStringLiteralExpr;
 }
 
+void StringLiteralExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void StringLiteralExpr::Check() {
-  if (!TestMode) {
-    auto iter{Map.find(str_)};
-    if (iter != std::end(Map)) {
-      arr_ = iter->second.first;
-      ptr_ = iter->second.second;
-      return;
-    }
+  auto iter{StringMap.find(str_)};
+  if (iter != std::end(StringMap)) {
+    arr_ = iter->second.first;
+    ptr_ = iter->second.second;
+    return;
   }
 
   auto width{type_->ArrayGetElementType()->GetWidth()};
+  // 类型已经包含了空字符
   auto size{type_->ArrayGetNumElements() - 1};
   auto str{str_.c_str()};
 
@@ -757,6 +709,7 @@ void StringLiteralExpr::Check() {
         values.push_back(*ptr);
         str += 1;
       }
+      // 空字符
       values.push_back(0);
       arr_ = llvm::ConstantDataArray::get(Context, values);
     } break;
@@ -784,20 +737,18 @@ void StringLiteralExpr::Check() {
       assert(false);
   }
 
-  auto var{CreateGlobalString(arr_, width)};
+  auto string{CreateGlobalString(arr_, width)};
 
   auto zero{llvm::ConstantInt::get(Builder.getInt64Ty(), 0)};
   ptr_ = llvm::ConstantExpr::getInBoundsGetElementPtr(
-      nullptr, var, llvm::ArrayRef<llvm::Constant*>{zero, zero});
+      nullptr, string, llvm::ArrayRef<llvm::Constant*>{zero, zero});
 
-  if (!TestMode) {
-    Map[str_] = {arr_, ptr_};
-  }
+  StringMap[str_] = {arr_, ptr_};
 }
 
 bool StringLiteralExpr::IsLValue() const { return false; }
 
-std::string StringLiteralExpr::GetStr() const { return str_; }
+const std::string& StringLiteralExpr::GetStr() const { return str_; }
 
 llvm::Constant* StringLiteralExpr::GetArr() const {
   assert(arr_ != nullptr);
@@ -826,13 +777,15 @@ AstNodeType IdentifierExpr::Kind() const {
   return AstNodeType::kIdentifierExpr;
 }
 
+void IdentifierExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void IdentifierExpr::Check() {}
 
 bool IdentifierExpr::IsLValue() const { return false; }
 
 enum Linkage IdentifierExpr::GetLinkage() const { return linkage_; }
 
-std::string IdentifierExpr::GetName() const { return name_; }
+const std::string& IdentifierExpr::GetName() const { return name_; }
 
 bool IdentifierExpr::IsTypeName() const { return is_type_name_; }
 
@@ -863,6 +816,8 @@ AstNodeType EnumeratorExpr::Kind() const {
   return AstNodeType::kEnumeratorExpr;
 }
 
+void EnumeratorExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void EnumeratorExpr::Check() {}
 
 bool EnumeratorExpr::IsLValue() const { return false; }
@@ -884,6 +839,8 @@ ObjectExpr* ObjectExpr::Get(const std::string& name, QualType type,
 }
 
 AstNodeType ObjectExpr::Kind() const { return AstNodeType::kObjectExpr; }
+
+void ObjectExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void ObjectExpr::Check() {}
 
@@ -941,7 +898,7 @@ std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() {
   return indexs_;
 }
 
-std::list<std::pair<Type*, std::int32_t>> ObjectExpr::GetIndexs() const {
+const std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() const {
   return indexs_;
 }
 
@@ -966,10 +923,13 @@ ObjectExpr::ObjectExpr(const std::string& name, QualType type,
  * StmtExpr
  */
 StmtExpr* StmtExpr::Get(CompoundStmt* block) {
+  assert(block != nullptr);
   return new (StmtExprPool.Allocate()) StmtExpr{block};
 }
 
 AstNodeType StmtExpr::Kind() const { return AstNodeType::kStmtExpr; }
+
+void StmtExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void StmtExpr::Check() {
   auto stmts{block_->GetStmts()};
@@ -995,55 +955,65 @@ StmtExpr::StmtExpr(CompoundStmt* block) : block_{block} {}
 /*
  * LabelStmt
  */
-LabelStmt* LabelStmt::Get(const std::string& ident, Stmt* stmt) {
-  return new (LabelStmtPool.Allocate()) LabelStmt{ident, stmt};
+LabelStmt* LabelStmt::Get(const std::string& name, Stmt* stmt) {
+  assert(stmt != nullptr);
+  return new (LabelStmtPool.Allocate()) LabelStmt{name, stmt};
 }
 
 AstNodeType LabelStmt::Kind() const { return AstNodeType::kLabelStmt; }
+
+void LabelStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void LabelStmt::Check() {}
 
 Stmt* LabelStmt::GetStmt() const { return stmt_; }
 
-std::string LabelStmt::GetName() const { return name_; }
+const std::string& LabelStmt::GetName() const { return name_; }
 
-LabelStmt::LabelStmt(const std::string& ident, Stmt* stmt)
-    : name_{ident}, stmt_{stmt} {}
+LabelStmt::LabelStmt(const std::string& name, Stmt* stmt)
+    : name_{name}, stmt_{stmt} {}
 
 /*
  * CaseStmt
  */
-CaseStmt* CaseStmt::Get(std::int32_t lhs, Stmt* stmt) {
+CaseStmt* CaseStmt::Get(std::int64_t lhs, Stmt* stmt) {
+  assert(stmt != nullptr);
   return new (CaseStmtPool.Allocate()) CaseStmt{lhs, stmt};
 }
 
-CaseStmt* CaseStmt::Get(std::int32_t lhs, std::int32_t rhs, Stmt* stmt) {
+CaseStmt* CaseStmt::Get(std::int64_t lhs, std::int64_t rhs, Stmt* stmt) {
+  assert(stmt != nullptr);
   return new (CaseStmtPool.Allocate()) CaseStmt{lhs, rhs, stmt};
 }
 
 AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
+void CaseStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void CaseStmt::Check() {}
 
-int32_t CaseStmt::GetLHS() const { return lhs_; }
+std::int64_t CaseStmt::GetLHS() const { return lhs_; }
 
-std::optional<std::int32_t> CaseStmt::GetRHS() const { return rhs_; }
+std::optional<std::int64_t> CaseStmt::GetRHS() const { return rhs_; }
 
 const Stmt* CaseStmt::GetStmt() const { return stmt_; }
 
-CaseStmt::CaseStmt(std::int32_t lhs, Stmt* stmt) : lhs_{lhs}, stmt_{stmt} {}
+CaseStmt::CaseStmt(std::int64_t lhs, Stmt* stmt) : lhs_{lhs}, stmt_{stmt} {}
 
-CaseStmt::CaseStmt(std::int32_t lhs, std::int32_t rhs, Stmt* stmt)
+CaseStmt::CaseStmt(std::int64_t lhs, std::int64_t rhs, Stmt* stmt)
     : lhs_{lhs}, rhs_{rhs}, stmt_{stmt} {}
 
 /*
  * DefaultStmt
  */
 DefaultStmt* DefaultStmt::Get(Stmt* block) {
+  assert(block != nullptr);
   return new (DefaultStmtPool.Allocate()) DefaultStmt{block};
 }
 
 AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
+
+void DefaultStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void DefaultStmt::Check() {}
 
@@ -1059,14 +1029,16 @@ CompoundStmt* CompoundStmt::Get() {
 }
 
 CompoundStmt* CompoundStmt::Get(std::vector<Stmt*> stmts) {
-  return new (CompoundStmtPool.Allocate()) CompoundStmt{stmts};
+  return new (CompoundStmtPool.Allocate()) CompoundStmt{std::move(stmts)};
 }
 
 AstNodeType CompoundStmt::Kind() const { return AstNodeType::kCompoundStmt; }
 
+void CompoundStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void CompoundStmt::Check() {}
 
-std::vector<Stmt*> CompoundStmt::GetStmts() const { return stmts_; }
+const std::vector<Stmt*>& CompoundStmt::GetStmts() const { return stmts_; }
 
 void CompoundStmt::AddStmt(Stmt* stmt) {
   // 非 typedef
@@ -1087,6 +1059,8 @@ ExprStmt* ExprStmt::Get(Expr* expr) {
 
 AstNodeType ExprStmt::Kind() const { return AstNodeType::kExprStmt; }
 
+void ExprStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void ExprStmt::Check() {}
 
 Expr* ExprStmt::GetExpr() const { return expr_; }
@@ -1097,10 +1071,13 @@ ExprStmt::ExprStmt(Expr* expr) : expr_{expr} {}
  * IfStmt
  */
 IfStmt* IfStmt::Get(Expr* cond, Stmt* then_block, Stmt* else_block) {
+  assert(cond != nullptr && then_block != nullptr);
   return new (IfStmtPool.Allocate()) IfStmt{cond, then_block, else_block};
 }
 
 AstNodeType IfStmt::Kind() const { return AstNodeType::kIfStmt; }
+
+void IfStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void IfStmt::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -1122,10 +1099,13 @@ IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
  * SwitchStmt
  */
 SwitchStmt* SwitchStmt::Get(Expr* cond, Stmt* block) {
+  assert(cond != nullptr && block != nullptr);
   return new (SwitchStmtPool.Allocate()) SwitchStmt{cond, block};
 }
 
 AstNodeType SwitchStmt::Kind() const { return AstNodeType::kSwitchStmt; }
+
+void SwitchStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void SwitchStmt::Check() {
   if (!cond_->GetType()->IsIntegerTy()) {
@@ -1133,7 +1113,7 @@ void SwitchStmt::Check() {
           cond_->GetQualType().ToString());
   }
 
-  cond_ = Expr::MayCastTo(cond_, ArithmeticType::Get(kInt));
+  cond_ = Expr::MayCastTo(cond_, ArithmeticType::Get(kLong));
 }
 
 const Expr* SwitchStmt::GetCond() const { return cond_; }
@@ -1146,10 +1126,13 @@ SwitchStmt::SwitchStmt(Expr* cond, Stmt* block) : cond_{cond}, stmt_{block} {}
  * WhileStmt
  */
 WhileStmt* WhileStmt::Get(Expr* cond, Stmt* block) {
+  assert(cond != nullptr && block != nullptr);
   return new (WhileStmtPool.Allocate()) WhileStmt{cond, block};
 }
 
 AstNodeType WhileStmt::Kind() const { return AstNodeType::kWhileStmt; }
+
+void WhileStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void WhileStmt::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -1168,10 +1151,13 @@ WhileStmt::WhileStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
  * DoWhileStmt
  */
 DoWhileStmt* DoWhileStmt::Get(Expr* cond, Stmt* block) {
+  assert(cond != nullptr && block != nullptr);
   return new (DoWhileStmtPool.Allocate()) DoWhileStmt{cond, block};
 }
 
 AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
+
+void DoWhileStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void DoWhileStmt::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -1196,6 +1182,8 @@ ForStmt* ForStmt::Get(Expr* init, Expr* cond, Expr* inc, Stmt* block,
 }
 
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
+
+void ForStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void ForStmt::Check() {
   if (cond_ && !cond_->GetType()->IsScalarTy()) {
@@ -1224,19 +1212,22 @@ GotoStmt* GotoStmt::Get(const std::string& name) {
   return new (GotoStmtPool.Allocate()) GotoStmt{name};
 }
 
-GotoStmt* GotoStmt::Get(LabelStmt* ident) {
-  return new (GotoStmtPool.Allocate()) GotoStmt{ident};
+GotoStmt* GotoStmt::Get(LabelStmt* label) {
+  assert(label != nullptr);
+  return new (GotoStmtPool.Allocate()) GotoStmt{label};
 }
 
 AstNodeType GotoStmt::Kind() const { return AstNodeType::kGotoStmt; }
 
+void GotoStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void GotoStmt::Check() {}
+
+const LabelStmt* GotoStmt::GetLabel() const { return label_; }
 
 void GotoStmt::SetLabel(LabelStmt* label) { label_ = label; }
 
-std::string GotoStmt::GetName() const { return name_; }
-
-const LabelStmt* GotoStmt::GetLabel() const { return label_; }
+const std::string& GotoStmt::GetName() const { return name_; }
 
 GotoStmt::GotoStmt(const std::string& name) : name_{name} {}
 
@@ -1251,6 +1242,8 @@ ContinueStmt* ContinueStmt::Get() {
 
 AstNodeType ContinueStmt::Kind() const { return AstNodeType::kContinueStmt; }
 
+void ContinueStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void ContinueStmt::Check() {}
 
 /*
@@ -1262,6 +1255,8 @@ BreakStmt* BreakStmt::Get() {
 
 AstNodeType BreakStmt::Kind() const { return AstNodeType::kBreakStmt; }
 
+void BreakStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void BreakStmt::Check() {}
 
 /*
@@ -1272,6 +1267,8 @@ ReturnStmt* ReturnStmt::Get(Expr* expr) {
 }
 
 AstNodeType ReturnStmt::Kind() const { return AstNodeType::kReturnStmt; }
+
+void ReturnStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void ReturnStmt::Check() {}
 
@@ -1290,6 +1287,8 @@ AstNodeType TranslationUnit::Kind() const {
   return AstNodeType::kTranslationUnit;
 }
 
+void TranslationUnit::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void TranslationUnit::Check() {}
 
 void TranslationUnit::AddExtDecl(ExtDecl* ext_decl) {
@@ -1299,14 +1298,18 @@ void TranslationUnit::AddExtDecl(ExtDecl* ext_decl) {
   }
 }
 
-std::vector<ExtDecl*> TranslationUnit::GetExtDecl() const { return ext_decls_; }
+const std::vector<ExtDecl*>& TranslationUnit::GetExtDecl() const {
+  return ext_decls_;
+}
 
 /*
  * Initializer
  */
 Initializer::Initializer(Type* type, Expr* expr,
                          std::list<std::pair<Type*, std::int32_t>> indexs)
-    : type_(type), expr_(expr), indexs_{std::move(indexs)} {}
+    : type_(type), expr_(expr), indexs_{std::move(indexs)} {
+  assert(type != nullptr && expr != nullptr);
+}
 
 Type* Initializer::GetType() const {
   assert(type_ != nullptr);
@@ -1323,7 +1326,8 @@ const Expr* Initializer::GetExpr() const {
   return expr_;
 }
 
-std::list<std::pair<Type*, std::int32_t>> Initializer::GetIndexs() const {
+const std::list<std::pair<Type*, std::int32_t>>& Initializer::GetIndexs()
+    const {
   return indexs_;
 }
 
@@ -1336,6 +1340,8 @@ Declaration* Declaration::Get(IdentifierExpr* ident) {
 }
 
 AstNodeType Declaration::Kind() const { return AstNodeType::kDeclaration; }
+
+void Declaration::Accept(Visitor& visitor) const { visitor.Visit(*this); }
 
 void Declaration::Check() {}
 
@@ -1373,7 +1379,9 @@ void Declaration::AddInits(std::vector<Initializer> inits) {
   }
 }
 
-std::vector<Initializer> Declaration::GetLocalInits() const { return inits_; }
+const std::vector<Initializer>& Declaration::GetLocalInits() const {
+  return inits_;
+}
 
 void Declaration::SetConstant(llvm::Constant* constant) {
   constant_ = constant;
@@ -1418,8 +1426,11 @@ FuncDef* FuncDef::Get(IdentifierExpr* ident) {
 
 AstNodeType FuncDef::Kind() const { return AstNodeType::kFuncDef; }
 
+void FuncDef::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+
 void FuncDef::Check() {
   for (const auto& param : ident_->GetQualType()->FuncGetParams()) {
+    assert(param != nullptr);
     if (param->IsAnonymous()) {
       Error(param, "param name omitted");
     }
@@ -1435,7 +1446,7 @@ void FuncDef::SetBody(CompoundStmt* body) {
   }
 }
 
-std::string FuncDef::GetName() const { return ident_->GetName(); }
+const std::string& FuncDef::GetName() const { return ident_->GetName(); }
 
 enum Linkage FuncDef::GetLinkage() const { return ident_->GetLinkage(); }
 

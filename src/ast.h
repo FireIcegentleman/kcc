@@ -9,6 +9,7 @@
 #include <list>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -29,6 +30,11 @@ class ObjectExpr;
 class CompoundStmt;
 class Declaration;
 class Visitor;
+
+// arr / ptr
+inline std::unordered_map<std::string,
+                          std::pair<llvm::Constant*, llvm::Constant*>>
+    StringMap;
 
 class AstNodeTypes : public QObject {
   Q_OBJECT
@@ -165,7 +171,6 @@ class TypeCastExpr : public Expr {
   TypeCastExpr(Expr* expr, QualType to);
 
   Expr* expr_;
-  QualType to_;
 };
 
 /*
@@ -243,7 +248,7 @@ class FuncCallExpr : public Expr {
   Type* GetFuncType() const;
 
   Expr* GetCallee() const;
-  std::vector<Expr*> GetArgs() const;
+  const std::vector<Expr*>& GetArgs() const;
 
   void SetVaArgType(Type* va_arg_type);
   Type* GetVaArgType() const;
@@ -290,7 +295,7 @@ class StringLiteralExpr : public Expr {
   virtual void Check() override;
   virtual bool IsLValue() const override;
 
-  std::string GetStr() const;
+  const std::string& GetStr() const;
   llvm::Constant* GetArr() const;
   llvm::Constant* GetPtr() const;
 
@@ -327,9 +332,10 @@ class IdentifierExpr : public Expr {
   virtual bool IsLValue() const override;
 
   enum Linkage GetLinkage() const;
-  std::string GetName() const;
+  const std::string& GetName() const;
   bool IsTypeName() const;
   bool IsObject() const;
+
   ObjectExpr* ToObjectExpr();
   const ObjectExpr* ToObjectExpr() const;
 
@@ -404,7 +410,7 @@ class ObjectExpr : public IdentifierExpr {
   bool HasGlobalPtr() const;
 
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
-  std::list<std::pair<Type*, std::int32_t>> GetIndexs() const;
+  const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
 
   const std::string& GetFuncName() const;
   void SetFuncName(const std::string& func_name);
@@ -461,7 +467,7 @@ class LabelStmt : public Stmt {
   virtual void Check() override;
 
   Stmt* GetStmt() const;
-  std::string GetName() const;
+  const std::string& GetName() const;
 
  private:
   explicit LabelStmt(const std::string& name, Stmt* stmt);
@@ -472,23 +478,23 @@ class LabelStmt : public Stmt {
 
 class CaseStmt : public Stmt {
  public:
-  static CaseStmt* Get(std::int32_t lhs, Stmt* stmt);
-  static CaseStmt* Get(std::int32_t lhs, std::int32_t rhs, Stmt* stmt);
+  static CaseStmt* Get(std::int64_t lhs, Stmt* stmt);
+  static CaseStmt* Get(std::int64_t lhs, std::int64_t rhs, Stmt* stmt);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  int32_t GetLHS() const;
-  std::optional<std::int32_t> GetRHS() const;
+  std::int64_t GetLHS() const;
+  std::optional<std::int64_t> GetRHS() const;
   const Stmt* GetStmt() const;
 
  private:
-  CaseStmt(std::int32_t lhs, Stmt* stmt);
-  CaseStmt(std::int32_t lhs, std::int32_t rhs, Stmt* stmt);
+  CaseStmt(std::int64_t lhs, Stmt* stmt);
+  CaseStmt(std::int64_t lhs, std::int64_t rhs, Stmt* stmt);
 
-  std::int32_t lhs_{};
-  std::optional<std::int32_t> rhs_{};
+  std::int64_t lhs_{};
+  std::optional<std::int64_t> rhs_{};
 
   Stmt* stmt_;
 };
@@ -518,7 +524,7 @@ class CompoundStmt : public Stmt {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  std::vector<Stmt*> GetStmts() const;
+  const std::vector<Stmt*>& GetStmts() const;
   void AddStmt(Stmt* stmt);
 
  private:
@@ -644,7 +650,7 @@ class ForStmt : public Stmt {
 class GotoStmt : public Stmt {
  public:
   static GotoStmt* Get(const std::string& name);
-  static GotoStmt* Get(LabelStmt* ident);
+  static GotoStmt* Get(LabelStmt* label);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -652,7 +658,7 @@ class GotoStmt : public Stmt {
 
   const LabelStmt* GetLabel() const;
   void SetLabel(LabelStmt* label);
-  std::string GetName() const;
+  const std::string& GetName() const;
 
  private:
   explicit GotoStmt(const std::string& name);
@@ -669,6 +675,9 @@ class ContinueStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+
+ private:
+  ContinueStmt() = default;
 };
 
 class BreakStmt : public Stmt {
@@ -678,6 +687,9 @@ class BreakStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+
+ private:
+  BreakStmt() = default;
 };
 
 class ReturnStmt : public Stmt {
@@ -707,7 +719,7 @@ class TranslationUnit : public AstNode {
   virtual void Check() override;
 
   void AddExtDecl(ExtDecl* ext_decl);
-  std::vector<ExtDecl*> GetExtDecl() const;
+  const std::vector<ExtDecl*>& GetExtDecl() const;
 
  private:
   std::vector<ExtDecl*> ext_decls_;
@@ -721,7 +733,7 @@ class Initializer {
   Type* GetType() const;
   Expr*& GetExpr();
   const Expr* GetExpr() const;
-  std::list<std::pair<Type*, std::int32_t>> GetIndexs() const;
+  const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
 
  private:
   Type* type_;
@@ -738,7 +750,7 @@ class Declaration : public Stmt {
   virtual void Check() override;
 
   void AddInits(std::vector<Initializer> inits);
-  std::vector<Initializer> GetLocalInits() const;
+  const std::vector<Initializer>& GetLocalInits() const;
   void SetConstant(llvm::Constant* constant);
   llvm::Constant* GetConstant() const;
   bool ValueInit() const;
@@ -772,7 +784,7 @@ class FuncDef : public ExtDecl {
   virtual void Check() override;
 
   void SetBody(CompoundStmt* body);
-  std::string GetName() const;
+  const std::string& GetName() const;
   enum Linkage GetLinkage() const;
   Type* GetFuncType() const;
   IdentifierExpr* GetIdent() const;

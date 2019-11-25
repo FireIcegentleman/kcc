@@ -11,6 +11,8 @@
 
 namespace kcc {
 
+CalcConstantExpr::CalcConstantExpr(const Location& loc) : loc_{loc} {}
+
 llvm::Constant* CalcConstantExpr::Calc(const Expr* expr) {
   assert(expr != nullptr);
   expr->Accept(*this);
@@ -20,6 +22,7 @@ llvm::Constant* CalcConstantExpr::Calc(const Expr* expr) {
 
 std::int64_t CalcConstantExpr::CalcInteger(const Expr* expr) {
   auto val{Calc(expr)};
+
   if (auto p{llvm::dyn_cast<llvm::ConstantInt>(val)}) {
     return p->getValue().getSExtValue();
   } else {
@@ -31,18 +34,18 @@ std::int64_t CalcConstantExpr::CalcInteger(const Expr* expr) {
 void CalcConstantExpr::Visit(const UnaryOpExpr& node) {
   switch (node.GetOp()) {
     case Tag::kPlus:
-      val_ = CalcConstantExpr{}.Calc(node.GetExpr());
+      val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr());
       break;
     case Tag::kMinus:
-      val_ = NegOp(CalcConstantExpr{}.Calc(node.GetExpr()),
-                   node.GetType()->IsUnsigned());
+      val_ = NegOp(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()),
+                   node.GetExpr()->GetType()->IsUnsigned());
       break;
     case Tag::kTilde:
-      val_ =
-          llvm::ConstantExpr::getNot(CalcConstantExpr{}.Calc(node.GetExpr()));
+      val_ = llvm::ConstantExpr::getNot(
+          CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()));
       break;
     case Tag::kExclaim:
-      val_ = LogicNotOp(CalcConstantExpr{}.Calc(node.GetExpr()));
+      val_ = LogicNotOp(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()));
       break;
     case Tag::kAmp: {
       // 运算对象只能是一个全局变量
@@ -56,16 +59,18 @@ void CalcConstantExpr::Visit(const UnaryOpExpr& node) {
 }
 
 void CalcConstantExpr::Visit(const TypeCastExpr& node) {
-  val_ = ConstantCastTo(CalcConstantExpr{}.Calc(node.GetExpr()),
+  val_ = ConstantCastTo(CalcConstantExpr{node.GetLoc()}.Calc(node.GetExpr()),
                         node.GetCastToType()->GetLLVMType(),
                         node.GetExpr()->GetType()->IsUnsigned());
 }
 
 void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
-#define L CalcConstantExpr{}.Calc(node.GetLHS())
-#define R CalcConstantExpr{}.Calc(node.GetRHS())
+#define L CalcConstantExpr{node.GetLoc()}.Calc(node.GetLHS())
+#define R CalcConstantExpr{node.GetLoc()}.Calc(node.GetRHS())
 
-  auto is_unsigned{node.GetType()->IsUnsigned()};
+  // 有时左右两边符号性可能不同
+  // 如指针 + 整数
+  auto is_unsigned{node.GetLHS()->GetType()->IsUnsigned()};
 
   switch (node.GetOp()) {
     case Tag::kPlus:
@@ -145,12 +150,12 @@ void CalcConstantExpr::Visit(const BinaryOpExpr& node) {
 }
 
 void CalcConstantExpr::Visit(const ConditionOpExpr& node) {
-  auto flag{CalcConstantExpr{}.Calc(node.GetCond())};
+  auto flag{CalcConstantExpr{node.GetLoc()}.Calc(node.GetCond())};
 
   if (flag->isZeroValue()) {
-    val_ = CalcConstantExpr{}.Calc(node.GetRHS());
+    val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetRHS());
   } else {
-    val_ = CalcConstantExpr{}.Calc(node.GetLHS());
+    val_ = CalcConstantExpr{node.GetLoc()}.Calc(node.GetLHS());
   }
 }
 
@@ -174,7 +179,8 @@ void CalcConstantExpr::Visit(const StmtExpr& node) {
   if (!node.GetType()->IsVoidTy()) {
     auto last{node.GetBlock()->GetStmts().back()};
     assert(last->Kind() == AstNodeType::kExprStmt);
-    val_ = CalcConstantExpr{}.Calc(dynamic_cast<ExprStmt*>(last)->GetExpr());
+    val_ = CalcConstantExpr{node.GetLoc()}.Calc(
+        dynamic_cast<ExprStmt*>(last)->GetExpr());
   } else {
     Error(node.GetLoc(), "expect constant expression");
   }
@@ -193,7 +199,11 @@ void CalcConstantExpr::Visit(const IdentifierExpr& node) {
 }
 
 void CalcConstantExpr::Visit(const ObjectExpr& node) {
-  val_ = node.GetGlobalPtr();
+  if (node.GetType()->IsArrayTy()) {
+    val_ = node.GetGlobalPtr();
+  } else {
+    Error(loc_, "expect constant expression");
+  }
 }
 
 void CalcConstantExpr::Visit(const LabelStmt&) { assert(false); }

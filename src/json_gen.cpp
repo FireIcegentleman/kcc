@@ -477,29 +477,33 @@ void JsonGen::Visit(const Declaration& node) {
   node.GetIdent()->Accept(*this);
   children.append(result_);
 
-  for (const auto& item : node.GetLocalInits()) {
-    QJsonObject obj;
-
-    QString str;
-    for (const auto& index : item.GetIndexs()) {
-      str.append(QString::number(index.second)).append(' ');
-    }
-
-    obj["name"] = str;
-
-    QJsonArray arr;
-    item.GetExpr()->Accept(*this);
-    arr.append(result_);
-
-    obj["children"] = arr;
-
-    children.append(obj);
-  }
-
   if (node.HasConstantInit()) {
     QJsonObject obj;
     obj["name"] = QString::fromStdString(LLVMConstantToStr(node.GetConstant()));
     children.append(obj);
+  } else if (node.ValueInit()) {
+    QJsonObject obj;
+    obj["name"] = "value init";
+    children.append(obj);
+  } else if (node.HasLocalInit()) {
+    for (const auto& item : node.GetLocalInits()) {
+      QJsonObject obj;
+
+      QString str;
+      for (const auto& index : item.GetIndexs()) {
+        str.append(QString::number(index.second)).append(' ');
+      }
+
+      obj["name"] = str;
+
+      QJsonArray arr;
+      item.GetExpr()->Accept(*this);
+      arr.append(result_);
+
+      obj["children"] = arr;
+
+      children.append(obj);
+    }
   }
 
   root["children"] = children;

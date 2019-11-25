@@ -47,7 +47,7 @@ class Parser {
   bool IsTypeName(const Token& tok);
   bool IsDecl(const Token& tok);
   bool InGlobal() const;
-  std::int32_t ParseInt32Constant();
+  std::int64_t ParseInt64Constant();
   Declaration* MakeDeclaration(const Token& token, QualType type,
                                std::uint32_t storage_class_spec,
                                std::uint32_t func_spec, std::int32_t align);

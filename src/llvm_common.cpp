@@ -13,20 +13,26 @@
 namespace kcc {
 
 std::string LLVMTypeToStr(llvm::Type *type) {
+  assert(type != nullptr);
+
   std::string s;
   llvm::raw_string_ostream rso{s};
   type->print(rso);
   return s;
 }
 
-std::string LLVMConstantToStr(llvm::Constant *type) {
+std::string LLVMConstantToStr(llvm::Constant *constant) {
+  assert(constant != nullptr);
+
   std::string s;
   llvm::raw_string_ostream rso{s};
-  type->print(rso);
+  constant->print(rso);
   return s;
 }
 
 llvm::Constant *GetConstantZero(llvm::Type *type) {
+  assert(type != nullptr);
+
   if (type->isIntegerTy()) {
     return llvm::ConstantInt::get(type, 0);
   } else if (type->isFloatingPointTy()) {
@@ -42,6 +48,8 @@ llvm::Constant *GetConstantZero(llvm::Type *type) {
 }
 
 std::int32_t FloatPointRank(llvm::Type *type) {
+  assert(type != nullptr);
+
   if (type->isFloatTy()) {
     return 0;
   } else if (type->isDoubleTy()) {
@@ -55,6 +63,8 @@ std::int32_t FloatPointRank(llvm::Type *type) {
 }
 
 bool IsArrCastToPtr(llvm::Value *value, llvm::Type *type) {
+  assert(value != nullptr && type != nullptr);
+
   auto value_type{value->getType()};
 
   return value_type->isPointerTy() &&
@@ -65,16 +75,25 @@ bool IsArrCastToPtr(llvm::Value *value, llvm::Type *type) {
                  ->getPointerTo() == type;
 }
 
-bool IsIntegerTy(llvm::Value *value) { return value->getType()->isIntegerTy(); }
+bool IsIntegerTy(llvm::Value *value) {
+  assert(value != nullptr);
+  return value->getType()->isIntegerTy();
+}
 
 bool IsFloatingPointTy(llvm::Value *value) {
+  assert(value != nullptr);
   return value->getType()->isFloatingPointTy();
 }
 
-bool IsPointerTy(llvm::Value *value) { return value->getType()->isPointerTy(); }
+bool IsPointerTy(llvm::Value *value) {
+  assert(value != nullptr);
+  return value->getType()->isPointerTy();
+}
 
 llvm::Constant *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
                                bool is_unsigned) {
+  assert(value != nullptr && to != nullptr);
+
   if (to->isIntegerTy(1)) {
     return ConstantCastToBool(value);
   }
@@ -120,12 +139,14 @@ llvm::Constant *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
   } else if (IsPointerTy(value) && to->isPointerTy()) {
     return llvm::ConstantExpr::getPointerCast(value, to);
   } else {
-    Error("can not cast this expression with type'{}' to '{}'",
+    Error("can not cast this expression with type '{}' to '{}'",
           LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
   }
 }
 
 llvm::Constant *ConstantCastToBool(llvm::Constant *value) {
+  assert(value != nullptr);
+
   if (value->getType()->isIntegerTy(1)) {
     return value;
   }
@@ -137,7 +158,7 @@ llvm::Constant *ConstantCastToBool(llvm::Constant *value) {
     return llvm::ConstantExpr::getFCmp(llvm::CmpInst::FCMP_ONE, value,
                                        GetConstantZero(value->getType()));
   } else {
-    Error("this constant expression can not cast to bool '{}'",
+    Error("this constant expression can not cast to bool: '{}'",
           LLVMTypeToStr(value->getType()));
   }
 }
@@ -147,6 +168,8 @@ llvm::ConstantInt *GetInt32Constant(std::int32_t value) {
 }
 
 llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned) {
+  assert(value != nullptr && to != nullptr);
+
   if (to->isIntegerTy(1)) {
     return CastToBool(value);
   }
@@ -187,11 +210,14 @@ llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned) {
   } else if (IsPointerTy(value) && to->isPointerTy()) {
     return Builder.CreatePointerCast(value, to);
   } else {
-    Error("{} to {}", LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
+    Error("can not cast this expression with type '{}' to '{}'",
+          LLVMTypeToStr(value->getType()), LLVMTypeToStr(to));
   }
 }
 
 llvm::Value *CastToBool(llvm::Value *value) {
+  assert(value != nullptr);
+
   if (value->getType()->isIntegerTy(1)) {
     return value;
   }
@@ -201,11 +227,14 @@ llvm::Value *CastToBool(llvm::Value *value) {
   } else if (IsFloatingPointTy(value)) {
     return Builder.CreateFCmpONE(value, GetZero(value->getType()));
   } else {
-    Error("{}", LLVMTypeToStr(value->getType()));
+    Error("this constant expression can not cast to bool: '{}'",
+          LLVMTypeToStr(value->getType()));
   }
 }
 
 llvm::Value *GetZero(llvm::Type *type) {
+  assert(type != nullptr);
+
   if (type->isIntegerTy()) {
     return llvm::ConstantInt::get(type, 0);
   } else if (type->isFloatingPointTy()) {
@@ -220,6 +249,7 @@ llvm::Value *GetZero(llvm::Type *type) {
 
 llvm::GlobalVariable *CreateGlobalCompoundLiteral(QualType type,
                                                   llvm::Constant *init) {
+  assert(init != nullptr);
   auto var{new llvm::GlobalVariable(
       *Module, type->GetLLVMType(), type.IsConst(),
       llvm::GlobalValue::InternalLinkage, init, ".compoundliteral")};
@@ -230,6 +260,7 @@ llvm::GlobalVariable *CreateGlobalCompoundLiteral(QualType type,
 
 llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
                                          std::int32_t align) {
+  assert(init != nullptr);
   auto var{new llvm::GlobalVariable(*Module, init->getType(), true,
                                     llvm::GlobalValue::PrivateLinkage, init,
                                     ".str")};
@@ -242,11 +273,15 @@ llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
 llvm::GlobalVariable *CreateGlobalVar(QualType type, llvm::Constant *init,
                                       Linkage linkage,
                                       const std::string &name) {
-  return new llvm::GlobalVariable(*Module, type->GetLLVMType(), type.IsConst(),
-                                  linkage == kInternal
-                                      ? llvm::GlobalValue::InternalLinkage
-                                      : llvm::GlobalValue::ExternalLinkage,
-                                  init, name);
+  assert(init != nullptr);
+  auto var{new llvm::GlobalVariable(
+      *Module, type->GetLLVMType(), type.IsConst(),
+      linkage == kInternal ? llvm::GlobalValue::InternalLinkage
+                           : llvm::GlobalValue::ExternalLinkage,
+      init, name)};
+  var->setAlignment(type->GetAlign());
+
+  return var;
 }
 
 }  // namespace kcc

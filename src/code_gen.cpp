@@ -417,7 +417,7 @@ void CodeGen::Visit(const LabelStmt& node) {
 void CodeGen::Visit(const CaseStmt& node) {
   auto block{CreateBasicBlock("switch.case")};
   EmitBlock(block);
-  std::int32_t begin, end;
+  std::int64_t begin, end;
 
   if (node.GetRHS()) {
     begin = node.GetLHS();
@@ -427,8 +427,8 @@ void CodeGen::Visit(const CaseStmt& node) {
     end = begin;
   }
 
-  for (std::int32_t i{begin}; i <= end; ++i) {
-    switch_inst_->addCase(llvm::ConstantInt::get(Builder.getInt32Ty(), i),
+  for (auto i{begin}; i <= end; ++i) {
+    switch_inst_->addCase(llvm::ConstantInt::get(Builder.getInt64Ty(), i),
                           block);
   }
 

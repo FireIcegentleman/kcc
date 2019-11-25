@@ -21,6 +21,8 @@ namespace kcc {
 Parser::Parser(std::vector<Token> tokens, const std::string& file_name)
     : tokens_{std::move(tokens)} {
   Module = std::make_unique<llvm::Module>(file_name, Context);
+  StringMap.clear();
+
   unit_ = MakeAstNode<TranslationUnit>(Peek());
   AddBuiltin();
 }
@@ -1232,10 +1234,10 @@ Stmt* Parser::ParseLabelStmt() {
 Stmt* Parser::ParseCaseStmt() {
   auto token{Expect(Tag::kCase)};
 
-  auto lhs{ParseInt32Constant()};
+  auto lhs{ParseInt64Constant()};
 
   if (Try(Tag::kEllipsis)) {
-    auto rhs{ParseInt32Constant()};
+    auto rhs{ParseInt64Constant()};
     Expect(Tag::kColon);
     return MakeAstNode<CaseStmt>(token, lhs, rhs, ParseStmt());
   } else {
@@ -2916,18 +2918,13 @@ Expr* Parser::TryParseStmtExpr() {
   return nullptr;
 }
 
-std::int32_t Parser::ParseInt32Constant() {
+std::int64_t Parser::ParseInt64Constant() {
   auto expr{ParseExpr()};
   if (!expr->GetType()->IsIntegerTy()) {
     Error(expr, "expect integer");
   }
 
   auto val{CalcConstantExpr{}.CalcInteger(expr)};
-
-  if (val > std::numeric_limits<std::int32_t>::max() ||
-      val < std::numeric_limits<std::int32_t>::min()) {
-    Error(expr, "case range exceed range of int: {}", val);
-  }
 
   return val;
 }

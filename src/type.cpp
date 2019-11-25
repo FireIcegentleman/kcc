@@ -309,7 +309,7 @@ void Type::StructSetName(const std::string& name) {
   ToStructType()->SetName(name);
 }
 
-std::string Type::StructGetName() const {
+const std::string& Type::StructGetName() const {
   assert(IsStructOrUnionTy());
   return ToStructType()->GetName();
 }
@@ -394,7 +394,7 @@ void Type::FuncSetName(const std::string& name) {
   ToFunctionType()->SetName(name);
 }
 
-std::string Type::FuncGetName() const {
+const std::string& Type::FuncGetName() const {
   assert(IsFunctionTy());
   return ToFunctionType()->GetName();
 }
@@ -884,7 +884,7 @@ void StructType::SetName(const std::string& name) {
   llvm::cast<llvm::StructType>(llvm_type_)->setName(prefix + name);
 }
 
-std::string StructType::GetName() const { return name_; }
+const std::string& StructType::GetName() const { return name_; }
 
 std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 
@@ -1119,7 +1119,7 @@ bool FunctionType::IsNoreturn() const { return func_spec_ & kNoreturn; }
 
 void FunctionType::SetName(const std::string& name) { name_ = name; }
 
-std::string FunctionType::GetName() const { return name_; }
+const std::string& FunctionType::GetName() const { return name_; }
 
 FunctionType::FunctionType(QualType return_type, std::vector<ObjectExpr*> param,
                            bool is_var_args)

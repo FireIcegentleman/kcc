@@ -183,7 +183,7 @@ class Type {
 
   bool StructHasName() const;
   void StructSetName(const std::string& name);
-  std::string StructGetName() const;
+  const std::string& StructGetName() const;
   std::vector<ObjectExpr*>& StructGetMembers();
   ObjectExpr* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
@@ -201,7 +201,7 @@ class Type {
   bool FuncIsInline() const;
   bool FuncIsNoreturn() const;
   void FuncSetName(const std::string& name);
-  std::string FuncGetName() const;
+  const std::string& FuncGetName() const;
 
  protected:
   explicit Type(bool complete);
@@ -301,7 +301,7 @@ class StructType : public Type {
   bool IsStruct() const;
   bool HasName() const;
   void SetName(const std::string& name);
-  std::string GetName() const;
+  const std::string& GetName() const;
 
   std::int32_t GetNumMembers() const;
   std::vector<ObjectExpr*>& GetMembers();
@@ -354,7 +354,7 @@ class FunctionType : public Type {
   bool IsInline() const;
   bool IsNoreturn() const;
   void SetName(const std::string& name);
-  std::string GetName() const;
+  const std::string& GetName() const;
 
  private:
   FunctionType(QualType return_type, std::vector<ObjectExpr*> param,

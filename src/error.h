@@ -24,6 +24,8 @@ namespace kcc {
 inline std::vector<std::pair<std::string, std::string>> WarningStrings;
 
 [[noreturn]] void Error(Tag expect, const Token &actual);
+[[noreturn]] void Error(const UnaryOpExpr *unary, std::string_view msg);
+[[noreturn]] void Error(const BinaryOpExpr *binary, std::string_view msg);
 void PrintWarnings();
 
 template <typename... Args>
