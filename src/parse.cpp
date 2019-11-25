@@ -237,7 +237,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     auto obj{MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage,
                                      false)};
     if (curr_func_def_) {
-      obj->SetStaticName(curr_func_def_->GetFuncType()->FuncGetName());
+      obj->SetFuncName(curr_func_def_->GetFuncType()->FuncGetName());
     }
 
     if (align > 0) {
@@ -300,7 +300,6 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
   for (auto&& goto_item : unresolved_gotos_) {
     auto label{FindLabel(goto_item->GetName())};
     if (label) {
-      label->SetHasGoto(true);
       goto_item->SetLabel(label);
     } else {
       Error(goto_item->GetLoc(), "unknowen label: {}", goto_item->GetName());
@@ -1274,12 +1273,6 @@ Stmt* Parser::ParseLabelStmt() {
 }
 
 Stmt* Parser::ParseCaseStmt() {
-  if (std::size(switch_stmts_) == 0) {
-    Error("can not use case here");
-  }
-
-  switch_stmts_.top()->SetHasCase(true);
-
   Expect(Tag::kCase);
 
   MarkLoc();
@@ -1318,12 +1311,6 @@ Stmt* Parser::ParseCaseStmt() {
 }
 
 Stmt* Parser::ParseDefaultStmt() {
-  if (std::size(switch_stmts_) == 0) {
-    Error("can not use default here");
-  }
-
-  switch_stmts_.top()->SetHasDefault(true);
-
   Expect(Tag::kDefault);
   Expect(Tag::kColon);
 
@@ -1381,22 +1368,13 @@ Stmt* Parser::ParseIfStmt() {
 }
 
 Stmt* Parser::ParseSwitchStmt() {
-  auto switch_stmt{SwitchStmt::Get()};
-  switch_stmts_.push(switch_stmt);
-
-  Expect(Tag::kSwitch);
+  auto token{Expect(Tag::kSwitch)};
 
   Expect(Tag::kLeftParen);
   auto cond{ParseExpr()};
-  cond = Expr::MayCastTo(cond, ArithmeticType::Get(kInt));
   Expect(Tag::kRightParen);
 
-  switch_stmt->SetCond(cond);
-  switch_stmt->SetBlock(ParseStmt());
-
-  switch_stmts_.pop();
-
-  return switch_stmt;
+  return MakeAstNode<SwitchStmt>(cond, ParseStmt());
 }
 
 Stmt* Parser::ParseWhileStmt() {
@@ -1471,7 +1449,6 @@ Stmt* Parser::ParseGotoStmt() {
   auto label{FindLabel(tok.GetIdentifier())};
 
   if (label) {
-    label->SetHasGoto(true);
     return MakeAstNode<GotoStmt>(label);
   } else {
     auto ret{MakeAstNode<GotoStmt>(tok.GetIdentifier())};
@@ -3011,7 +2988,7 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
 
 LabelStmt* Parser::FindLabel(const std::string& name) const {
   for (const auto& item : labels_) {
-    if (item->GetIdent() == name) {
+    if (item->GetName() == name) {
       return item;
     }
   }

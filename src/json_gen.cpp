@@ -227,28 +227,28 @@ void JsonGen::Visit(const LabelStmt& node) {
   result_ = root;
 }
 
-void JsonGen::Visit(const CaseStmt& ) {
+void JsonGen::Visit(const CaseStmt& node) {
   QJsonObject root;
 
-//  auto rhs{node.GetRHS()};
-//  if (rhs) {
-//    root["name"] = node.KindQStr()
-//                       .append(' ')
-//                       .append(QString::number(node.GetLHS()))
-//                       .append("to ")
-//                       .append(QString::number(*rhs));
-//  } else {
-//    root["name"] =
-//        node.KindQStr().append(' ').append(QString::number(node.GetLHS()));
-//  }
-//
-//  QJsonArray children;
-//  if (node.GetStmt()) {
-//    node.GetStmt()->Accept(*this);
-//    children.append(result_);
-//  }
+  auto rhs{node.GetRHS()};
+  if (rhs) {
+    root["name"] = node.KindQStr()
+                       .append(' ')
+                       .append(QString::number(node.GetLHS()))
+                       .append("to ")
+                       .append(QString::number(*rhs));
+  } else {
+    root["name"] =
+        node.KindQStr().append(' ').append(QString::number(node.GetLHS()));
+  }
 
-  //root["children"] = children;
+  QJsonArray children;
+  if (node.GetStmt()) {
+    node.GetStmt()->Accept(*this);
+    children.append(result_);
+  }
+
+  root["children"] = children;
 
   result_ = root;
 }
@@ -333,7 +333,7 @@ void JsonGen::Visit(const SwitchStmt& node) {
   node.GetCond()->Accept(*this);
   children.append(result_);
 
-  node.GetBlock()->Accept(*this);
+  node.GetStmt()->Accept(*this);
   children.append(result_);
 
   root["children"] = children;
@@ -496,11 +496,11 @@ void JsonGen::Visit(const Declaration& node) {
     children.append(obj);
   }
 
-//  if (node.GetConstant()) {
-//    QJsonObject obj;
-//    obj["name"] = QString::fromStdString(LLVMConstantToStr(node.GetConstant()));
-//    children.append(obj);
-//  }
+  if (node.constant_) {
+    QJsonObject obj;
+    obj["name"] = QString::fromStdString(LLVMConstantToStr(node.constant_));
+    children.append(obj);
+  }
 
   root["children"] = children;
 
@@ -516,7 +516,7 @@ void JsonGen::Visit(const FuncDef& node) {
   node.GetIdent()->Accept(*this);
   children.append(result_);
 
- // node.GetBody()->Accept(*this);
+  node.GetBody()->Accept(*this);
   children.append(result_);
 
   root["children"] = children;

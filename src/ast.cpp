@@ -51,14 +51,14 @@ ACCEPT(FuncDef)
 /*
  * AstNodeTypes
  */
-QString AstNodeTypes::ToString(AstNodeTypes::Type type) {
+QString AstNodeTypes::ToQString(AstNodeTypes::Type type) {
   return QMetaEnum::fromType<Type>().valueToKey(type) + 1;
 }
 
 /*
  * AstNode
  */
-QString AstNode::KindQStr() const { return AstNodeTypes::ToString(Kind()); }
+QString AstNode::KindQStr() const { return AstNodeTypes::ToQString(Kind()); }
 
 Location AstNode::GetLoc() const { return loc_; }
 
@@ -90,6 +90,16 @@ void Expr::EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const {
   } else {
     return EnsureCompatible(lhs, rhs);
   }
+}
+
+void Expr::EnsureCompatibleConvertVoidPtr(Expr*& lhs, Expr*& rhs) {
+  if (lhs->GetType()->PointerGetElementType()->IsVoidTy()) {
+    lhs = Expr::MayCastTo(lhs, rhs->GetType());
+  } else if (rhs->GetType()->PointerGetElementType()->IsVoidTy()) {
+    rhs = Expr::MayCastTo(rhs, lhs->GetType());
+  }
+
+  EnsureCompatible(lhs->GetType(), rhs->GetType());
 }
 
 Expr* Expr::MayCast(Expr* expr) {
@@ -666,6 +676,10 @@ Type* FuncCallExpr::GetFuncType() const {
   }
 }
 
+void FuncCallExpr::SetVaArgType(Type* va_arg_type) {
+  va_arg_type_ = va_arg_type;
+}
+
 Expr* FuncCallExpr::GetCallee() const { return callee_; }
 
 std::vector<Expr*> FuncCallExpr::GetArgs() const { return args_; }
@@ -781,7 +795,7 @@ void StringLiteralExpr::Check() {
       nullptr, var, llvm::ArrayRef<llvm::Constant*>{zero, zero});
 
   if (!TestMode) {
-    Map[str] = {arr_, ptr_};
+    Map[str_] = {arr_, ptr_};
   }
 }
 
@@ -828,10 +842,6 @@ bool IdentifierExpr::IsTypeName() const { return is_type_name_; }
 
 bool IdentifierExpr::IsObject() const {
   return dynamic_cast<const ObjectExpr*>(this);
-}
-
-bool IdentifierExpr::IsEnumerator() const {
-  return dynamic_cast<const EnumeratorExpr*>(this);
 }
 
 ObjectExpr* IdentifierExpr::ToObjectExpr() {
@@ -905,8 +915,6 @@ Declaration* ObjectExpr::GetDecl() { return decl_; }
 
 void ObjectExpr::SetDecl(Declaration* decl) { decl_ = decl; }
 
-bool ObjectExpr::HasInit() const { return decl_->HasLocalInit(); }
-
 bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
 bool ObjectExpr::InGlobal() const { return linkage_ != kNone; }
@@ -941,18 +949,13 @@ std::list<std::pair<Type*, std::int32_t>> ObjectExpr::GetIndexs() const {
   return indexs_;
 }
 
-void ObjectExpr::SetIndexs(
-    const std::list<std::pair<Type*, std::int32_t>>& indexs) {
-  indexs_ = indexs;
+const std::string& ObjectExpr::GetFuncName() const {
+  assert(!std::empty(func_name_));
+  return func_name_;
 }
 
-const std::string& ObjectExpr::GetStaticName() const {
-  assert(!std::empty(static_name_));
-  return static_name_;
-}
-
-void ObjectExpr::SetStaticName(const std::string& func_name) {
-  static_name_ = func_name;
+void ObjectExpr::SetFuncName(const std::string& func_name) {
+  func_name_ = func_name;
 }
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
@@ -1004,41 +1007,38 @@ AstNodeType LabelStmt::Kind() const { return AstNodeType::kLabelStmt; }
 
 void LabelStmt::Check() {}
 
-void LabelStmt::SetHasGoto(bool has_goto) { has_goto_ = has_goto; }
-
-std::string LabelStmt::GetIdent() const { return ident_; }
-
 Stmt* LabelStmt::GetStmt() const { return stmt_; }
 
-std::string LabelStmt::GetName() const { return ident_; }
+std::string LabelStmt::GetName() const { return name_; }
 
 LabelStmt::LabelStmt(const std::string& ident, Stmt* stmt)
-    : stmt_{stmt}, ident_{ident} {}
+    : name_{ident}, stmt_{stmt} {}
 
 /*
  * CaseStmt
  */
-CaseStmt* CaseStmt::Get(std::int32_t case_value, Stmt* block) {
-  return new (CaseStmtPool.Allocate()) CaseStmt{case_value, block};
+CaseStmt* CaseStmt::Get(std::int32_t lhs, Stmt* stmt) {
+  return new (CaseStmtPool.Allocate()) CaseStmt{lhs, stmt};
 }
 
-CaseStmt* CaseStmt::Get(std::int32_t case_value, std::int32_t case_value2,
-                        Stmt* block) {
-  return new (CaseStmtPool.Allocate()) CaseStmt{case_value, case_value2, block};
+CaseStmt* CaseStmt::Get(std::int32_t lhs, std::int32_t rhs, Stmt* stmt) {
+  return new (CaseStmtPool.Allocate()) CaseStmt{lhs, rhs, stmt};
 }
 
 AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
 void CaseStmt::Check() {}
 
-CaseStmt::CaseStmt(std::int32_t case_value, Stmt* block)
-    : case_value_{case_value}, block_{block} {}
+int32_t CaseStmt::GetLHS() const { return lhs_; }
 
-CaseStmt::CaseStmt(std::int32_t case_value, std::int32_t case_value2,
-                   Stmt* block)
-    : case_value_range_{case_value, case_value2},
-      has_range_{true},
-      block_{block} {}
+std::optional<std::int32_t> CaseStmt::GetRHS() const { return rhs_; }
+
+const Stmt* CaseStmt::GetStmt() const { return stmt_; }
+
+CaseStmt::CaseStmt(std::int32_t lhs, Stmt* stmt) : lhs_{lhs}, stmt_{stmt} {}
+
+CaseStmt::CaseStmt(std::int32_t lhs, std::int32_t rhs, Stmt* stmt)
+    : lhs_{lhs}, rhs_{rhs}, stmt_{stmt} {}
 
 /*
  * DefaultStmt
@@ -1051,9 +1051,9 @@ AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
 
 void DefaultStmt::Check() {}
 
-const Stmt* DefaultStmt::GetStmt() const { return block_; }
+const Stmt* DefaultStmt::GetStmt() const { return stmt_; }
 
-DefaultStmt::DefaultStmt(Stmt* block) : block_{block} {}
+DefaultStmt::DefaultStmt(Stmt* block) : stmt_{block} {}
 
 /*
  * CompoundStmt
@@ -1062,15 +1062,13 @@ CompoundStmt* CompoundStmt::Get() {
   return new (CompoundStmtPool.Allocate()) CompoundStmt{};
 }
 
-CompoundStmt* CompoundStmt::Get(std::vector<Stmt*> stmts, Scope* scope) {
-  return new (CompoundStmtPool.Allocate()) CompoundStmt{stmts, scope};
+CompoundStmt* CompoundStmt::Get(std::vector<Stmt*> stmts) {
+  return new (CompoundStmtPool.Allocate()) CompoundStmt{stmts};
 }
 
 AstNodeType CompoundStmt::Kind() const { return AstNodeType::kCompoundStmt; }
 
 void CompoundStmt::Check() {}
-
-Scope* CompoundStmt::GetScope() { return scope_; }
 
 std::vector<Stmt*> CompoundStmt::GetStmts() const { return stmts_; }
 
@@ -1081,8 +1079,8 @@ void CompoundStmt::AddStmt(Stmt* stmt) {
   }
 }
 
-CompoundStmt::CompoundStmt(std::vector<Stmt*> stmts, Scope* scope)
-    : stmts_{std::move(stmts)}, scope_{scope} {}
+CompoundStmt::CompoundStmt(std::vector<Stmt*> stmts)
+    : stmts_{std::move(stmts)} {}
 
 /*
  * ExprStmt
@@ -1126,10 +1124,6 @@ IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
 /*
  * SwitchStmt
  */
-SwitchStmt* SwitchStmt::Get() {
-  return new (SwitchStmtPool.Allocate()) SwitchStmt{};
-}
-
 SwitchStmt* SwitchStmt::Get(Expr* cond, Stmt* block) {
   return new (SwitchStmtPool.Allocate()) SwitchStmt{cond, block};
 }
@@ -1144,21 +1138,11 @@ void SwitchStmt::Check() {
   cond_ = Expr::MayCastTo(cond_, ArithmeticType::Get(kInt));
 }
 
-void SwitchStmt::SetCond(Expr* cond) { cond_ = cond; }
-
-void SwitchStmt::SetBlock(Stmt* block) { block_ = block; }
-
-void SwitchStmt::SetHasCase(bool flag) { has_case_ = flag; }
-
 const Expr* SwitchStmt::GetCond() const { return cond_; }
 
-const Stmt* SwitchStmt::GetBlock() const { return block_; }
+const Stmt* SwitchStmt::GetStmt() const { return stmt_; }
 
-void SwitchStmt::SetHasDefault(bool flag) { has_default_ = flag; }
-
-SwitchStmt::SwitchStmt() {}
-
-SwitchStmt::SwitchStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
+SwitchStmt::SwitchStmt(Expr* cond, Stmt* block) : cond_{cond}, stmt_{block} {}
 
 /*
  * WhileStmt
@@ -1477,9 +1461,11 @@ std::string FuncDef::GetName() const { return ident_->GetName(); }
 
 enum Linkage FuncDef::GetLinkage() const { return ident_->GetLinkage(); }
 
-QualType FuncDef::GetFuncType() const { return ident_->GetType(); }
+Type* FuncDef::GetFuncType() const { return ident_->GetType(); }
 
 IdentifierExpr* FuncDef::GetIdent() const { return ident_; }
+
+const CompoundStmt* FuncDef::GetBody() const { return body_; }
 
 FuncDef::FuncDef(IdentifierExpr* ident) : ident_{ident} {}
 

@@ -7,11 +7,12 @@
 
 #include <cstdint>
 #include <list>
-#include <set>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/Instructions.h>
@@ -25,6 +26,7 @@
 
 namespace kcc {
 
+class ObjectExpr;
 class CompoundStmt;
 class Declaration;
 class Visitor;
@@ -67,7 +69,7 @@ class AstNodeTypes : public QObject {
 
   Q_ENUM(Type)
 
-  static QString ToString(Type type);
+  static QString ToQString(Type type);
 };
 
 using AstNodeType = AstNodeTypes::Type;
@@ -81,6 +83,7 @@ class AstNode {
   virtual void Check() = 0;
 
   QString KindQStr() const;
+
   Location GetLoc() const;
   void SetLoc(const Location& loc);
 
@@ -102,9 +105,11 @@ class Expr : public AstNode {
 
   void EnsureCompatible(QualType lhs, QualType rhs) const;
   void EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const;
+  void EnsureCompatibleConvertVoidPtr(Expr*& lhs, Expr*& rhs);
   // 数组函数隐式转换
   static Expr* MayCast(Expr* expr);
   static Expr* MayCastTo(Expr* expr, QualType to);
+  // 通常算术转换
   static Type* Convert(Expr*& lhs, Expr*& rhs);
 
  protected:
@@ -237,7 +242,8 @@ class FuncCallExpr : public Expr {
   virtual bool IsLValue() const override;
 
   Type* GetFuncType() const;
-  void SetVaArgType(Type* va_arg_type) { va_arg_type_ = va_arg_type; }
+
+  void SetVaArgType(Type* va_arg_type);
 
   Expr* GetCallee() const;
   std::vector<Expr*> GetArgs() const;
@@ -248,6 +254,7 @@ class FuncCallExpr : public Expr {
 
   Expr* callee_;
   std::vector<Expr*> args_;
+
   Type* va_arg_type_{nullptr};
 };
 
@@ -312,7 +319,8 @@ enum Linkage { kNone, kInternal, kExternal };
 class IdentifierExpr : public Expr {
  public:
   static IdentifierExpr* Get(const std::string& name, QualType type,
-                             enum Linkage linkage, bool is_type_name);
+                             enum Linkage linkage = Linkage::kNone,
+                             bool is_type_name = false);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -323,13 +331,13 @@ class IdentifierExpr : public Expr {
   std::string GetName() const;
   bool IsTypeName() const;
   bool IsObject() const;
-  bool IsEnumerator() const;
   ObjectExpr* ToObjectExpr();
   const ObjectExpr* ToObjectExpr() const;
 
  protected:
-  IdentifierExpr(const std::string& name, QualType type, enum Linkage linkage,
-                 bool is_type_name);
+  IdentifierExpr(const std::string& name, QualType type,
+                 enum Linkage linkage = Linkage::kNone,
+                 bool is_type_name = false);
 
   std::string name_;
   enum Linkage linkage_;
@@ -377,25 +385,30 @@ class ObjectExpr : public IdentifierExpr {
   bool IsExtern() const;
   void SetStorageClassSpec(std::uint32_t storage_class_spec);
   std::uint32_t GetStorageClassSpec();
+
   std::int32_t GetAlign() const;
   void SetAlign(std::int32_t align);
   std::int32_t GetOffset() const;
   void SetOffset(std::int32_t offset);
+
   Declaration* GetDecl();
   void SetDecl(Declaration* decl);
-  bool HasInit() const;
+
   bool IsAnonymous() const;
   bool InGlobal() const;
+
   void SetLocalPtr(llvm::AllocaInst* local_ptr);
   void SetGlobalPtr(llvm::GlobalVariable* global_ptr);
   llvm::AllocaInst* GetLocalPtr() const;
   llvm::GlobalVariable* GetGlobalPtr() const;
+
   bool HasGlobalPtr() const;
+
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   std::list<std::pair<Type*, std::int32_t>> GetIndexs() const;
-  void SetIndexs(const std::list<std::pair<Type*, std::int32_t>>& indexs);
-  const std::string& GetStaticName() const;
-  void SetStaticName(const std::string& func_name);
+
+  const std::string& GetFuncName() const;
+  void SetFuncName(const std::string& func_name);
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -406,12 +419,18 @@ class ObjectExpr : public IdentifierExpr {
   std::uint32_t storage_class_spec_{};
   std::int32_t align_{};
   std::int32_t offset_{};
+
+  // 当遇到重复声明时使用
   Declaration* decl_{};
 
+  // 用于索引结构体或数组成员
   std::list<std::pair<Type*, std::int32_t>> indexs_;
+
   llvm::AllocaInst* local_ptr_{};
   llvm::GlobalVariable* global_ptr_{};
-  std::string static_name_;
+
+  // TODO 更好的方法
+  std::string func_name_;
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式
@@ -436,52 +455,48 @@ class Stmt : public AstNode {};
 
 class LabelStmt : public Stmt {
  public:
-  static LabelStmt* Get(const std::string& ident, Stmt* stmt);
+  static LabelStmt* Get(const std::string& name, Stmt* stmt);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
-  void SetHasGoto(bool has_goto);
-  std::string GetIdent() const;
-  void SetMove(bool flag) { has_to_move_ = flag; }
 
   Stmt* GetStmt() const;
   std::string GetName() const;
 
  private:
-  explicit LabelStmt(const std::string& ident, Stmt* stmt);
+  explicit LabelStmt(const std::string& name, Stmt* stmt);
 
+  std::string name_;
   Stmt* stmt_;
-  std::string ident_;
-  bool has_goto_{false};
-  //  mutable llvm::BasicBlock* label_{};
-  bool has_to_move_{false};
 };
 
 class CaseStmt : public Stmt {
  public:
-  static CaseStmt* Get(std::int32_t case_value, Stmt* block);
-  static CaseStmt* Get(std::int32_t case_value, std::int32_t case_value2,
-                       Stmt* block);
+  static CaseStmt* Get(std::int32_t lhs, Stmt* stmt);
+  static CaseStmt* Get(std::int32_t lhs, std::int32_t rhs, Stmt* stmt);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  // private:
-  CaseStmt(std::int32_t case_value, Stmt* block);
-  CaseStmt(std::int32_t case_value, std::int32_t case_value2, Stmt* block);
+  int32_t GetLHS() const;
+  std::optional<std::int32_t> GetRHS() const;
+  const Stmt* GetStmt() const;
 
-  std::int32_t case_value_{};
-  std::pair<std::int32_t, std::int32_t> case_value_range_;
-  bool has_range_{false};
+ private:
+  CaseStmt(std::int32_t lhs, Stmt* stmt);
+  CaseStmt(std::int32_t lhs, std::int32_t rhs, Stmt* stmt);
 
-  Stmt* block_;
+  std::int32_t lhs_{};
+  std::optional<std::int32_t> rhs_{};
+
+  Stmt* stmt_;
 };
 
 class DefaultStmt : public Stmt {
  public:
-  static DefaultStmt* Get(Stmt* block);
+  static DefaultStmt* Get(Stmt* stmt);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -490,30 +505,28 @@ class DefaultStmt : public Stmt {
   const Stmt* GetStmt() const;
 
  private:
-  DefaultStmt(Stmt* block);
+  DefaultStmt(Stmt* stmt);
 
-  Stmt* block_;
+  Stmt* stmt_;
 };
 
 class CompoundStmt : public Stmt {
  public:
   static CompoundStmt* Get();
-  static CompoundStmt* Get(std::vector<Stmt*> stmts, Scope* scope);
+  static CompoundStmt* Get(std::vector<Stmt*> stmts);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  Scope* GetScope();
   std::vector<Stmt*> GetStmts() const;
   void AddStmt(Stmt* stmt);
 
  private:
   CompoundStmt() = default;
-  explicit CompoundStmt(std::vector<Stmt*> stmts, Scope* scope);
+  explicit CompoundStmt(std::vector<Stmt*> stmts);
 
   std::vector<Stmt*> stmts_;
-  Scope* scope_;
 };
 
 class ExprStmt : public Stmt {
@@ -554,29 +567,20 @@ class IfStmt : public Stmt {
 
 class SwitchStmt : public Stmt {
  public:
-  static SwitchStmt* Get();
-  static SwitchStmt* Get(Expr* cond, Stmt* block);
+  static SwitchStmt* Get(Expr* cond, Stmt* stmt);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
-  void SetHasCase(bool flag);
-  void SetHasDefault(bool flag);
-  void SetCond(Expr* cond);
-  void SetBlock(Stmt* block);
 
   const Expr* GetCond() const;
-  const Stmt* GetBlock() const;
+  const Stmt* GetStmt() const;
 
-  // private:
-  SwitchStmt();
-  SwitchStmt(Expr* cond, Stmt* block);
+ private:
+  SwitchStmt(Expr* cond, Stmt* stmt);
 
-  Expr* cond_{};
-  Stmt* block_{};
-
-  bool has_case_{false};
-  bool has_default_{false};
+  Expr* cond_;
+  Stmt* stmt_;
 };
 
 class WhileStmt : public Stmt {
@@ -598,9 +602,6 @@ class WhileStmt : public Stmt {
 };
 
 class DoWhileStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static DoWhileStmt* Get(Expr* cond, Stmt* block);
 
@@ -619,9 +620,6 @@ class DoWhileStmt : public Stmt {
 };
 
 class ForStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static ForStmt* Get(Expr* init, Expr* cond, Expr* inc, Stmt* block,
                       Stmt* decl);
@@ -645,9 +643,6 @@ class ForStmt : public Stmt {
 };
 
 class GotoStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static GotoStmt* Get(const std::string& name);
   static GotoStmt* Get(LabelStmt* ident);
@@ -655,10 +650,10 @@ class GotoStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
-  void SetLabel(LabelStmt* label);
-  std::string GetName() const;
 
   const LabelStmt* GetLabel() const;
+  void SetLabel(LabelStmt* label);
+  std::string GetName() const;
 
  private:
   explicit GotoStmt(const std::string& name);
@@ -669,9 +664,6 @@ class GotoStmt : public Stmt {
 };
 
 class ContinueStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static ContinueStmt* Get();
 
@@ -681,9 +673,6 @@ class ContinueStmt : public Stmt {
 };
 
 class BreakStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static BreakStmt* Get();
 
@@ -693,9 +682,6 @@ class BreakStmt : public Stmt {
 };
 
 class ReturnStmt : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static ReturnStmt* Get(Expr* expr = nullptr);
 
@@ -805,9 +791,6 @@ class Declaration : public Stmt {
 };
 
 class FuncDef : public ExtDecl {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static FuncDef* Get(IdentifierExpr* ident);
 
@@ -818,14 +801,15 @@ class FuncDef : public ExtDecl {
   void SetBody(CompoundStmt* body);
   std::string GetName() const;
   enum Linkage GetLinkage() const;
-  QualType GetFuncType() const;
+  Type* GetFuncType() const;
   IdentifierExpr* GetIdent() const;
+  const CompoundStmt* GetBody() const;
 
  private:
   explicit FuncDef(IdentifierExpr* ident);
 
   IdentifierExpr* ident_;
-  CompoundStmt* body_;
+  CompoundStmt* body_{};
 };
 
 template <typename T, typename... Args>

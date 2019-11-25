@@ -4,7 +4,6 @@
 
 #include "code_gen.h"
 
-#include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/Optional.h>
 #include <llvm/IR/Attributes.h>
@@ -416,11 +415,11 @@ void CodeGen::Visit(const CaseStmt& node) {
   EmitBlock(block);
   std::int32_t begin, end;
 
-  if (node.has_range_) {
-    begin = node.case_value_range_.first;
-    end = node.case_value_range_.second;
+  if (node.GetRHS()) {
+    begin = node.GetLHS();
+    end = *node.GetRHS();
   } else {
-    begin = node.case_value_;
+    begin = node.GetLHS();
     end = begin;
   }
 
@@ -429,7 +428,7 @@ void CodeGen::Visit(const CaseStmt& node) {
                           block);
   }
 
-  EmitStmt(node.block_);
+  EmitStmt(node.GetStmt());
 }
 
 void CodeGen::Visit(const DefaultStmt& node) {
@@ -475,11 +474,7 @@ void CodeGen::Visit(const IfStmt& node) {
 }
 
 void CodeGen::Visit(const SwitchStmt& node) {
-  if (!node.has_case_ && !node.has_default_) {
-    return;
-  }
-
-  node.cond_->Accept(*this);
+  node.GetCond()->Accept(*this);
   auto cond_val{result_};
 
   auto switch_inst_backup{switch_inst_};
@@ -488,12 +483,13 @@ void CodeGen::Visit(const SwitchStmt& node) {
   auto end_block{CreateBasicBlock("switch.end")};
   switch_inst_ = Builder.CreateSwitch(cond_val, default_block);
 
+  Builder.ClearInsertionPoint();
   llvm::BasicBlock* continue_block{};
   if (!std::empty(break_continue_stack_)) {
     continue_block = break_continue_stack_.back().continue_block;
   }
   break_continue_stack_.push_back({end_block, continue_block});
-  EmitStmt(node.block_);
+  EmitStmt(node.GetStmt());
   break_continue_stack_.pop_back();
 
   if (!default_block->getParent()) {
@@ -533,21 +529,21 @@ void CodeGen::Visit(const DoWhileStmt& node) {
 
   EmitBlock(body_block);
   break_continue_stack_.push_back({end_block, cond_block});
-  EmitStmt(node.block_);
+  EmitStmt(node.GetBlock());
   break_continue_stack_.pop_back();
 
   EmitBlock(cond_block);
-  auto cond_val{EvaluateExprAsBool(node.cond_)};
+  auto cond_val{EvaluateExprAsBool(node.GetCond())};
   Builder.CreateCondBr(cond_val, body_block, end_block);
 
   EmitBlock(end_block);
 }
 
 void CodeGen::Visit(const ForStmt& node) {
-  if (node.init_) {
-    node.init_->Accept(*this);
-  } else if (node.decl_) {
-    EmitStmt(node.decl_);
+  if (node.GetInit()) {
+    node.GetInit()->Accept(*this);
+  } else if (node.GetDecl()) {
+    EmitStmt(node.GetDecl());
   }
 
   auto cond_block{CreateBasicBlock("for.cond")};
@@ -555,26 +551,26 @@ void CodeGen::Visit(const ForStmt& node) {
 
   EmitBlock(cond_block);
 
-  if (node.cond_) {
+  if (node.GetCond()) {
     auto body_block{CreateBasicBlock("for.body")};
-    EmitBranchOnBoolExpr(node.cond_, body_block, end_block);
+    EmitBranchOnBoolExpr(node.GetCond(), body_block, end_block);
     EmitBlock(body_block);
   }
 
   llvm::BasicBlock* continue_block;
-  if (node.inc_) {
+  if (node.GetInc()) {
     continue_block = CreateBasicBlock("for.inc");
   } else {
     continue_block = cond_block;
   }
 
   break_continue_stack_.push_back({end_block, continue_block});
-  EmitStmt(node.block_);
+  EmitStmt(node.GetBlock());
   break_continue_stack_.pop_back();
 
-  if (node.inc_) {
+  if (node.GetInc()) {
     EmitBlock(continue_block);
-    node.inc_->Accept(*this);
+    node.GetInc()->Accept(*this);
   }
 
   EmitBranch(cond_block);
@@ -586,7 +582,7 @@ void CodeGen::Visit(const GotoStmt& node) {
   if (!HaveInsertPoint()) {
     return;
   }
-  Builder.CreateBr(GetBasicBlockForLabel(node.label_));
+  Builder.CreateBr(GetBasicBlockForLabel(node.GetLabel()));
   Builder.ClearInsertionPoint();
 }
 
@@ -615,10 +611,10 @@ void CodeGen::Visit(const BreakStmt& node) {
 }
 
 void CodeGen::Visit(const ReturnStmt& node) {
-  if (node.expr_) {
+  if (node.GetExpr()) {
     auto back{load_};
     load_ = true;
-    node.expr_->Accept(*this);
+    node.GetExpr()->Accept(*this);
     load_ = back;
     Builder.CreateRet(result_);
   } else {
@@ -689,7 +685,7 @@ void CodeGen::Visit(const FuncDef& node) {
     ++iter;
   }
 
-  node.body_->Accept(*this);
+  node.GetBody()->Accept(*this);
 
   if (Builder.GetInsertBlock() && !Builder.GetInsertBlock()->getTerminator()) {
     if (func_name == "main") {
@@ -1338,7 +1334,7 @@ void CodeGen::DealLocaleDecl(const Declaration& node) {
 
   if (obj->IsStatic()) {
     llvm::GlobalVariable* ptr;
-    auto static_name{obj->GetStaticName() + "." + obj->GetName()};
+    auto static_name{obj->GetFuncName() + "." + obj->GetName()};
 
     if (obj->HasGlobalPtr()) {
       ptr = obj->GetGlobalPtr();
@@ -1597,7 +1593,7 @@ llvm::BasicBlock* CodeGen::GetBasicBlockForLabel(const LabelStmt* label) {
     return bb;
   }
 
-  return bb = CreateBasicBlock(label->GetIdent());
+  return bb = CreateBasicBlock(label->GetName());
 }
 
 bool CodeGen::TestAndClearIgnoreResultAssign() {
