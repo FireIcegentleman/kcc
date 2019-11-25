@@ -2285,7 +2285,7 @@ llvm::Constant* Parser::ParseInitializer(std::vector<Initializer>& inits,
 
 void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
                                    std::int32_t designated) {
-  std::int32_t index{};
+  std::size_t index{};
   auto has_brace{Try(Tag::kLeftBrace)};
 
   while (true) {
@@ -2296,7 +2296,8 @@ void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
       return;
     }
 
-    // TODO ???
+    // e.g.
+    // int a[10][10] = {1, [2][2] = 3};
     if (!designated && !has_brace &&
         (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
       // put ',' back
@@ -2314,8 +2315,7 @@ void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
       Expect(Tag::kRightSquare);
 
       if (index < 0 ||
-          (type->IsComplete() &&
-           static_cast<std::size_t>(index) >= type->ArrayGetNumElements())) {
+          (type->IsComplete() && index >= type->ArrayGetNumElements())) {
         Error(expr, "array designator index {} exceeds array bounds", index);
       }
     }
@@ -2502,11 +2502,12 @@ llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
 
 llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
                                                       std::int32_t designated) {
-  std::int32_t index{};
+  std::size_t index{};
   auto has_brace{Try(Tag::kLeftBrace)};
+  // 可能为零
   auto size{type->ArrayGetNumElements()};
-  std::vector<llvm::Constant*> val(
-      size, GetConstantZero(type->ArrayGetElementType()->GetLLVMType()));
+  auto zero{GetConstantZero(type->ArrayGetElementType()->GetLLVMType())};
+  std::vector<llvm::Constant*> val(size, zero);
 
   while (true) {
     if (Test(Tag::kRightBrace)) {
@@ -2535,8 +2536,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
       Expect(Tag::kRightSquare);
 
       if (index < 0 ||
-          (type->IsComplete() &&
-           static_cast<std::size_t>(index) >= type->ArrayGetNumElements())) {
+          (type->IsComplete() && index >= type->ArrayGetNumElements())) {
         Error(expr, "array designator index {} exceeds array bounds", index);
       }
     }
@@ -2545,8 +2545,14 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
       val[index] = ParseConstantInitializer(type->ArrayGetElementType(),
                                             designated, false);
     } else {
-      val.push_back(ParseConstantInitializer(type->ArrayGetElementType(),
-                                             designated, false));
+      if (index >= std::size(val)) {
+        val.insert(std::end(val), index - std::size(val), zero);
+        val.push_back(ParseConstantInitializer(type->ArrayGetElementType(),
+                                               designated, false));
+      } else {
+        val[index] = ParseConstantInitializer(type->ArrayGetElementType(),
+                                              designated, false);
+      }
     }
 
     designated = false;
@@ -2557,7 +2563,6 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
       break;
     }
 
-    // int a[] = {1, 2, [5] = 3}; 这种也是合法的
     if (!type->IsComplete()) {
       type->ArraySetNumElements(std::max(static_cast<std::size_t>(index),
                                          type->ArrayGetNumElements()));
@@ -2635,12 +2640,11 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
 
   if (is_struct) {
     for (const auto& member : type->StructGetMembers()) {
-      val.push_back(
-          llvm::Constant::getNullValue(member->GetType()->GetLLVMType()));
+      val.push_back(GetConstantZero(member->GetType()->GetLLVMType()));
     }
   } else {
-    val.push_back(llvm::Constant::getNullValue(
-        type->GetLLVMType()->getStructElementType(0)));
+    val.push_back(
+        GetConstantZero(type->GetLLVMType()->getStructElementType(0)));
   }
 
   while (true) {
@@ -2679,24 +2683,15 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
         PutBack();
         PutBack();
       }
+    }
 
-      if (is_struct) {
-        val[member_iter - std::begin(type->StructGetMembers())] =
-            ParseConstantInitializer((*member_iter)->GetType(), designated,
-                                     false);
-      } else {
-        val[0] = ParseConstantInitializer((*member_iter)->GetType(), designated,
-                                          false);
-      }
+    if (is_struct) {
+      val[member_iter - std::begin(type->StructGetMembers())] =
+          ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                   false);
     } else {
-      if (is_struct) {
-        val[member_iter - std::begin(type->StructGetMembers())] =
-            ParseConstantInitializer((*member_iter)->GetType(), designated,
-                                     false);
-      } else {
-        val[0] = ParseConstantInitializer((*member_iter)->GetType(), designated,
-                                          false);
-      }
+      val.front() = ParseConstantInitializer((*member_iter)->GetType(),
+                                             designated, false);
     }
 
     designated = false;
