@@ -12,7 +12,6 @@
 #include <utility>
 #include <vector>
 
-#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/Instructions.h>
@@ -243,10 +242,10 @@ class FuncCallExpr : public Expr {
 
   Type* GetFuncType() const;
 
-  void SetVaArgType(Type* va_arg_type);
-
   Expr* GetCallee() const;
   std::vector<Expr*> GetArgs() const;
+
+  void SetVaArgType(Type* va_arg_type);
   Type* GetVaArgType() const;
 
  private:

@@ -127,13 +127,17 @@ void RunKcc(const std::string &file_name) {
   if (EmitTokens) {
     if (std::empty(OutputFilePath)) {
       for (const auto &tok : tokens) {
-        std::cout << tok.ToString() << '\n';
+        if (tok.GetLoc().GetFileName() == file_name) {
+          std::cout << tok.ToString() << '\n';
+        }
       }
       std::cout << std::endl;
     } else {
       std::ofstream ofs{OutputFilePath};
       for (const auto &tok : tokens) {
-        std::cout << tok.ToString() << '\n';
+        if (tok.GetLoc().GetFileName() == file_name) {
+          std::cout << tok.ToString() << '\n';
+        }
       }
       std::cout << std::endl;
     }
@@ -144,7 +148,7 @@ void RunKcc(const std::string &file_name) {
   auto unit{parser.ParseTranslationUnit()};
 
   if (EmitAST) {
-    JsonGen json_gen;
+    JsonGen json_gen{file_name};
     if (std::empty(OutputFilePath)) {
       json_gen.GenJson(unit, GetFileName(file_name, ".html"));
     } else {
@@ -206,13 +210,15 @@ void Run(const std::string &file) {
   auto tokens{scanner.Tokenize()};
   std::ofstream tokens_file{GetFileName(file, ".txt")};
   for (const auto &tok : tokens) {
-    tokens_file << tok.ToString() << '\n';
+    if (tok.GetLoc().GetFileName() == file) {
+      tokens_file << tok.ToString() << '\n';
+    }
   }
   tokens_file << std::flush;
 
   Parser parser{std::move(tokens), file};
   auto unit{parser.ParseTranslationUnit()};
-  JsonGen{}.GenJson(unit, GetFileName(file, ".html"));
+  JsonGen{file}.GenJson(unit, GetFileName(file, ".html"));
 
   if (StandardIR) {
     std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm -O0 " + file};

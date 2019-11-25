@@ -5,6 +5,7 @@
 #include "ast.h"
 
 #include <algorithm>
+#include <cstddef>
 
 #include "error.h"
 #include "llvm_common.h"
@@ -227,8 +228,8 @@ void UnaryOpExpr::NotOpCheck() {
           TokenTag::ToString(op_), expr_->GetQualType().ToString());
   }
 
-  auto new_type{ArithmeticType::IntegerPromote(expr_->GetType())};
-  expr_ = Expr::MayCastTo(expr_, QualType{new_type});
+  expr_ = Expr::MayCastTo(
+      expr_, QualType{ArithmeticType::IntegerPromote(expr_->GetType())});
 
   type_ = expr_->GetQualType();
 }
@@ -352,7 +353,7 @@ void BinaryOpExpr::Check() {
 }
 
 bool BinaryOpExpr::IsLValue() const {
-  // 在 C++ 中赋值运算符表达式是左值表达式，逗号运算符表达式可以是左值表达式
+  // 在 C++ 中赋值运算符表达式是左值表达式, 逗号运算符表达式可以是左值表达式
   // 而在 C 中两者都绝不是
   switch (op_) {
     case Tag::kPeriod:
@@ -433,6 +434,7 @@ void BinaryOpExpr::SubOpCheck() {
     rhs_ = Expr::MayCastTo(rhs_, ArithmeticType::Get(kLong | kUnsigned));
     type_ = lhs_type;
   } else if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
+    // 如果这里有一个是 void* 指针也不能隐式转换
     EnsureCompatible(lhs_type, rhs_type);
     // ptrdiff_t
     type_ = QualType{ArithmeticType::Get(kLong)};
@@ -548,6 +550,7 @@ void BinaryOpExpr::CommaOpCheck() { type_ = rhs_->GetQualType(); }
  * ConditionOpExpr
  */
 ConditionOpExpr* ConditionOpExpr::Get(Expr* cond, Expr* lhs, Expr* rhs) {
+  assert(cond != nullptr && lhs != nullptr && rhs != nullptr);
   return new (ConditionOpExprPool.Allocate()) ConditionOpExpr{cond, lhs, rhs};
 }
 
@@ -603,6 +606,12 @@ ConditionOpExpr::ConditionOpExpr(Expr* cond, Expr* lhs, Expr* rhs)
  * FuncCallExpr
  */
 FuncCallExpr* FuncCallExpr::Get(Expr* callee, std::vector<Expr*> args) {
+  assert(callee != nullptr);
+  for (const auto& item : args) {
+    assert(item != nullptr);
+    (void)item;
+  }
+
   return new (FuncCallExprPool.Allocate()) FuncCallExpr{callee, args};
 }
 
@@ -662,13 +671,13 @@ Type* FuncCallExpr::GetFuncType() const {
   }
 }
 
-void FuncCallExpr::SetVaArgType(Type* va_arg_type) {
-  va_arg_type_ = va_arg_type;
-}
-
 Expr* FuncCallExpr::GetCallee() const { return callee_; }
 
 std::vector<Expr*> FuncCallExpr::GetArgs() const { return args_; }
+
+void FuncCallExpr::SetVaArgType(Type* va_arg_type) {
+  va_arg_type_ = va_arg_type;
+}
 
 Type* FuncCallExpr::GetVaArgType() const { return va_arg_type_; }
 
@@ -683,10 +692,12 @@ ConstantExpr* ConstantExpr::Get(std::int32_t val) {
 }
 
 ConstantExpr* ConstantExpr::Get(Type* type, std::uint64_t val) {
+  assert(type != nullptr);
   return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
 }
 
 ConstantExpr* ConstantExpr::Get(Type* type, long double val) {
+  assert(type != nullptr);
   return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
 }
 
@@ -735,7 +746,7 @@ void StringLiteralExpr::Check() {
   }
 
   auto width{type_->ArrayGetElementType()->GetWidth()};
-  auto size{type_->ArrayGetNumElements()};
+  auto size{type_->ArrayGetNumElements() - 1};
   auto str{str_.c_str()};
 
   switch (width) {
@@ -746,6 +757,7 @@ void StringLiteralExpr::Check() {
         values.push_back(*ptr);
         str += 1;
       }
+      values.push_back(0);
       arr_ = llvm::ConstantDataArray::get(Context, values);
     } break;
     case 2: {
@@ -755,6 +767,7 @@ void StringLiteralExpr::Check() {
         values.push_back(*ptr);
         str += 2;
       }
+      values.push_back(0);
       arr_ = llvm::ConstantDataArray::get(Context, values);
     } break;
     case 4: {
@@ -764,6 +777,7 @@ void StringLiteralExpr::Check() {
         values.push_back(*ptr);
         str += 4;
       }
+      values.push_back(0);
       arr_ = llvm::ConstantDataArray::get(Context, values);
     } break;
     default:
@@ -796,7 +810,7 @@ llvm::Constant* StringLiteralExpr::GetPtr() const {
 }
 
 StringLiteralExpr::StringLiteralExpr(Type* type, const std::string& val)
-    : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth())},
+    : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth() + 1)},
       str_{val} {}
 
 /*

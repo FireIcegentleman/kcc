@@ -855,14 +855,14 @@ Expr* Parser::ParsePrimaryExpr() {
     if (InGlobal()) {
       Error(token, "Not allowed to use __func__ or __FUNCTION__ here");
     }
-    return MakeAstNode<StringLiteralExpr>(token, func_def_->GetName() + '\0');
+    return MakeAstNode<StringLiteralExpr>(token, func_def_->GetName());
   } else if (Try(Tag::kFuncSignature)) {
     if (InGlobal()) {
       Error(token, "Not allowed to use __PRETTY_FUNCTION__ here");
     }
     return MakeAstNode<StringLiteralExpr>(
         token, func_def_->GetFuncType()->ToString() + ": " +
-                   func_def_->GetFuncType()->FuncGetName() + '\0');
+                   func_def_->GetFuncType()->FuncGetName());
   } else {
     Error(token, "'{}' unexpected", token.GetStr());
   }
@@ -1099,16 +1099,13 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
     case Encoding::kUtf8:
     case Encoding::kNone:
       type_spec = kChar;
-      str.append(1, '\0');
       break;
     case Encoding::kChar16:
       type_spec = kShort | kUnsigned;
-      str.append(2, '\0');
       break;
     case Encoding::kChar32:
     case Encoding::kWchar:
       type_spec = kInt | kUnsigned;
-      str.append(4, '\0');
       break;
     default:
       assert(false);
@@ -1937,11 +1934,12 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
                                          std::uint32_t storage_class_spec,
                                          std::uint32_t func_spec,
                                          std::int32_t align) {
+  auto token{Peek()};
   Token tok;
   ParseDeclarator(tok, base_type);
 
   if (std::empty(tok.GetStr())) {
-    Error(tok, "expect identifier");
+    Error(token, "expect identifier");
   }
 
   auto decl{
@@ -2563,7 +2561,6 @@ Expr* Parser::ParseTypeid() {
   Expect(Tag::kRightParen);
 
   auto str{expr->GetType()->ToString()};
-  str += '\0';
   return MakeAstNode<StringLiteralExpr>(token, str);
 }
 

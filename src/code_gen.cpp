@@ -59,7 +59,11 @@ void CodeGen::GenCode(const TranslationUnit* root) {
   root->Accept(*this);
 
   if (llvm::verifyModule(*Module, &llvm::errs())) {
+#ifdef DEV
+    Warning("module is broken");
+#else
     Error("module is broken");
+#endif
   }
 }
 
