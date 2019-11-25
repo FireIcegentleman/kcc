@@ -10,6 +10,9 @@ namespace kcc {
 
 bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
           const std::string &output_file) {
+  /*
+   * Platform Specific Code
+   */
   std::vector<const char *> args{
       "-pie",
       "--eh-frame-hdr",
@@ -42,6 +45,9 @@ bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/crtendS.o",
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
       "crtn.o"};
+  /*
+   * End of Platform Specific Code
+   */
 
   for (const auto &item : obj_file) {
     args.push_back(item.c_str());

@@ -82,9 +82,9 @@ class AstNode {
   virtual void Accept(Visitor& visitor) const = 0;
   virtual void Check() = 0;
 
-  QString KindQStr() const;
+  QString KindQString() const;
 
-  Location GetLoc() const;
+  const Location& GetLoc() const;
   void SetLoc(const Location& loc);
 
  protected:

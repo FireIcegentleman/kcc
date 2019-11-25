@@ -193,7 +193,7 @@ void CodeGen::Visit(const BinaryOpExpr& node) {
   node.GetRHS()->Accept(*this);
   auto rhs{result_};
 
-  bool is_unsigned{node.GetType()->IsUnsigned()};
+  bool is_unsigned{node.GetLHS()->GetType()->IsUnsigned()};
 
   switch (node.GetOp()) {
     case Tag::kPlus:
