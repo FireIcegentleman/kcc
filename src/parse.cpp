@@ -70,7 +70,7 @@ void Parser::EnterBlock(Type* func_type) {
 
   if (func_type) {
     for (const auto& param : func_type->FuncGetParams()) {
-      scope_->InsertUsual(param->GetName(), param);
+      scope_->InsertUsual(param);
     }
   }
 }
@@ -115,6 +115,25 @@ bool Parser::IsDecl(const Token& tok) {
 
 bool Parser::InGlobal() const { return func_def_ == nullptr; }
 
+std::int64_t Parser::ParseInt64Constant() {
+  auto expr{ParseExpr()};
+  if (!expr->GetType()->IsIntegerTy()) {
+    Error(expr, "expect integer");
+  }
+
+  auto val{CalcConstantExpr{}.CalcInteger(expr)};
+
+  return val;
+}
+
+LabelStmt* Parser::FindLabel(const std::string& name) const {
+  if (auto iter{labels_.find(name)}; iter != std::end(labels_)) {
+    return iter->second;
+  } else {
+    return nullptr;
+  }
+}
+
 Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
                                      std::uint32_t storage_class_spec,
                                      std::uint32_t func_spec,
@@ -139,9 +158,12 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
     } else {
       scope_->InsertUsual(
           name, MakeAstNode<IdentifierExpr>(token, name, type, kNone, true));
-      if (type->IsStructOrUnionTy()) {
+
+      // 如果没有名字, 将 typedef 的名字给该 struct / union
+      if (type->IsStructOrUnionTy() && !type->StructHasName()) {
         type->StructSetName(name);
       }
+
       return nullptr;
     }
   } else if (storage_class_spec & kRegister) {
@@ -192,25 +214,21 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
       }
     }
 
-    if (!ident->GetType()->IsComplete()) {
-      ident->GetType()->SetComplete(type->IsComplete());
-    }
-
     // extern int a;
     // int a = 1;
-    if (auto p{dynamic_cast<ObjectExpr*>(ident)}; p) {
+    if (auto obj{ident->ToObjectExpr()}) {
       if (!(storage_class_spec & kExtern)) {
-        p->SetStorageClassSpec(p->GetStorageClassSpec() & ~kExtern);
+        obj->SetStorageClassSpec(obj->GetStorageClassSpec() & ~kExtern);
       }
-    }
 
-    if (ident->IsObject()) {
-      auto decl{dynamic_cast<ObjectExpr*>(ident)->GetDecl()};
+      auto decl{ident->ToObjectExpr()->GetDecl()};
       assert(decl != nullptr);
       return decl;
     }
   }
 
+  // int a;
+  // { extern int a;}
   if (storage_class_spec & kExtern) {
     ident = scope_->FindUsual(name);
     if (ident) {
@@ -219,25 +237,26 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
               ident->GetType()->ToString());
       }
 
-      if (linkage != ident->GetLinkage()) {
-        linkage = ident->GetLinkage();
+      if (ident->IsObject()) {
+        auto decl{ident->ToObjectExpr()->GetDecl()};
+        assert(decl != nullptr);
+        return decl;
       }
     }
   }
 
-  IdentifierExpr* ret;
   if (type->IsFunctionTy()) {
     if (align > 0) {
       Error(token, "'_Alignas' attribute applies to func");
-    } else if (func_spec != 0) {
-      type->FuncSetFuncSpec(func_spec);
     }
 
+    type->FuncSetFuncSpec(func_spec);
     type->FuncSetName(name);
-    ret = MakeAstNode<IdentifierExpr>(token, name, type, linkage, false);
 
-    scope_->InsertUsual(name, ret);
-    return MakeAstNode<Declaration>(token, ret);
+    ident = MakeAstNode<IdentifierExpr>(token, name, type, linkage, false);
+    scope_->InsertUsual(name, ident);
+
+    return MakeAstNode<Declaration>(token, ident);
   } else {
     auto obj{MakeAstNode<ObjectExpr>(token, name, type, storage_class_spec,
                                      linkage, false)};
@@ -250,16 +269,15 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
         Error(token,
               "requested alignment is less than minimum alignment of {} for "
               "type '{}'",
-              type->GetWidth(), type->ToString());
+              type->GetWidth(), type.ToString());
       }
       obj->SetAlign(align);
     }
 
-    ret = obj;
-
-    scope_->InsertUsual(name, ret);
-    auto decl{MakeAstNode<Declaration>(token, ret)};
+    scope_->InsertUsual(obj);
+    auto decl{MakeAstNode<Declaration>(token, obj)};
     obj->SetDecl(decl);
+
     return decl;
   }
 }
@@ -302,12 +320,13 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
   auto ret{func_def_};
   ExitFunc();
 
-  for (auto&& goto_item : gotos_) {
-    auto label{FindLabel(goto_item->GetName())};
+  // label 具有函数作用域
+  for (auto&& item : gotos_) {
+    auto label{FindLabel(item->GetName())};
     if (label) {
-      goto_item->SetLabel(label);
+      item->SetLabel(label);
     } else {
-      Error(goto_item->GetLoc(), "unknowen label: {}", goto_item->GetName());
+      Error(item->GetLoc(), "unknown label: {}", item->GetName());
     }
   }
   gotos_.clear();
@@ -1065,18 +1084,19 @@ Expr* Parser::ParseFloat() {
   return MakeAstNode<ConstantExpr>(tok, ArithmeticType::Get(type_spec), val);
 }
 
-StringLiteralExpr* Parser::ParseStringLiteral() {
+StringLiteralExpr* Parser::ParseStringLiteral(bool handle_escape) {
   auto loc{Peek().GetLoc()};
   // 如果一个没有指定编码而另一个指定了那么可以连接
   // 两个都指定了不能连接
   auto tok{Expect(Tag::kStringLiteral)};
-  auto [str,
-        encoding]{Scanner{tok.GetStr(), tok.GetLoc()}.HandleStringLiteral()};
+  auto [str, encoding]{
+      Scanner{tok.GetStr(), tok.GetLoc()}.HandleStringLiteral(handle_escape)};
   ConvertString(str, encoding);
 
   while (Test(Tag::kStringLiteral)) {
     tok = Next();
-    auto [next_str, next_encoding]{Scanner{tok.GetStr()}.HandleStringLiteral()};
+    auto [next_str, next_encoding]{
+        Scanner{tok.GetStr()}.HandleStringLiteral(handle_escape)};
     ConvertString(next_str, next_encoding);
 
     if (encoding == Encoding::kNone && next_encoding != Encoding::kNone) {
@@ -1440,8 +1460,7 @@ void Parser::ParseStaticAssertDecl() {
   auto expr{ParseConstantExpr()};
   Expect(Tag::kComma);
 
-  // TODO 不处理转义序列
-  auto msg{ParseStringLiteral()->GetStr()};
+  auto msg{ParseStringLiteral(false)->GetStr()};
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
@@ -1488,7 +1507,7 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
     tok = Next();
 
     switch (tok.GetTag()) {
-      // GNU 扩展
+      // GCC 扩展
       case Tag::kExtension:
         break;
       case Tag::kTypeof:
@@ -1689,9 +1708,8 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
       // 无前向声明
       if (!tag) {
         auto type{StructType::Get(is_struct, tag_name, scope_)};
-        auto ident{
-            MakeAstNode<IdentifierExpr>(tok, tag_name, type, kNone, true)};
-        scope_->InsertTag(tag_name, ident);
+        auto ident{MakeAstNode<IdentifierExpr>(tok, tag_name, type)};
+        scope_->InsertTag(ident);
 
         ParseStructDeclList(type);
         Expect(Tag::kRightBrace);
@@ -1714,9 +1732,8 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
         return tag->GetType();
       } else {
         auto type{StructType::Get(is_struct, tag_name, scope_)};
-        auto ident{
-            MakeAstNode<IdentifierExpr>(tok, tag_name, type, kNone, true)};
-        scope_->InsertTag(tag_name, ident);
+        auto ident{MakeAstNode<IdentifierExpr>(tok, tag_name, type)};
+        scope_->InsertTag(ident);
         return type;
       }
     }
@@ -1835,8 +1852,7 @@ Type* Parser::ParseEnumSpec() {
 
       if (!tag) {
         auto type{ArithmeticType::Get(32)};
-        auto ident{
-            MakeAstNode<IdentifierExpr>(tok, tag_name, type, kNone, true)};
+        auto ident{MakeAstNode<IdentifierExpr>(tok, tag_name, type)};
         scope_->InsertTag(tag_name, ident);
         ParseEnumerator();
 
@@ -2852,15 +2868,6 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
       llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
 }
 
-LabelStmt* Parser::FindLabel(const std::string& name) const {
-  auto iter{labels_.find(name)};
-  if (iter != std::end(labels_)) {
-    return iter->second;
-  } else {
-    return nullptr;
-  }
-}
-
 void Parser::AddBuiltin() {
   auto loc{unit_->GetLoc()};
 
@@ -2916,17 +2923,6 @@ Expr* Parser::TryParseStmtExpr() {
   }
 
   return nullptr;
-}
-
-std::int64_t Parser::ParseInt64Constant() {
-  auto expr{ParseExpr()};
-  if (!expr->GetType()->IsIntegerTy()) {
-    Error(expr, "expect integer");
-  }
-
-  auto val{CalcConstantExpr{}.CalcInteger(expr)};
-
-  return val;
 }
 
 }  // namespace kcc

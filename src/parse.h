@@ -7,10 +7,9 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <map>
-#include <set>
 #include <stack>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -48,6 +47,7 @@ class Parser {
   bool IsDecl(const Token& tok);
   bool InGlobal() const;
   std::int64_t ParseInt64Constant();
+  LabelStmt* FindLabel(const std::string& name) const;
   Declaration* MakeDeclaration(const Token& token, QualType type,
                                std::uint32_t storage_class_spec,
                                std::uint32_t func_spec, std::int32_t align);
@@ -90,7 +90,7 @@ class Parser {
   Expr* ParseCharacter();
   Expr* ParseInteger();
   Expr* ParseFloat();
-  StringLiteralExpr* ParseStringLiteral();
+  StringLiteralExpr* ParseStringLiteral(bool handle_escape = true);
   Expr* ParseGenericSelection();
   Expr* ParseConstantExpr();
 
@@ -201,8 +201,6 @@ class Parser {
   Expr* ParseOffsetof();
   void AddBuiltin();
 
-  LabelStmt* FindLabel(const std::string& name) const;
-
   TranslationUnit* unit_;
 
   std::vector<Token> tokens_;
@@ -218,7 +216,7 @@ class Parser {
   std::stack<CompoundStmt*> compound_stmt_;
 
   // 非常量初始化时记录索引
-  std::list<std::pair<Type*, std::int32_t>> indexs_;
+  std::vector<std::pair<Type*, std::int32_t>> indexs_;
 };
 
 }  // namespace kcc

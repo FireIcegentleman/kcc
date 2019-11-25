@@ -1306,7 +1306,7 @@ const std::vector<ExtDecl*>& TranslationUnit::GetExtDecl() const {
  * Initializer
  */
 Initializer::Initializer(Type* type, Expr* expr,
-                         std::list<std::pair<Type*, std::int32_t>> indexs)
+                         std::vector<std::pair<Type*, std::int32_t>> indexs)
     : type_(type), expr_(expr), indexs_{std::move(indexs)} {
   assert(type != nullptr && expr != nullptr);
 }
@@ -1326,7 +1326,7 @@ const Expr* Initializer::GetExpr() const {
   return expr_;
 }
 
-const std::list<std::pair<Type*, std::int32_t>>& Initializer::GetIndexs()
+const std::vector<std::pair<Type*, std::int32_t>>& Initializer::GetIndexs()
     const {
   return indexs_;
 }

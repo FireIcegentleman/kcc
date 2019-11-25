@@ -28,7 +28,7 @@ class Scanner {
 
   std::string HandleIdentifier();
   std::pair<std::int32_t, Encoding> HandleCharacter();
-  std::pair<std::string, Encoding> HandleStringLiteral();
+  std::pair<std::string, Encoding> HandleStringLiteral(bool handle_escape);
 
  private:
   bool HasNext();

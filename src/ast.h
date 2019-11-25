@@ -728,17 +728,17 @@ class TranslationUnit : public AstNode {
 class Initializer {
  public:
   Initializer(Type* type, Expr* expr,
-              std::list<std::pair<Type*, std::int32_t>> indexs);
+              std::vector<std::pair<Type*, std::int32_t>> indexs);
 
   Type* GetType() const;
   Expr*& GetExpr();
   const Expr* GetExpr() const;
-  const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
+  const std::vector<std::pair<Type*, std::int32_t>>& GetIndexs() const;
 
  private:
   Type* type_;
   Expr* expr_;
-  std::list<std::pair<Type*, std::int32_t>> indexs_;
+  std::vector<std::pair<Type*, std::int32_t>> indexs_;
 };
 
 class Declaration : public Stmt {

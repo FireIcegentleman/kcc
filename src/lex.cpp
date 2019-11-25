@@ -102,7 +102,8 @@ std::pair<std::int32_t, Encoding> Scanner::HandleCharacter() {
   return {val, encoding};
 }
 
-std::pair<std::string, Encoding> Scanner::HandleStringLiteral() {
+std::pair<std::string, Encoding> Scanner::HandleStringLiteral(
+    bool handle_escape) {
   auto encoding{HandleEncoding()};
   std::string s;
   // eat "
@@ -112,11 +113,11 @@ std::pair<std::string, Encoding> Scanner::HandleStringLiteral() {
     std::int32_t ch{Next(false)};
     bool is_ucn{IsUCN(ch)};
 
-    if (ch == '\\') {
+    if (handle_escape && ch == '\\') {
       ch = HandleEscape();
     }
 
-    if (is_ucn) {
+    if (handle_escape && is_ucn) {
       AppendUCN(s, ch);
     } else {
       s.push_back(ch);
