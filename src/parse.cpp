@@ -18,9 +18,10 @@
 
 namespace kcc {
 
-Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {
-  Module = std::make_unique<llvm::Module>("fuck", Context);
-  unit_ = MakeAstNode<TranslationUnit>();
+Parser::Parser(std::vector<Token> tokens, const std::string& file_name)
+    : tokens_{std::move(tokens)} {
+  Module = std::make_unique<llvm::Module>(file_name, Context);
+  unit_ = MakeAstNode<TranslationUnit>(Peek());
   AddBuiltin();
 }
 
@@ -62,8 +63,6 @@ Token Parser::Expect(Tag tag) {
   }
 }
 
-void Parser::MarkLoc() { loc_ = Peek().GetLoc(); }
-
 void Parser::EnterBlock(Type* func_type) {
   scope_ = Scope::Get(scope_, kBlock);
 
@@ -77,7 +76,7 @@ void Parser::EnterBlock(Type* func_type) {
 void Parser::ExitBlock() { scope_ = scope_->GetParent(); }
 
 void Parser::EnterFunc(IdentifierExpr* ident) {
-  func_def_ = MakeAstNode<FuncDef>(ident);
+  func_def_ = MakeAstNode<FuncDef>(ident->GetLoc(), ident);
 }
 
 void Parser::ExitFunc() { func_def_ = nullptr; }
@@ -114,28 +113,30 @@ bool Parser::IsDecl(const Token& tok) {
 
 bool Parser::InGlobal() const { return func_def_ == nullptr; }
 
-Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
+Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
                                      std::uint32_t storage_class_spec,
                                      std::uint32_t func_spec,
                                      std::int32_t align) {
+  auto name{token.GetIdentifier()};
+
   if (storage_class_spec & kTypedef) {
     if (align > 0) {
-      Error(loc_, "'_Alignas' attribute applies to typedef");
+      Error(token, "'_Alignas' attribute applies to typedef");
     }
 
     auto ident{scope_->FindUsualInCurrScope(name)};
     if (ident) {
       // 如果两次定义的类型兼容是可以的
       if (!type->Compatible(ident->GetType())) {
-        Error(loc_, "typedef redefinition with different types '{}' vs '{}'",
+        Error(token, "typedef redefinition with different types '{}' vs '{}'",
               type->ToString(), ident->GetType()->ToString());
       } else {
-        Warning(loc_, "Typedef redefinition");
+        Warning(token, "Typedef redefinition");
         return nullptr;
       }
     } else {
-      scope_->InsertUsual(name,
-                          MakeAstNode<IdentifierExpr>(name, type, kNone, true));
+      scope_->InsertUsual(
+          name, MakeAstNode<IdentifierExpr>(token, name, type, kNone, true));
       if (type->IsStructOrUnionTy()) {
         type->StructSetName(name);
       }
@@ -143,14 +144,14 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     }
   } else if (storage_class_spec & kRegister) {
     if (align > 0) {
-      Error(loc_, "'_Alignas' attribute applies to register");
+      Error(token, "'_Alignas' attribute applies to register");
     }
   }
 
   if (type->IsVoidTy()) {
-    Error(loc_, "variable or field '{}' declared void", name);
+    Error(token, "variable or field '{}' declared void", name);
   } else if (type->IsFunctionTy() && !scope_->IsFileScope()) {
-    Error(loc_, "function declaration is not allowed here");
+    Error(token, "function declaration is not allowed here");
   }
 
   Linkage linkage;
@@ -168,24 +169,24 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
   //有链接对象(外部或内部)的声明可以重复
   if (ident) {
     if (!type->Compatible(ident->GetType())) {
-      Error(loc_, "conflicting types '{}' vs '{}'", type->ToString(),
+      Error(token, "conflicting types '{}' vs '{}'", type->ToString(),
             ident->GetType()->ToString());
     }
 
     if (linkage == kNone) {
-      Error(loc_, "redefinition of '{}'", name);
+      Error(token, "redefinition of '{}'", name);
     } else if (linkage == kExternal) {
       // static int a = 1;
       // extern int a;
       // 这种情况是可以的
       if (ident->GetLinkage() == kNone) {
-        Error(loc_, "conflicting linkage '{}'", name);
+        Error(token, "conflicting linkage '{}'", name);
       } else {
         linkage = ident->GetLinkage();
       }
     } else {
       if (ident->GetLinkage() != kInternal) {
-        Error(loc_, "conflicting linkage '{}'", name);
+        Error(token, "conflicting linkage '{}'", name);
       }
     }
 
@@ -212,7 +213,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     ident = scope_->FindUsual(name);
     if (ident) {
       if (!type->Compatible(ident->GetType())) {
-        Error(loc_, "conflicting types '{}' vs '{}'", type->ToString(),
+        Error(token, "conflicting types '{}' vs '{}'", type->ToString(),
               ident->GetType()->ToString());
       }
 
@@ -225,26 +226,26 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
   IdentifierExpr* ret;
   if (type->IsFunctionTy()) {
     if (align > 0) {
-      Error(loc_, "'_Alignas' attribute applies to func");
+      Error(token, "'_Alignas' attribute applies to func");
     } else if (func_spec != 0) {
       type->FuncSetFuncSpec(func_spec);
     }
 
     type->FuncSetName(name);
-    ret = MakeAstNode<IdentifierExpr>(name, type, linkage, false);
+    ret = MakeAstNode<IdentifierExpr>(token, name, type, linkage, false);
 
     scope_->InsertUsual(name, ret);
-    return MakeAstNode<Declaration>(ret);
+    return MakeAstNode<Declaration>(token, ret);
   } else {
-    auto obj{MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage,
-                                     false)};
+    auto obj{MakeAstNode<ObjectExpr>(token, name, type, storage_class_spec,
+                                     linkage, false)};
     if (func_def_) {
       obj->SetFuncName(func_def_->GetFuncType()->FuncGetName());
     }
 
     if (align > 0) {
       if (align < type->GetWidth()) {
-        Error(loc_,
+        Error(token,
               "requested alignment is less than minimum alignment of {} for "
               "type '{}'",
               type->GetWidth(), type->ToString());
@@ -255,7 +256,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     ret = obj;
 
     scope_->InsertUsual(name, ret);
-    auto decl{MakeAstNode<Declaration>(ret)};
+    auto decl{MakeAstNode<Declaration>(token, ret)};
     obj->SetDecl(decl);
     return decl;
   }
@@ -267,6 +268,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
 ExtDecl* Parser::ParseExternalDecl() {
   auto ext_decl{ParseDecl(true)};
 
+  // _Static_assert / e.g. int;
   if (ext_decl == nullptr) {
     return nullptr;
   }
@@ -274,11 +276,10 @@ ExtDecl* Parser::ParseExternalDecl() {
   TryParseAsm();
   TryParseAttributeSpec();
 
-  MarkLoc();
   if (Test(Tag::kLeftBrace)) {
     auto stmt{ext_decl->GetStmts()};
     if (std::size(stmt) != 1) {
-      Error(loc_, "unexpect left braces");
+      Error(Peek(), "unexpect left braces");
     }
 
     return ParseFuncDef(dynamic_cast<Declaration*>(stmt.front()));
@@ -317,25 +318,21 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
  * Expr
  */
 Expr* Parser::ParseExpr() {
+  // GCC 扩展, 当使用 -ansi 时避免警告
   Try(Tag::kExtension);
 
-  // GNU 扩展, 语句表达式
-  if (Try(Tag::kLeftParen)) {
-    if (Test(Tag::kLeftBrace)) {
-      return ParseStmtExpr();
-    } else {
-      PutBack();
-    }
+  // GCC 扩展, 语句表达式
+  if (auto expr{TryParseStmtExpr()}) {
+    return expr;
   }
 
   auto lhs{ParseAssignExpr()};
 
-  MarkLoc();
+  auto token{Peek()};
   while (Try(Tag::kComma)) {
     auto rhs{ParseAssignExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kComma, lhs, rhs);
-
-    MarkLoc();
+    lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kComma, lhs, rhs);
+    token = Peek();
   }
 
   return lhs;
@@ -345,62 +342,58 @@ Expr* Parser::ParseAssignExpr() {
   Try(Tag::kExtension);
 
   // 因为有很多是直接调用该函数而不是 ParseExpr
-  if (Try(Tag::kLeftParen)) {
-    if (Test(Tag::kLeftBrace)) {
-      return ParseStmtExpr();
-    } else {
-      PutBack();
-    }
+  // 所以需要再做一遍
+  if (auto expr{TryParseStmtExpr()}) {
+    return expr;
   }
 
   auto lhs{ParseConditionExpr()};
   Expr* rhs;
 
-  MarkLoc();
-
-  switch (Next().GetTag()) {
+  auto token{Next()};
+  switch (token.GetTag()) {
     case Tag::kEqual:
       rhs = ParseAssignExpr();
       break;
     case Tag::kStarEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kStar, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kStar, lhs, rhs);
       break;
     case Tag::kSlashEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kSlash, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kSlash, lhs, rhs);
       break;
     case Tag::kPercentEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kPercent, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kPercent, lhs, rhs);
       break;
     case Tag::kPlusEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kPlus, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kPlus, lhs, rhs);
       break;
     case Tag::kMinusEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kMinus, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kMinus, lhs, rhs);
       break;
     case Tag::kLessLessEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kLessLess, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kLessLess, lhs, rhs);
       break;
     case Tag::kGreaterGreaterEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kGreaterGreater, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kGreaterGreater, lhs, rhs);
       break;
     case Tag::kAmpEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kAmp, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kAmp, lhs, rhs);
       break;
     case Tag::kCaretEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kCaret, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kCaret, lhs, rhs);
       break;
     case Tag::kPipeEqual:
       rhs = ParseAssignExpr();
-      rhs = MakeAstNode<BinaryOpExpr>(Tag::kPipe, lhs, rhs);
+      rhs = MakeAstNode<BinaryOpExpr>(token, Tag::kPipe, lhs, rhs);
       break;
     default: {
       PutBack();
@@ -408,24 +401,21 @@ Expr* Parser::ParseAssignExpr() {
     }
   }
 
-  // TODO 代码报错位置不对
-  MarkLoc();
-  return MakeAstNode<BinaryOpExpr>(Tag::kEqual, lhs, rhs);
+  return MakeAstNode<BinaryOpExpr>(token, Tag::kEqual, lhs, rhs);
 }
 
 Expr* Parser::ParseConditionExpr() {
   auto cond{ParseLogicalOrExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   if (Try(Tag::kQuestion)) {
-    // GNU 扩展
+    // GCC 扩展
     // a ?: b 相当于 a ? a: c
     auto lhs{Test(Tag::kColon) ? cond : ParseExpr()};
     Expect(Tag::kColon);
     auto rhs{ParseConditionExpr()};
 
-    return MakeAstNode<ConditionOpExpr>(cond, lhs, rhs);
+    return MakeAstNode<ConditionOpExpr>(token, cond, lhs, rhs);
   }
 
   return cond;
@@ -434,13 +424,11 @@ Expr* Parser::ParseConditionExpr() {
 Expr* Parser::ParseLogicalOrExpr() {
   auto lhs{ParseLogicalAndExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (Try(Tag::kPipePipe)) {
     auto rhs{ParseLogicalAndExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kPipePipe, lhs, rhs);
-
-    MarkLoc();
+    lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kPipePipe, lhs, rhs);
+    token = Peek();
   }
 
   return lhs;
@@ -449,13 +437,11 @@ Expr* Parser::ParseLogicalOrExpr() {
 Expr* Parser::ParseLogicalAndExpr() {
   auto lhs{ParseInclusiveOrExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (Try(Tag::kAmpAmp)) {
     auto rhs{ParseInclusiveOrExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kAmpAmp, lhs, rhs);
-
-    MarkLoc();
+    lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kAmpAmp, lhs, rhs);
+    token = Peek();
   }
 
   return lhs;
@@ -464,13 +450,11 @@ Expr* Parser::ParseLogicalAndExpr() {
 Expr* Parser::ParseInclusiveOrExpr() {
   auto lhs{ParseExclusiveOrExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (Try(Tag::kPipe)) {
     auto rhs{ParseExclusiveOrExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kPipe, lhs, rhs);
-
-    MarkLoc();
+    lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kPipe, lhs, rhs);
+    token = Peek();
   }
 
   return lhs;
@@ -479,13 +463,11 @@ Expr* Parser::ParseInclusiveOrExpr() {
 Expr* Parser::ParseExclusiveOrExpr() {
   auto lhs{ParseAndExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (Try(Tag::kCaret)) {
     auto rhs{ParseAndExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kCaret, lhs, rhs);
-
-    MarkLoc();
+    lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kCaret, lhs, rhs);
+    token = Peek();
   }
 
   return lhs;
@@ -494,13 +476,11 @@ Expr* Parser::ParseExclusiveOrExpr() {
 Expr* Parser::ParseAndExpr() {
   auto lhs{ParseEqualityExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (Try(Tag::kAmp)) {
     auto rhs{ParseEqualityExpr()};
-    lhs = MakeAstNode<BinaryOpExpr>(Tag::kAmp, lhs, rhs);
-
-    MarkLoc();
+    lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kAmp, lhs, rhs);
+    token = Peek();
   }
 
   return lhs;
@@ -509,20 +489,18 @@ Expr* Parser::ParseAndExpr() {
 Expr* Parser::ParseEqualityExpr() {
   auto lhs{ParseRelationExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (true) {
     if (Try(Tag::kEqualEqual)) {
       auto rhs{ParseRelationExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kEqualEqual, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kEqualEqual, lhs, rhs);
     } else if (Try(Tag::kExclaimEqual)) {
       auto rhs{ParseRelationExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kExclaimEqual, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kExclaimEqual, lhs, rhs);
     } else {
       break;
     }
+    token = Peek();
   }
 
   return lhs;
@@ -531,28 +509,24 @@ Expr* Parser::ParseEqualityExpr() {
 Expr* Parser::ParseRelationExpr() {
   auto lhs{ParseShiftExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (true) {
     if (Try(Tag::kLess)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kLess, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kLess, lhs, rhs);
     } else if (Try(Tag::kGreater)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kGreater, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kGreater, lhs, rhs);
     } else if (Try(Tag::kLessEqual)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kLessEqual, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kLessEqual, lhs, rhs);
     } else if (Try(Tag::kGreaterEqual)) {
       auto rhs{ParseShiftExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kGreaterEqual, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kGreaterEqual, lhs, rhs);
     } else {
       break;
     }
+    token = Peek();
   }
 
   return lhs;
@@ -561,20 +535,18 @@ Expr* Parser::ParseRelationExpr() {
 Expr* Parser::ParseShiftExpr() {
   auto lhs{ParseAdditiveExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (true) {
     if (Try(Tag::kLessLess)) {
       auto rhs{ParseAdditiveExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kLessLess, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kLessLess, lhs, rhs);
     } else if (Try(Tag::kGreaterGreater)) {
       auto rhs{ParseAdditiveExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kGreaterGreater, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kGreaterGreater, lhs, rhs);
     } else {
       break;
     }
+    token = Peek();
   }
 
   return lhs;
@@ -583,20 +555,18 @@ Expr* Parser::ParseShiftExpr() {
 Expr* Parser::ParseAdditiveExpr() {
   auto lhs{ParseMultiplicativeExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (true) {
     if (Try(Tag::kPlus)) {
       auto rhs{ParseMultiplicativeExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kPlus, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kPlus, lhs, rhs);
     } else if (Try(Tag::kMinus)) {
       auto rhs{ParseMultiplicativeExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kMinus, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kMinus, lhs, rhs);
     } else {
       break;
     }
+    token = Peek();
   }
 
   return lhs;
@@ -605,32 +575,27 @@ Expr* Parser::ParseAdditiveExpr() {
 Expr* Parser::ParseMultiplicativeExpr() {
   auto lhs{ParseCastExpr()};
 
-  MarkLoc();
-
+  auto token{Peek()};
   while (true) {
     if (Try(Tag::kStar)) {
       auto rhs{ParseCastExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kStar, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kStar, lhs, rhs);
     } else if (Try(Tag::kSlash)) {
       auto rhs{ParseCastExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kSlash, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kSlash, lhs, rhs);
     } else if (Try(Tag::kPercent)) {
       auto rhs{ParseCastExpr()};
-      lhs = MakeAstNode<BinaryOpExpr>(Tag::kPercent, lhs, rhs);
-      MarkLoc();
+      lhs = MakeAstNode<BinaryOpExpr>(token, Tag::kPercent, lhs, rhs);
     } else {
       break;
     }
+    token = Peek();
   }
 
   return lhs;
 }
 
 Expr* Parser::ParseCastExpr() {
-  MarkLoc();
-
   if (Try(Tag::kLeftParen)) {
     if (IsTypeName(Peek())) {
       auto type{ParseTypeName()};
@@ -640,7 +605,7 @@ Expr* Parser::ParseCastExpr() {
       if (Test(Tag::kLeftBrace)) {
         return ParsePostfixExprTail(ParseCompoundLiteral(type));
       } else {
-        return MakeAstNode<TypeCastExpr>(ParseCastExpr(), type);
+        return MakeAstNode<TypeCastExpr>(Peek(), ParseCastExpr(), type);
       }
     } else {
       PutBack();
@@ -652,24 +617,26 @@ Expr* Parser::ParseCastExpr() {
 }
 
 Expr* Parser::ParseUnaryExpr() {
-  switch (Next().GetTag()) {
+  auto token{Next()};
+  switch (token.GetTag()) {
     // 默认为前缀
     case Tag::kPlusPlus:
-      return MakeAstNode<UnaryOpExpr>(Tag::kPlusPlus, ParseUnaryExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kPlusPlus, ParseUnaryExpr());
     case Tag::kMinusMinus:
-      return MakeAstNode<UnaryOpExpr>(Tag::kMinusMinus, ParseUnaryExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kMinusMinus,
+                                      ParseUnaryExpr());
     case Tag::kAmp:
-      return MakeAstNode<UnaryOpExpr>(Tag::kAmp, ParseCastExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kAmp, ParseCastExpr());
     case Tag::kStar:
-      return MakeAstNode<UnaryOpExpr>(Tag::kStar, ParseCastExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kStar, ParseCastExpr());
     case Tag::kPlus:
-      return MakeAstNode<UnaryOpExpr>(Tag::kPlus, ParseCastExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kPlus, ParseCastExpr());
     case Tag::kMinus:
-      return MakeAstNode<UnaryOpExpr>(Tag::kMinus, ParseCastExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kMinus, ParseCastExpr());
     case Tag::kTilde:
-      return MakeAstNode<UnaryOpExpr>(Tag::kTilde, ParseCastExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kTilde, ParseCastExpr());
     case Tag::kExclaim:
-      return MakeAstNode<UnaryOpExpr>(Tag::kExclaim, ParseCastExpr());
+      return MakeAstNode<UnaryOpExpr>(token, Tag::kExclaim, ParseCastExpr());
     case Tag::kSizeof:
       return ParseSizeof();
     case Tag::kAlignof:
@@ -686,8 +653,8 @@ Expr* Parser::ParseUnaryExpr() {
 
 Expr* Parser::ParseSizeof() {
   QualType type;
-  MarkLoc();
 
+  auto token{Peek()};
   if (Try(Tag::kLeftParen)) {
     if (!IsTypeName(Peek())) {
       auto expr{ParseExpr()};
@@ -702,11 +669,11 @@ Expr* Parser::ParseSizeof() {
   }
 
   if (!type->IsComplete() && !type->IsVoidTy() && !type->IsFunctionTy()) {
-    Error(loc_, "sizeof(incomplete type)");
+    Error(token, "sizeof(incomplete type)");
   }
 
   return MakeAstNode<ConstantExpr>(
-      ArithmeticType::Get(kLong | kUnsigned),
+      token, ArithmeticType::Get(kLong | kUnsigned),
       static_cast<std::uint64_t>(type->GetWidth()));
 }
 
@@ -715,16 +682,16 @@ Expr* Parser::ParseAlignof() {
 
   Expect(Tag::kLeftParen);
 
-  MarkLoc();
-  if (!IsTypeName(Peek())) {
-    Error(loc_, "expect type name");
+  auto token{Peek()};
+  if (!IsTypeName(token)) {
+    Error(token, "expect type name");
   }
 
   type = ParseTypeName();
   Expect(Tag::kRightParen);
 
   return MakeAstNode<ConstantExpr>(
-      ArithmeticType::Get(kLong | kUnsigned),
+      token, ArithmeticType::Get(kLong | kUnsigned),
       static_cast<std::uint64_t>(type->GetAlign()));
 }
 
@@ -755,8 +722,8 @@ Expr* Parser::TryParseCompoundLiteral() {
 
 Expr* Parser::ParseCompoundLiteral(QualType type) {
   if (InGlobal()) {
-    auto obj{MakeAstNode<ObjectExpr>("", type, 0, kInternal, true)};
-    auto decl{MakeAstNode<Declaration>(obj)};
+    auto obj{MakeAstNode<ObjectExpr>(Peek(), "", type, 0, kInternal, true)};
+    auto decl{MakeAstNode<Declaration>(Peek(), obj)};
 
     decl->SetConstant(
         ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
@@ -766,8 +733,8 @@ Expr* Parser::ParseCompoundLiteral(QualType type) {
 
     return obj;
   } else {
-    auto obj{MakeAstNode<ObjectExpr>("", type, 0, kNone, true)};
-    auto decl{MakeAstNode<Declaration>(obj)};
+    auto obj{MakeAstNode<ObjectExpr>(Peek(), "", type, 0, kNone, true)};
+    auto decl{MakeAstNode<Declaration>(Peek(), obj)};
 
     ParseInitDeclaratorSub(decl);
     compound_stmt_.top()->AddStmt(decl);
@@ -777,9 +744,8 @@ Expr* Parser::ParseCompoundLiteral(QualType type) {
 }
 
 Expr* Parser::ParsePostfixExprTail(Expr* expr) {
+  auto token{Peek()};
   while (true) {
-    MarkLoc();
-
     switch (Next().GetTag()) {
       case Tag::kLeftSquare:
         expr = ParseIndexExpr(expr);
@@ -788,46 +754,46 @@ Expr* Parser::ParsePostfixExprTail(Expr* expr) {
         expr = ParseFuncCallExpr(expr);
         break;
       case Tag::kArrow:
-        expr = MakeAstNode<UnaryOpExpr>(Tag::kStar, expr);
+        expr = MakeAstNode<UnaryOpExpr>(token, Tag::kStar, expr);
         expr = ParseMemberRefExpr(expr);
         break;
       case Tag::kPeriod:
         expr = ParseMemberRefExpr(expr);
         break;
       case Tag::kPlusPlus:
-        expr = MakeAstNode<UnaryOpExpr>(Tag::kPostfixPlusPlus, expr);
+        expr = MakeAstNode<UnaryOpExpr>(token, Tag::kPostfixPlusPlus, expr);
         break;
       case Tag::kMinusMinus:
-        expr = MakeAstNode<UnaryOpExpr>(Tag::kPostfixMinusMinus, expr);
+        expr = MakeAstNode<UnaryOpExpr>(token, Tag::kPostfixMinusMinus, expr);
         break;
       default:
         PutBack();
         return expr;
     }
+    token = Peek();
   }
 }
 
 Expr* Parser::ParseIndexExpr(Expr* expr) {
-  MarkLoc();
-
+  auto token{Peek()};
   auto rhs{ParseExpr()};
   Expect(Tag::kRightSquare);
 
   return MakeAstNode<UnaryOpExpr>(
-      Tag::kStar, MakeAstNode<BinaryOpExpr>(Tag::kPlus, expr, rhs));
+      token, Tag::kStar,
+      MakeAstNode<BinaryOpExpr>(token, Tag::kPlus, expr, rhs));
 }
 
 Expr* Parser::ParseFuncCallExpr(Expr* expr) {
-  MarkLoc();
-
   std::vector<Expr*> args;
+
   if (expr->GetType()->IsFunctionTy() &&
       expr->GetType()->FuncGetName() == "__builtin_va_arg_sub") {
     args.push_back(ParseAssignExpr());
     Expect(Tag::kComma);
     auto type{ParseTypeName()};
     Expect(Tag::kRightParen);
-    auto ret{MakeAstNode<FuncCallExpr>(expr, args)};
+    auto ret{MakeAstNode<FuncCallExpr>(expr->GetLoc(), expr, args)};
     ret->SetVaArgType(type.GetType());
     return ret;
   }
@@ -840,31 +806,31 @@ Expr* Parser::ParseFuncCallExpr(Expr* expr) {
     }
   }
 
-  return MakeAstNode<FuncCallExpr>(expr, args);
+  return MakeAstNode<FuncCallExpr>(expr->GetLoc(), expr, args);
 }
 
 Expr* Parser::ParseMemberRefExpr(Expr* expr) {
-  MarkLoc();
+  auto token{Peek()};
 
   auto member{Expect(Tag::kIdentifier)};
   auto member_name{member.GetIdentifier()};
 
-  auto type{expr->GetType()};
+  auto type{expr->GetQualType()};
   if (!type->IsStructOrUnionTy()) {
-    Error(loc_, "an struct/union expected: '{}'", type->ToString());
+    Error(expr, "an struct/union expected: '{}'", type.ToString());
   }
 
   auto rhs{type->StructGetMember(member_name)};
   if (!rhs) {
-    Error(loc_, "'{}' is not a member of '{}'", member_name,
+    Error(member, "'{}' is not a member of '{}'", member_name,
           type->StructGetName());
   }
 
-  return MakeAstNode<BinaryOpExpr>(Tag::kPeriod, expr, rhs);
+  return MakeAstNode<BinaryOpExpr>(token, Tag::kPeriod, expr, rhs);
 }
 
 Expr* Parser::ParsePrimaryExpr() {
-  MarkLoc();
+  auto token{Peek()};
 
   if (Peek().IsIdentifier()) {
     auto name{Next().GetIdentifier()};
@@ -873,7 +839,7 @@ Expr* Parser::ParsePrimaryExpr() {
     if (ident) {
       return ident;
     } else {
-      Error(loc_, "undefined symbol: {}", name);
+      Error(token, "undefined symbol: {}", name);
     }
   } else if (Peek().IsConstant()) {
     return ParseConstant();
@@ -886,19 +852,19 @@ Expr* Parser::ParsePrimaryExpr() {
   } else if (Try(Tag::kGeneric)) {
     return ParseGenericSelection();
   } else if (Try(Tag::kFuncName)) {
-    if (func_def_ == nullptr) {
-      Error(loc_, "Not allowed to use __func__ or __FUNCTION__ here");
+    if (InGlobal()) {
+      Error(token, "Not allowed to use __func__ or __FUNCTION__ here");
     }
-    return MakeAstNode<StringLiteralExpr>(func_def_->GetName() + '\0');
+    return MakeAstNode<StringLiteralExpr>(token, func_def_->GetName() + '\0');
   } else if (Try(Tag::kFuncSignature)) {
-    if (func_def_ == nullptr) {
-      Error(loc_, "Not allowed to use __PRETTY_FUNCTION__ here");
+    if (InGlobal()) {
+      Error(token, "Not allowed to use __PRETTY_FUNCTION__ here");
     }
     return MakeAstNode<StringLiteralExpr>(
-        func_def_->GetFuncType()->ToString() + ": " +
-        func_def_->GetFuncType()->FuncGetName() + '\0');
+        token, func_def_->GetFuncType()->ToString() + ": " +
+                   func_def_->GetFuncType()->FuncGetName() + '\0');
   } else {
-    Error(loc_, "{} unexpected", Peek().GetStr());
+    Error(token, "'{}' unexpected", token.GetStr());
   }
 }
 
@@ -916,10 +882,8 @@ Expr* Parser::ParseConstant() {
 }
 
 Expr* Parser::ParseCharacter() {
-  MarkLoc();
-
-  auto tok{Next()};
-  Scanner scanner{tok.GetStr(), loc_};
+  auto token{Next()};
+  Scanner scanner{token.GetStr(), token.GetLoc()};
   auto [val, encoding]{scanner.HandleCharacter()};
 
   std::uint32_t type_spec{};
@@ -941,20 +905,18 @@ Expr* Parser::ParseCharacter() {
       type_spec = kInt | kUnsigned;
       break;
     case Encoding::kUtf8:
-      Error(tok, "Can't use u8 here");
+      Error(token, "Can't use u8 here");
     default:
       assert(false);
   }
 
-  return MakeAstNode<ConstantExpr>(ArithmeticType::Get(type_spec),
+  return MakeAstNode<ConstantExpr>(token, ArithmeticType::Get(type_spec),
                                    static_cast<std::uint64_t>(val));
 }
 
 Expr* Parser::ParseInteger() {
-  MarkLoc();
-
-  auto tok{Next()};
-  auto str{tok.GetStr()};
+  auto token{Next()};
+  auto str{token.GetStr()};
   std::uint64_t val;
   std::size_t end;
 
@@ -969,7 +931,7 @@ Expr* Parser::ParseInteger() {
       val = std::stoull(str, &end, 0);
     }
   } catch (const std::out_of_range& error) {
-    Error(tok, "integer out of range");
+    Error(token, "integer out of range");
   }
 
   auto backup{end};
@@ -977,12 +939,12 @@ Expr* Parser::ParseInteger() {
   for (auto ch{str[end]}; ch != '\0'; ch = str[++end]) {
     if (ch == 'u' || ch == 'U') {
       if (type_spec & kUnsigned) {
-        Error(tok, "invalid suffix: {}", str.substr(backup));
+        Error(token, "invalid suffix: {}", str.substr(backup));
       }
       type_spec |= kUnsigned;
     } else if (ch == 'l' || ch == 'L') {
       if ((type_spec & kLong) || (type_spec & kLongLong)) {
-        Error(tok, "invalid suffix: {}", str.substr(backup));
+        Error(token, "invalid suffix: {}", str.substr(backup));
       }
 
       if (str[end + 1] == 'l' || str[end + 1] == 'L') {
@@ -992,7 +954,7 @@ Expr* Parser::ParseInteger() {
         type_spec |= kLong;
       }
     } else {
-      Error(tok, "invalid suffix: {}", str.substr(backup));
+      Error(token, "invalid suffix: {}", str.substr(backup));
     }
   }
 
@@ -1062,12 +1024,10 @@ Expr* Parser::ParseInteger() {
     }
   }
 
-  return MakeAstNode<ConstantExpr>(ArithmeticType::Get(type_spec), val);
+  return MakeAstNode<ConstantExpr>(token, ArithmeticType::Get(type_spec), val);
 }
 
 Expr* Parser::ParseFloat() {
-  MarkLoc();
-
   auto tok{Next()};
   auto str{tok.GetStr()};
   long double val;
@@ -1100,16 +1060,16 @@ Expr* Parser::ParseFloat() {
     Error(tok, "invalid suffix:{}", str.substr(backup));
   }
 
-  return MakeAstNode<ConstantExpr>(ArithmeticType::Get(type_spec), val);
+  return MakeAstNode<ConstantExpr>(tok, ArithmeticType::Get(type_spec), val);
 }
 
 StringLiteralExpr* Parser::ParseStringLiteral() {
-  MarkLoc();
-
+  auto loc{Peek().GetLoc()};
   // 如果一个没有指定编码而另一个指定了那么可以连接
   // 两个都指定了不能连接
   auto tok{Expect(Tag::kStringLiteral)};
-  auto [str, encoding]{Scanner{tok.GetStr()}.HandleStringLiteral()};
+  auto [str,
+        encoding]{Scanner{tok.GetStr(), tok.GetLoc()}.HandleStringLiteral()};
   ConvertString(str, encoding);
 
   while (Test(Tag::kStringLiteral)) {
@@ -1127,12 +1087,10 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
     }
 
     if (encoding != next_encoding) {
-      Error(loc_, "cannot concat literal with different encodings");
+      Error(loc, "cannot concat literal with different encodings");
     }
 
     str += next_str;
-
-    MarkLoc();
   }
 
   std::uint32_t type_spec{};
@@ -1156,7 +1114,8 @@ StringLiteralExpr* Parser::ParseStringLiteral() {
       assert(false);
   }
 
-  return MakeAstNode<StringLiteralExpr>(ArithmeticType::Get(type_spec), str);
+  return MakeAstNode<StringLiteralExpr>(loc, ArithmeticType::Get(type_spec),
+                                        str);
 }
 
 Expr* Parser::ParseGenericSelection() {
@@ -1168,12 +1127,11 @@ Expr* Parser::ParseGenericSelection() {
   Expr* ret{nullptr};
   Expr* default_expr{nullptr};
 
+  auto token{Peek()};
   while (true) {
-    MarkLoc();
-
     if (Try(Tag::kDefault)) {
       if (default_expr) {
-        Error(loc_, "duplicate default generic association");
+        Error(token, "duplicate default generic association");
       }
 
       Expect(Tag::kColon);
@@ -1183,7 +1141,7 @@ Expr* Parser::ParseGenericSelection() {
 
       if (type->Compatible(control_expr->GetType())) {
         if (ret) {
-          Error(loc_,
+          Error(token,
                 "more than one generic association are compatible with control "
                 "expression");
         }
@@ -1258,74 +1216,55 @@ Stmt* Parser::ParseStmt() {
 }
 
 Stmt* Parser::ParseLabelStmt() {
-  auto tok{Expect(Tag::kIdentifier)};
+  auto token{Expect(Tag::kIdentifier)};
   Expect(Tag::kColon);
 
   TryParseAttributeSpec();
 
-  auto label{MakeAstNode<LabelStmt>(tok.GetIdentifier(), ParseStmt())};
-  labels_[tok.GetIdentifier()] = label;
+  auto name{token.GetIdentifier()};
+  if (FindLabel(name)) {
+    Error(token, "redefine of label: '{}'", token.GetIdentifier());
+  }
+
+  auto label{MakeAstNode<LabelStmt>(token, name, ParseStmt())};
+  labels_[name] = label;
 
   return label;
 }
 
 Stmt* Parser::ParseCaseStmt() {
-  Expect(Tag::kCase);
+  auto token{Expect(Tag::kCase)};
 
-  MarkLoc();
-  auto expr{ParseExpr()};
-  if (!expr->GetType()->IsIntegerTy()) {
-    Error(expr, "expect integer");
-  }
-  auto val{CalcConstantExpr{}.CalcInteger(expr)};
+  auto lhs{ParseInt32Constant()};
 
-  if (val > std::numeric_limits<std::int32_t>::max() ||
-      val < std::numeric_limits<std::int32_t>::min()) {
-    Error(loc_, "case range exceed range of int");
-  }
-
-  // GNU 扩展
   if (Try(Tag::kEllipsis)) {
-    MarkLoc();
-
-    auto expr2{ParseExpr()};
-    if (!expr2->GetType()->IsIntegerTy()) {
-      Error(expr2, "expect integer");
-    }
-    auto val2{CalcConstantExpr{}.CalcInteger(expr2)};
-    if (val2 > std::numeric_limits<std::int32_t>::max() ||
-        val2 < std::numeric_limits<std::int32_t>::min()) {
-      Error(loc_, "case range exceed range of int");
-    }
-
+    auto rhs{ParseInt32Constant()};
     Expect(Tag::kColon);
-
-    return MakeAstNode<CaseStmt>(val, val2, ParseStmt());
+    return MakeAstNode<CaseStmt>(token, lhs, rhs, ParseStmt());
   } else {
     Expect(Tag::kColon);
-    return MakeAstNode<CaseStmt>(val, ParseStmt());
+    return MakeAstNode<CaseStmt>(token, lhs, ParseStmt());
   }
 }
 
 Stmt* Parser::ParseDefaultStmt() {
-  Expect(Tag::kDefault);
+  auto token{Expect(Tag::kDefault)};
   Expect(Tag::kColon);
 
-  return MakeAstNode<DefaultStmt>(ParseStmt());
+  return MakeAstNode<DefaultStmt>(token, ParseStmt());
 }
 
 CompoundStmt* Parser::ParseCompoundStmt(Type* func_type) {
-  Expect(Tag::kLeftBrace);
+  auto token{Expect(Tag::kLeftBrace)};
 
   EnterBlock(func_type);
 
-  auto stmts{MakeAstNode<CompoundStmt>()};
+  auto stmts{MakeAstNode<CompoundStmt>(token)};
   compound_stmt_.push(stmts);
+
   while (!Try(Tag::kRightBrace)) {
     if (IsDecl(Peek())) {
-      if (auto decl{ParseDecl()}; decl) {
-        stmts->AddStmt(decl);
-      }
+      stmts->AddStmt(ParseDecl());
     } else {
       stmts->AddStmt(ParseStmt());
     }
@@ -1338,19 +1277,18 @@ CompoundStmt* Parser::ParseCompoundStmt(Type* func_type) {
 }
 
 Stmt* Parser::ParseExprStmt() {
+  auto token{Peek()};
   if (Try(Tag::kSemicolon)) {
-    return MakeAstNode<ExprStmt>();
+    return MakeAstNode<ExprStmt>(token);
   } else {
-    auto ret{MakeAstNode<ExprStmt>(ParseExpr())};
+    auto ret{MakeAstNode<ExprStmt>(token, ParseExpr())};
     Expect(Tag::kSemicolon);
     return ret;
   }
 }
 
 Stmt* Parser::ParseIfStmt() {
-  MarkLoc();
-
-  Expect(Tag::kIf);
+  auto token{Expect(Tag::kIf)};
 
   Expect(Tag::kLeftParen);
   auto cond{ParseExpr()};
@@ -1358,9 +1296,9 @@ Stmt* Parser::ParseIfStmt() {
 
   auto then_block{ParseStmt()};
   if (Try(Tag::kElse)) {
-    return MakeAstNode<IfStmt>(cond, then_block, ParseStmt());
+    return MakeAstNode<IfStmt>(token, cond, then_block, ParseStmt());
   } else {
-    return MakeAstNode<IfStmt>(cond, then_block);
+    return MakeAstNode<IfStmt>(token, cond, then_block);
   }
 }
 
@@ -1371,25 +1309,21 @@ Stmt* Parser::ParseSwitchStmt() {
   auto cond{ParseExpr()};
   Expect(Tag::kRightParen);
 
-  return MakeAstNode<SwitchStmt>(cond, ParseStmt());
+  return MakeAstNode<SwitchStmt>(token, cond, ParseStmt());
 }
 
 Stmt* Parser::ParseWhileStmt() {
-  MarkLoc();
-
-  Expect(Tag::kWhile);
+  auto token{Expect(Tag::kWhile)};
 
   Expect(Tag::kLeftParen);
   auto cond{ParseExpr()};
   Expect(Tag::kRightParen);
 
-  return MakeAstNode<WhileStmt>(cond, ParseStmt());
+  return MakeAstNode<WhileStmt>(token, cond, ParseStmt());
 }
 
 Stmt* Parser::ParseDoWhileStmt() {
-  MarkLoc();
-
-  Expect(Tag::kDo);
+  auto token{Expect(Tag::kDo)};
 
   auto stmt{ParseStmt()};
 
@@ -1399,13 +1333,11 @@ Stmt* Parser::ParseDoWhileStmt() {
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
-  return MakeAstNode<DoWhileStmt>(cond, stmt);
+  return MakeAstNode<DoWhileStmt>(token, cond, stmt);
 }
 
 Stmt* Parser::ParseForStmt() {
-  MarkLoc();
-
-  Expect(Tag::kFor);
+  auto token{Expect(Tag::kFor)};
   Expect(Tag::kLeftParen);
 
   Expr *init{}, *cond{}, *inc{};
@@ -1433,58 +1365,46 @@ Stmt* Parser::ParseForStmt() {
   block = ParseStmt();
   ExitBlock();
 
-  return MakeAstNode<ForStmt>(init, cond, inc, block, decl);
+  return MakeAstNode<ForStmt>(token, init, cond, inc, block, decl);
 }
 
 Stmt* Parser::ParseGotoStmt() {
-  MarkLoc();
-
   Expect(Tag::kGoto);
   auto tok{Expect(Tag::kIdentifier)};
   Expect(Tag::kSemicolon);
 
-  auto label{FindLabel(tok.GetIdentifier())};
+  auto ret{MakeAstNode<GotoStmt>(tok, tok.GetIdentifier())};
+  gotos_.push_back(ret);
 
-  if (label) {
-    return MakeAstNode<GotoStmt>(label);
-  } else {
-    auto ret{MakeAstNode<GotoStmt>(tok.GetIdentifier())};
-    gotos_.push_back(ret);
-    return ret;
-  }
+  return ret;
 }
 
 Stmt* Parser::ParseContinueStmt() {
-  MarkLoc();
-
-  Expect(Tag::kContinue);
+  auto token{Expect(Tag::kContinue)};
   Expect(Tag::kSemicolon);
 
-  return MakeAstNode<ContinueStmt>();
+  return MakeAstNode<ContinueStmt>(token);
 }
 
 Stmt* Parser::ParseBreakStmt() {
-  MarkLoc();
-
-  Expect(Tag::kBreak);
+  auto token{Expect(Tag::kBreak)};
   Expect(Tag::kSemicolon);
 
-  return MakeAstNode<BreakStmt>();
+  return MakeAstNode<BreakStmt>(token);
 }
 
 Stmt* Parser::ParseReturnStmt() {
-  MarkLoc();
-
-  Expect(Tag::kReturn);
+  auto token{Expect(Tag::kReturn)};
 
   if (Try(Tag::kSemicolon)) {
-    return MakeAstNode<ReturnStmt>();
+    return MakeAstNode<ReturnStmt>(token);
   } else {
     auto expr{ParseExpr()};
+    expr = Expr::MayCastTo(expr, func_def_->GetFuncType()->FuncGetReturnType());
+
     Expect(Tag::kSemicolon);
 
-    expr = Expr::MayCastTo(expr, func_def_->GetFuncType()->FuncGetReturnType());
-    return MakeAstNode<ReturnStmt>(expr);
+    return MakeAstNode<ReturnStmt>(token, expr);
   }
 }
 
@@ -1770,7 +1690,8 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
       // 无前向声明
       if (!tag) {
         auto type{StructType::Get(is_struct, tag_name, scope_)};
-        auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
+        auto ident{
+            MakeAstNode<IdentifierExpr>(tok, tag_name, type, kNone, true)};
         scope_->InsertTag(tag_name, ident);
 
         ParseStructDeclList(type);
@@ -1794,7 +1715,8 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
         return tag->GetType();
       } else {
         auto type{StructType::Get(is_struct, tag_name, scope_)};
-        auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
+        auto ident{
+            MakeAstNode<IdentifierExpr>(tok, tag_name, type, kNone, true)};
         scope_->InsertTag(tag_name, ident);
         return type;
       }
@@ -1845,7 +1767,8 @@ void Parser::ParseStructDeclList(StructType* type) {
         if (std::empty(tok.GetStr())) {
           // 此时该 struct / union 不能有名字
           if (copy->IsStructOrUnionTy() && !copy->StructHasName()) {
-            auto anonymous{MakeAstNode<ObjectExpr>("", copy, 0, kNone, true)};
+            auto anonymous{
+                MakeAstNode<ObjectExpr>(tok, "", copy, 0, kNone, true)};
             type->MergeAnonymous(anonymous);
             continue;
           } else {
@@ -1861,7 +1784,7 @@ void Parser::ParseStructDeclList(StructType* type) {
             // 若结构体定义了至少一个具名成员,
             // 则额外声明其最后成员拥有不完整的数组类型
             if (type->IsStruct() && std::size(type->GetMembers()) > 0) {
-              auto member{MakeAstNode<ObjectExpr>(name, copy)};
+              auto member{MakeAstNode<ObjectExpr>(tok, name, copy)};
               type->AddMember(member);
               Expect(Tag::kSemicolon);
 
@@ -1872,7 +1795,7 @@ void Parser::ParseStructDeclList(StructType* type) {
           } else if (copy->IsFunctionTy()) {
             Error(Peek(), "field '{}' declared as a function", name);
           } else {
-            auto member{MakeAstNode<ObjectExpr>(name, copy)};
+            auto member{MakeAstNode<ObjectExpr>(tok, name, copy)};
             type->AddMember(member);
           }
         }
@@ -1913,7 +1836,8 @@ Type* Parser::ParseEnumSpec() {
 
       if (!tag) {
         auto type{ArithmeticType::Get(32)};
-        auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
+        auto ident{
+            MakeAstNode<IdentifierExpr>(tok, tag_name, type, kNone, true)};
         scope_->InsertTag(tag_name, ident);
         ParseEnumerator();
 
@@ -1959,7 +1883,7 @@ void Parser::ParseEnumerator() {
       val = CalcConstantExpr{}.CalcInteger(expr);
     }
 
-    auto enumer{MakeAstNode<EnumeratorExpr>(tok.GetIdentifier(), val)};
+    auto enumer{MakeAstNode<EnumeratorExpr>(tok, tok.GetIdentifier(), val)};
     ++val;
     scope_->InsertUsual(name, enumer);
 
@@ -1997,7 +1921,7 @@ CompoundStmt* Parser::ParseInitDeclaratorList(QualType& base_type,
                                               std::uint32_t storage_class_spec,
                                               std::uint32_t func_spec,
                                               std::int32_t align) {
-  auto stmts{MakeAstNode<CompoundStmt>()};
+  auto stmts{MakeAstNode<CompoundStmt>(Peek())};
 
   do {
     auto copy{base_type};
@@ -2020,8 +1944,8 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
     Error(tok, "expect identifier");
   }
 
-  auto decl{MakeDeclaration(tok.GetIdentifier(), base_type, storage_class_spec,
-                            func_spec, align)};
+  auto decl{
+      MakeDeclaration(tok, base_type, storage_class_spec, func_spec, align)};
 
   if (decl && Try(Tag::kEqual) && decl->IsObjDecl()) {
     if (!InGlobal() && !(storage_class_spec & kStatic)) {
@@ -2061,22 +1985,22 @@ void Parser::ParsePointer(QualType& type) {
 }
 
 std::uint32_t Parser::ParseTypeQualList() {
-  MarkLoc();
-
   std::uint32_t type_qual{};
 
+  auto token{Peek()};
   while (true) {
     if (Try(Tag::kConst)) {
       type_qual |= kConst;
     } else if (Try(Tag::kRestrict)) {
       type_qual |= kRestrict;
     } else if (Try(Tag::kVolatile)) {
-      Error(loc_, "Does not support volatile");
+      type_qual |= kVolatile;
     } else if (Try(Tag::kAtomic)) {
-      Error(loc_, "Does not support _Atomic");
+      Error(token, "Does not support _Atomic");
     } else {
       break;
     }
+    token = Peek();
   }
 
   return type_qual;
@@ -2165,10 +2089,6 @@ std::size_t Parser::ParseArrayLength() {
 
 std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
   if (Test(Tag::kRightParen)) {
-    //    Warning(
-    //        Peek(),
-    //        "The parameter list is not allowed to be empty, you should use
-    //        void");
     return {{}, false};
   }
 
@@ -2181,15 +2101,14 @@ std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
   params.push_back(param);
 
   while (Try(Tag::kComma)) {
-    MarkLoc();
-
     if (Try(Tag::kEllipsis)) {
       return {params, true};
     }
 
     param = ParseParamDecl();
     if (param->GetType()->IsVoidTy()) {
-      Error(loc_, "'void' must be the first and only parameter if specified");
+      Error(param->GetLoc(),
+            "'void' must be the first and only parameter if specified");
     }
     params.push_back(param);
   }
@@ -2208,10 +2127,10 @@ ObjectExpr* Parser::ParseParamDecl() {
   base_type = Type::MayCast(base_type);
 
   if (std::empty(tok.GetStr())) {
-    return MakeAstNode<ObjectExpr>("", base_type, 0, kNone, true);
+    return MakeAstNode<ObjectExpr>(tok, "", base_type, 0, kNone, true);
   }
 
-  auto decl{MakeDeclaration(tok.GetIdentifier(), base_type, 0, 0, 0)};
+  auto decl{MakeDeclaration(tok, base_type, 0, 0, 0)};
 
   return dynamic_cast<ObjectExpr*>(decl->GetIdent());
 }
@@ -2635,17 +2554,17 @@ QualType Parser::ParseTypeof() {
 Expr* Parser::ParseStmtExpr() {
   auto block{ParseCompoundStmt()};
   Expect(Tag::kRightParen);
-  return MakeAstNode<StmtExpr>(block);
+  return MakeAstNode<StmtExpr>(block->GetLoc(), block);
 }
 
 Expr* Parser::ParseTypeid() {
-  Expect(Tag::kLeftParen);
+  auto token{Expect(Tag::kLeftParen)};
   auto expr{ParseExpr()};
   Expect(Tag::kRightParen);
 
   auto str{expr->GetType()->ToString()};
   str += '\0';
-  return MakeAstNode<StringLiteralExpr>(str);
+  return MakeAstNode<StringLiteralExpr>(token, str);
 }
 
 /*
@@ -2654,8 +2573,9 @@ Expr* Parser::ParseTypeid() {
 Expr* Parser::ParseOffsetof() {
   Expect(Tag::kLeftParen);
 
-  if (!IsTypeName(Peek())) {
-    Error(loc_, "expect type name");
+  auto token{Peek()};
+  if (!IsTypeName(token)) {
+    Error(token, "expect type name");
   }
   auto type{ParseTypeName()};
 
@@ -2664,7 +2584,7 @@ Expr* Parser::ParseOffsetof() {
   Expect(Tag::kRightParen);
 
   return MakeAstNode<ConstantExpr>(
-      ArithmeticType::Get(kLong | kUnsigned),
+      token, ArithmeticType::Get(kLong | kUnsigned),
       static_cast<std::uint64_t>(type->StructGetMember(name)->GetOffset()));
 }
 
@@ -2778,7 +2698,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
   if (has_brace) {
     Try(Tag::kComma);
     if (!Try(Tag::kRightBrace)) {
-      Error(loc_, "excess elements in array initializer");
+      Error(Peek(), "excess elements in array initializer");
     }
   }
 
@@ -2943,24 +2863,26 @@ LabelStmt* Parser::FindLabel(const std::string& name) const {
 }
 
 void Parser::AddBuiltin() {
+  auto loc{unit_->GetLoc()};
+
   auto va_list{StructType::Get(true, "__va_list_tag", scope_)};
   va_list->AddMember(
-      MakeAstNode<ObjectExpr>("gp_offset", ArithmeticType::Get(kInt)));
+      MakeAstNode<ObjectExpr>(loc, "gp_offset", ArithmeticType::Get(kInt)));
   va_list->AddMember(
-      MakeAstNode<ObjectExpr>("fp_offset", ArithmeticType::Get(kInt)));
+      MakeAstNode<ObjectExpr>(loc, "fp_offset", ArithmeticType::Get(kInt)));
   va_list->AddMember(MakeAstNode<ObjectExpr>(
-      "overflow_arg_area", PointerType::Get(VoidType::Get())));
+      loc, "overflow_arg_area", PointerType::Get(VoidType::Get())));
   va_list->AddMember(MakeAstNode<ObjectExpr>(
-      "reg_save_area", PointerType::Get(VoidType::Get())));
+      loc, "reg_save_area", PointerType::Get(VoidType::Get())));
   va_list->SetComplete(true);
 
   scope_->InsertUsual(
       "__builtin_va_list",
-      MakeAstNode<IdentifierExpr>("__builtin_va_list",
+      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_list",
                                   ArrayType::Get(va_list, 1), kNone, true));
 
-  auto param1{MakeAstNode<ObjectExpr>("", va_list->GetPointerTo())};
-  auto param2{MakeAstNode<ObjectExpr>("", ArithmeticType::Get(kInt))};
+  auto param1{MakeAstNode<ObjectExpr>(loc, "", va_list->GetPointerTo())};
+  auto param2{MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kInt))};
 
   auto start{FunctionType::Get(VoidType::Get(), {param1, param2})};
   start->SetName("__builtin_va_start");
@@ -2972,17 +2894,45 @@ void Parser::AddBuiltin() {
   copy->SetName("__builtin_va_copy");
 
   scope_->InsertUsual("__builtin_va_start",
-                      MakeAstNode<IdentifierExpr>("__builtin_va_start", start,
+                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_start",
+                                                  start, kExternal, false));
+  scope_->InsertUsual("__builtin_va_end",
+                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_end", end,
                                                   kExternal, false));
-  scope_->InsertUsual(
-      "__builtin_va_end",
-      MakeAstNode<IdentifierExpr>("__builtin_va_end", end, kExternal, false));
   scope_->InsertUsual("__builtin_va_arg_sub",
-                      MakeAstNode<IdentifierExpr>("__builtin_va_arg_sub", arg,
-                                                  kExternal, false));
-  scope_->InsertUsual(
-      "__builtin_va_copy",
-      MakeAstNode<IdentifierExpr>("__builtin_va_copy", copy, kExternal, false));
+                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_arg_sub",
+                                                  arg, kExternal, false));
+  scope_->InsertUsual("__builtin_va_copy",
+                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_copy",
+                                                  copy, kExternal, false));
+}
+
+Expr* Parser::TryParseStmtExpr() {
+  if (Try(Tag::kLeftParen)) {
+    if (Test(Tag::kLeftBrace)) {
+      return ParseStmtExpr();
+    } else {
+      PutBack();
+    }
+  }
+
+  return nullptr;
+}
+
+std::int32_t Parser::ParseInt32Constant() {
+  auto expr{ParseExpr()};
+  if (!expr->GetType()->IsIntegerTy()) {
+    Error(expr, "expect integer");
+  }
+
+  auto val{CalcConstantExpr{}.CalcInteger(expr)};
+
+  if (val > std::numeric_limits<std::int32_t>::max() ||
+      val < std::numeric_limits<std::int32_t>::min()) {
+    Error(expr, "case range exceed range of int: {}", val);
+  }
+
+  return val;
 }
 
 }  // namespace kcc

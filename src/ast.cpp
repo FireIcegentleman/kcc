@@ -106,7 +106,7 @@ Expr* Expr::MayCast(Expr* expr) {
   auto type{Type::MayCast(expr->GetQualType())};
 
   if (type != expr->GetQualType()) {
-    return MakeNode<TypeCastExpr>(expr->GetLoc(), expr, type);
+    return MakeAstNode<TypeCastExpr>(expr->GetLoc(), expr, type);
   } else {
     return expr;
   }
@@ -116,7 +116,7 @@ Expr* Expr::MayCastTo(Expr* expr, QualType to) {
   expr = MayCast(expr);
 
   if (!expr->GetType()->Equal(to.GetType())) {
-    return MakeNode<TypeCastExpr>(expr->GetLoc(), expr, to);
+    return MakeAstNode<TypeCastExpr>(expr->GetLoc(), expr, to);
   } else {
     return expr;
   }
@@ -623,7 +623,7 @@ AstNodeType FuncCallExpr::Kind() const { return AstNodeType::kFuncCallExpr; }
 
 void FuncCallExpr::Check() {
   if (callee_->GetType()->IsPointerTy()) {
-    callee_ = MakeNode<UnaryOpExpr>(callee_->GetLoc(), Tag::kStar, callee_);
+    callee_ = MakeAstNode<UnaryOpExpr>(callee_->GetLoc(), Tag::kStar, callee_);
   }
 
   if (!callee_->GetType()->IsFunctionTy()) {

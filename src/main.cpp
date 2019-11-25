@@ -140,7 +140,7 @@ void RunKcc(const std::string &file_name) {
     return;
   }
 
-  Parser parser{std::move(tokens)};
+  Parser parser{std::move(tokens), file_name};
   auto unit{parser.ParseTranslationUnit()};
 
   if (EmitAST) {
@@ -210,7 +210,7 @@ void Run(const std::string &file) {
   }
   tokens_file << std::flush;
 
-  Parser parser{std::move(tokens)};
+  Parser parser{std::move(tokens), file};
   auto unit{parser.ParseTranslationUnit()};
   JsonGen{}.GenJson(unit, GetFileName(file, ".html"));
 

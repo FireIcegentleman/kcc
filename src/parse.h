@@ -26,13 +26,10 @@ namespace kcc {
 
 class Parser {
  public:
-  explicit Parser(std::vector<Token> tokens);
+  explicit Parser(std::vector<Token> tokens, const std::string& file_name);
   TranslationUnit* ParseTranslationUnit();
 
  private:
-  template <typename T, typename... Args>
-  T* MakeAstNode(Args&&... args);
-
   bool HasNext();
   Token Peek();
   Token Next();
@@ -40,7 +37,6 @@ class Parser {
   bool Test(Tag tag);
   bool Try(Tag tag);
   Token Expect(Tag tag);
-  void MarkLoc();
 
   void EnterBlock(Type* func_type = nullptr);
   void ExitBlock();
@@ -51,7 +47,8 @@ class Parser {
   bool IsTypeName(const Token& tok);
   bool IsDecl(const Token& tok);
   bool InGlobal() const;
-  Declaration* MakeDeclaration(const std::string& name, QualType type,
+  std::int32_t ParseInt32Constant();
+  Declaration* MakeDeclaration(const Token& token, QualType type,
                                std::uint32_t storage_class_spec,
                                std::uint32_t func_spec, std::int32_t align);
 
@@ -196,6 +193,7 @@ class Parser {
   QualType ParseTypeof();
   Expr* ParseStmtExpr();
   Expr* ParseTypeid();
+  Expr* TryParseStmtExpr();
 
   /*
    * built in
@@ -221,17 +219,7 @@ class Parser {
 
   // 非常量初始化时记录索引
   std::list<std::pair<Type*, std::int32_t>> indexs_;
-
-  Location loc_;
 };
-
-template <typename T, typename... Args>
-T* Parser::MakeAstNode(Args&&... args) {
-  auto t{T::Get(std::forward<Args>(args)...)};
-  t->SetLoc(loc_);
-  t->Check();
-  return t;
-}
 
 }  // namespace kcc
 

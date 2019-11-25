@@ -787,11 +787,16 @@ class FuncDef : public ExtDecl {
 };
 
 template <typename T, typename... Args>
-T* MakeNode(const Location& loc, Args&&... args) {
+T* MakeAstNode(const Location& loc, Args&&... args) {
   auto t{T::Get(std::forward<Args>(args)...)};
   t->SetLoc(loc);
   t->Check();
   return t;
+}
+
+template <typename T, typename... Args>
+T* MakeAstNode(const Token& token, Args&&... args) {
+  return MakeAstNode<T>(token.GetLoc(), std::forward<Args>(args)...);
 }
 
 }  // namespace kcc
