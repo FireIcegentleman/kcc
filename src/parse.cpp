@@ -37,9 +37,9 @@ TranslationUnit* Parser::ParseTranslationUnit() {
 
 bool Parser::HasNext() { return !Peek().TagIs(Tag::kEof); }
 
-Token Parser::Peek() { return tokens_[index_]; }
+const Token& Parser::Peek() { return tokens_[index_]; }
 
-Token Parser::Next() { return tokens_[index_++]; }
+const Token& Parser::Next() { return tokens_[index_++]; }
 
 void Parser::PutBack() {
   assert(index_ > 0);
@@ -57,7 +57,7 @@ bool Parser::Try(Tag tag) {
   }
 }
 
-Token Parser::Expect(Tag tag) {
+const Token& Parser::Expect(Tag tag) {
   if (!Test(tag)) {
     Error(tag, Peek());
   } else {

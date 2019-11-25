@@ -182,7 +182,7 @@ bool Scanner::IsUCN(std::int32_t ch) {
   return ch == '\\' && (Test('u') || Test('U'));
 }
 
-Token Scanner::MakeToken(Tag tag) {
+const Token& Scanner::MakeToken(Tag tag) {
   token_.SetTag(tag);
   token_.SetStr(buffer_);
   buffer_.clear();
@@ -191,7 +191,7 @@ Token Scanner::MakeToken(Tag tag) {
 
 void Scanner::MarkLocation() { token_.SetLoc(loc_); }
 
-Token Scanner::Scan() {
+const Token& Scanner::Scan() {
   SkipSpace();
 
   MarkLocation();
@@ -418,7 +418,7 @@ void Scanner::SkipLineDirectives() {
 //  pp-number p sign
 //  pp-number P sign
 //  pp-number .
-Token Scanner::SkipNumber() {
+const Token& Scanner::SkipNumber() {
   bool saw_hex_prefix{false};
   auto tag{Tag::kInteger};
 
@@ -470,7 +470,7 @@ Token Scanner::SkipNumber() {
 //  NOPQRSTUVWXYZ
 // digit: one of
 //  0123456789
-Token Scanner::SkipIdentifier() {
+const Token& Scanner::SkipIdentifier() {
   PutBack();
   std::int32_t ch{Next()};
 
@@ -495,7 +495,7 @@ Token Scanner::SkipIdentifier() {
 //  any member of the source character set except
 //  the single-quote ', backslash \, or new-line character
 //  escape-sequence
-Token Scanner::SkipCharacter() {
+const Token& Scanner::SkipCharacter() {
   auto ch{Next()};
   while (ch != '\'' && ch != '\n' && ch != '\0') {
     if (ch == '\\') {
@@ -522,7 +522,7 @@ Token Scanner::SkipCharacter() {
 //  any member of the source character set except
 //  the double-quote ", backslash \, or new-line character
 //  escape-sequence
-Token Scanner::SkipStringLiteral() {
+const Token& Scanner::SkipStringLiteral() {
   auto ch{Next()};
   while (ch != '\"' && ch != '\n' && ch != '\0') {
     if (ch == '\\') {

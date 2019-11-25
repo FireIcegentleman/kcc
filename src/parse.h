@@ -30,12 +30,12 @@ class Parser {
 
  private:
   bool HasNext();
-  Token Peek();
-  Token Next();
+  const Token& Peek();
+  const Token& Next();
   void PutBack();
   bool Test(Tag tag);
   bool Try(Tag tag);
-  Token Expect(Tag tag);
+  const Token& Expect(Tag tag);
 
   void EnterBlock(Type* func_type = nullptr);
   void ExitBlock();

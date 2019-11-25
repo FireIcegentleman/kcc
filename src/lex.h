@@ -39,18 +39,18 @@ class Scanner {
   bool Try(std::int32_t c);
   bool IsUCN(std::int32_t ch);
 
-  Token MakeToken(Tag tag);
+  const Token& MakeToken(Tag tag);
   void MarkLocation();
 
-  Token Scan();
+  const Token& Scan();
 
   void SkipSpace();
   void SkipLineDirectives();
 
-  Token SkipNumber();
-  Token SkipIdentifier();
-  Token SkipCharacter();
-  Token SkipStringLiteral();
+  const Token& SkipNumber();
+  const Token& SkipIdentifier();
+  const Token& SkipCharacter();
+  const Token& SkipStringLiteral();
 
   Encoding HandleEncoding();
   std::int32_t HandleEscape();
