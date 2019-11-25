@@ -1258,7 +1258,7 @@ void CodeGen::InitLocalAggregate(const Declaration& node) {
       Builder.CreateBitCast(obj->GetLocalPtr(), Builder.getInt8PtrTy()),
       Builder.getInt8(0), width, obj->GetAlign());
 
-  if (node.value_init_) {
+  if (node.ValueInit()) {
     return;
   }
 
@@ -1313,13 +1313,13 @@ void CodeGen::DealGlobalDecl(const Declaration& node) {
   } else {
     ptr->setDSOLocal(true);
 
-    if (!node.HasGlobalInit()) {
+    if (!node.HasConstantInit()) {
       // ptr->setLinkage(llvm::GlobalVariable::CommonLinkage);
     }
   }
 
-  if (node.HasGlobalInit()) {
-    ptr->setInitializer(node.GetGlobalInit());
+  if (node.HasConstantInit()) {
+    ptr->setInitializer(node.GetConstant());
   } else {
     if (!obj->IsExtern()) {
       ptr->setInitializer(GetConstantZero(type));
@@ -1347,8 +1347,8 @@ void CodeGen::DealLocaleDecl(const Declaration& node) {
     ptr->setAlignment(obj->GetAlign());
     ptr->setLinkage(llvm::GlobalVariable::InternalLinkage);
 
-    if (node.HasGlobalInit()) {
-      ptr->setInitializer(node.GetGlobalInit());
+    if (node.HasConstantInit()) {
+      ptr->setInitializer(node.GetConstant());
     } else {
       if (!obj->IsExtern()) {
         ptr->setInitializer(GetConstantZero(type->GetLLVMType()));
@@ -1374,6 +1374,10 @@ void CodeGen::DealLocaleDecl(const Declaration& node) {
     } else {
       assert(false);
     }
+  } else if (node.HasConstantInit()) {
+    result_ = Builder.CreateBitCast(obj->GetLocalPtr(), Builder.getInt8PtrTy());
+    Builder.CreateMemCpy(result_, obj->GetAlign(), node.GetConstant(),
+                         obj->GetAlign(), obj->GetType()->GetWidth());
   }
 }
 

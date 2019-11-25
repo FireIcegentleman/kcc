@@ -50,6 +50,7 @@ class Parser {
   void ExitProto();
   bool IsTypeName(const Token& tok);
   bool IsDecl(const Token& tok);
+  bool InGlobal() const;
   Declaration* MakeDeclaration(const std::string& name, QualType type,
                                std::uint32_t storage_class_spec,
                                std::uint32_t func_spec, std::int32_t align);
@@ -161,15 +162,15 @@ class Parser {
   /*
    * Init
    */
-  Initializers ParseInitDeclaratorSub(IdentifierExpr* ident);
-  void ParseInitializer(Initializers& inits, QualType type, std::int32_t offset,
-                        bool designated, bool force_brace);
-  void ParseArrayInitializer(Initializers& inits, Type* type,
-                             std::int32_t offset, std::int32_t designated);
-  bool ParseLiteralInitializer(Initializers& inits, Type* type,
-                               std::int32_t offset);
-  void ParseStructInitializer(Initializers& inits, Type* type,
-                              std::int32_t offset, bool designated);
+  void ParseInitDeclaratorSub(Declaration* decl);
+  llvm::Constant* ParseInitializer(std::vector<Initializer>& inits,
+                                   QualType type, bool designated,
+                                   bool force_brace);
+  void ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
+                             std::int32_t designated);
+  llvm::Constant* ParseLiteralInitializer(Type* type);
+  void ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
+                              bool designated);
   static auto ParseStructDesignator(Type* type, const std::string& name)
       -> decltype(std::begin(type->StructGetMembers()));
 
@@ -204,19 +205,24 @@ class Parser {
 
   LabelStmt* FindLabel(const std::string& name) const;
 
+  TranslationUnit* unit_;
+
   std::vector<Token> tokens_;
   decltype(tokens_)::size_type index_{};
 
-  Location loc_;
+  FuncDef* func_def_{};
+  Scope* scope_{Scope::Get(nullptr, kFile)};
 
-  FuncDef* curr_func_def_{};
-  Scope* curr_scope_{Scope::Get(nullptr, kFile)};
-  std::list<std::pair<Type*, std::int32_t>> indexs_;
-  std::vector<LabelStmt*> labels_;
-  std::vector<GotoStmt*> unresolved_gotos_;
+  std::unordered_map<std::string, LabelStmt*> labels_;
+  std::vector<GotoStmt*> gotos_;
+
+  // 用于将块作用与的复合字面量加入块中
   std::stack<CompoundStmt*> compound_stmt_;
 
-  TranslationUnit* unit_{MakeAstNode<TranslationUnit>()};
+  // 非常量初始化时记录索引
+  std::list<std::pair<Type*, std::int32_t>> indexs_;
+
+  Location loc_;
 };
 
 template <typename T, typename... Args>

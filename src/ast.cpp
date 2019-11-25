@@ -1311,19 +1311,21 @@ std::vector<ExtDecl*> TranslationUnit::GetExtDecl() const { return ext_decls_; }
 /*
  * Initializer
  */
-Initializer::Initializer(
-    Type* type, std::int32_t offset, Expr* expr,
-    const std::list<std::pair<Type*, std::int32_t>>& indexs)
-    : type_(type), offset_(offset), expr_(expr), indexs_{indexs} {}
+Initializer::Initializer(Type* type, Expr* expr,
+                         std::list<std::pair<Type*, std::int32_t>> indexs)
+    : type_(type), expr_(expr), indexs_{std::move(indexs)} {}
 
 Type* Initializer::GetType() const {
   assert(type_ != nullptr);
   return type_;
 }
 
-int32_t Initializer::GetOffset() const { return offset_; }
+Expr*& Initializer::GetExpr() {
+  assert(expr_ != nullptr);
+  return expr_;
+}
 
-Expr* Initializer::GetExpr() const {
+const Expr* Initializer::GetExpr() const {
   assert(expr_ != nullptr);
   return expr_;
 }
@@ -1332,30 +1334,11 @@ std::list<std::pair<Type*, std::int32_t>> Initializer::GetIndexs() const {
   return indexs_;
 }
 
-bool operator<(const Initializer& lhs, const Initializer& rhs) {
-  return lhs.offset_ < rhs.offset_;
-}
-
-/*
- * Initializers
- */
-void Initializers::AddInit(const Initializer& init) {
-  for (auto& item : inits_) {
-    if (item.offset_ == init.offset_) {
-      item = init;
-      return;
-    }
-  }
-
-  inits_.push_back(init);
-}
-
-std::size_t Initializers::size() const { return std::size(inits_); }
-
 /*
  * Declaration
  */
 Declaration* Declaration::Get(IdentifierExpr* ident) {
+  assert(ident != nullptr);
   return new (DeclarationPool.Allocate()) Declaration{ident};
 }
 
@@ -1363,42 +1346,56 @@ AstNodeType Declaration::Kind() const { return AstNodeType::kDeclaration; }
 
 void Declaration::Check() {}
 
-bool Declaration::HasLocalInit() const {
-  return std::size(inits_) || value_init_;
-}
-
-void Declaration::AddInits(const Initializers& inits) {
+void Declaration::AddInits(std::vector<Initializer> inits) {
   if (std::size(inits) == 0) {
     // GNU 扩展
     value_init_ = true;
     return;
   }
 
-  inits_ = inits;
-
-  std::sort(std::begin(inits_), std::end(inits_));
+  inits_ = std::move(inits);
 
   if (ident_->GetType()->IsScalarTy()) {
     assert(std::size(inits_) == 1);
     auto& init{*std::begin(inits_)};
-    if (!init.type_->Equal(init.expr_->GetType())) {
-      init.expr_ = Expr::MayCastTo(init.expr_, init.type_);
+
+    auto type{init.GetType()};
+    auto& expr{init.GetExpr()};
+
+    if (!type->Equal(expr->GetType())) {
+      expr = Expr::MayCastTo(expr, type);
     }
   } else if (ident_->GetType()->IsAggregateTy()) {
     auto last{*(std::end(inits_) - 1)};
 
     // TODO 柔性数组怎么实现???
-    if ((last.offset_ + last.type_->GetWidth() >
-         ident_->GetType()->GetWidth())) {
-      Error(loc_, "excess elements in array initializer");
-    }
+    for (auto&& init : inits_) {
+      auto type{init.GetType()};
+      auto& expr{init.GetExpr()};
 
-    for (auto& init : inits_) {
-      if (!init.type_->Equal(init.expr_->GetType())) {
-        init.expr_ = Expr::MayCastTo(init.expr_, init.type_);
+      if (!type->Equal(expr->GetType())) {
+        expr = Expr::MayCastTo(expr, type);
       }
     }
   }
+}
+
+std::vector<Initializer> Declaration::GetLocalInits() const { return inits_; }
+
+void Declaration::SetConstant(llvm::Constant* constant) {
+  constant_ = constant;
+}
+
+llvm::Constant* Declaration::GetConstant() const { return constant_; }
+
+bool Declaration::ValueInit() const { return value_init_; }
+
+bool Declaration::HasLocalInit() const {
+  return std::size(inits_) != 0 || value_init_;
+}
+
+bool Declaration::HasConstantInit() const {
+  return constant_ != nullptr || value_init_;
 }
 
 IdentifierExpr* Declaration::GetIdent() const { return ident_; }
@@ -1407,26 +1404,14 @@ bool Declaration::IsObjDecl() const {
   return dynamic_cast<ObjectExpr*>(ident_);
 }
 
-void Declaration::SetConstant(llvm::Constant* constant) {
-  constant_ = constant;
-}
-
-llvm::Constant* Declaration::GetGlobalInit() const { return constant_; }
-
-bool Declaration::IsObjDeclInGlobal() const {
-  assert(IsObjDecl());
-  return dynamic_cast<ObjectExpr*>(ident_)->InGlobal();
-}
-
 ObjectExpr* Declaration::GetObject() const {
   assert(IsObjDecl());
   return dynamic_cast<ObjectExpr*>(ident_);
 }
 
-bool Declaration::HasGlobalInit() const { return constant_ != nullptr; }
-
-std::vector<Initializer> Declaration::GetLocalInits() const {
-  return inits_.inits_;
+bool Declaration::IsObjDeclInGlobal() const {
+  assert(IsObjDecl());
+  return dynamic_cast<ObjectExpr*>(ident_)->InGlobal();
 }
 
 Declaration::Declaration(IdentifierExpr* ident) : ident_{ident} {}

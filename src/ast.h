@@ -715,53 +715,22 @@ class TranslationUnit : public AstNode {
 };
 
 class Initializer {
-  friend class Declaration;
-  friend class Initializers;
-  friend class JsonGen;
-  friend class CodeGen;
-
-  friend bool operator<(const Initializer& lhs, const Initializer& rhs);
-
  public:
-  Initializer(Type* type, std::int32_t offset, Expr* expr,
-              const std::list<std::pair<Type*, std::int32_t>>& indexs);
+  Initializer(Type* type, Expr* expr,
+              std::list<std::pair<Type*, std::int32_t>> indexs);
+
   Type* GetType() const;
-  int32_t GetOffset() const;
-  Expr* GetExpr() const;
+  Expr*& GetExpr();
+  const Expr* GetExpr() const;
   std::list<std::pair<Type*, std::int32_t>> GetIndexs() const;
 
  private:
   Type* type_;
-  std::int32_t offset_;
   Expr* expr_;
-
   std::list<std::pair<Type*, std::int32_t>> indexs_;
 };
 
-class Initializers {
-  friend class JsonGen;
-  friend class CodeGen;
-  friend class Declaration;
-
- public:
-  void AddInit(const Initializer& init);
-  std::size_t size() const;
-
-  auto begin() { return std::begin(inits_); }
-  auto begin() const { return std::begin(inits_); }
-  auto end() { return std::end(inits_); }
-  auto end() const { return std::end(inits_); }
-
- private:
-  std::vector<Initializer> inits_;
-};
-
-bool operator<(const Initializer& lhs, const Initializer& rhs);
-
 class Declaration : public Stmt {
-  friend class JsonGen;
-  friend class CodeGen;
-
  public:
   static Declaration* Get(IdentifierExpr* ident);
 
@@ -769,25 +738,30 @@ class Declaration : public Stmt {
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
 
-  bool HasLocalInit() const;
-  void AddInits(const Initializers& inits);
-  IdentifierExpr* GetIdent() const;
-  bool IsObjDecl() const;
-  void SetConstant(llvm::Constant* constant);
-  llvm::Constant* GetGlobalInit() const;
-  bool IsObjDeclInGlobal() const;
-  ObjectExpr* GetObject() const;
-  bool HasGlobalInit() const;
+  void AddInits(std::vector<Initializer> inits);
   std::vector<Initializer> GetLocalInits() const;
+  void SetConstant(llvm::Constant* constant);
+  llvm::Constant* GetConstant() const;
+  bool ValueInit() const;
+
+  bool HasLocalInit() const;
+  bool HasConstantInit() const;
+
+  IdentifierExpr* GetIdent() const;
+
+  bool IsObjDecl() const;
+  ObjectExpr* GetObject() const;
+  bool IsObjDeclInGlobal() const;
 
  private:
   explicit Declaration(IdentifierExpr* ident);
 
   IdentifierExpr* ident_;
-  Initializers inits_;
-  bool value_init_{false};
 
+  std::vector<Initializer> inits_;
   llvm::Constant* constant_{};
+
+  bool value_init_{false};
 };
 
 class FuncDef : public ExtDecl {

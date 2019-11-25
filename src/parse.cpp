@@ -20,11 +20,11 @@ namespace kcc {
 
 Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {
   Module = std::make_unique<llvm::Module>("fuck", Context);
+  unit_ = MakeAstNode<TranslationUnit>();
+  AddBuiltin();
 }
 
 TranslationUnit* Parser::ParseTranslationUnit() {
-  AddBuiltin();
-
   while (HasNext()) {
     unit_->AddExtDecl(ParseExternalDecl());
   }
@@ -65,32 +65,32 @@ Token Parser::Expect(Tag tag) {
 void Parser::MarkLoc() { loc_ = Peek().GetLoc(); }
 
 void Parser::EnterBlock(Type* func_type) {
-  curr_scope_ = Scope::Get(curr_scope_, kBlock);
+  scope_ = Scope::Get(scope_, kBlock);
 
   if (func_type) {
     for (const auto& param : func_type->FuncGetParams()) {
-      curr_scope_->InsertUsual(param->GetName(), param);
+      scope_->InsertUsual(param->GetName(), param);
     }
   }
 }
 
-void Parser::ExitBlock() { curr_scope_ = curr_scope_->GetParent(); }
+void Parser::ExitBlock() { scope_ = scope_->GetParent(); }
 
 void Parser::EnterFunc(IdentifierExpr* ident) {
-  curr_func_def_ = MakeAstNode<FuncDef>(ident);
+  func_def_ = MakeAstNode<FuncDef>(ident);
 }
 
-void Parser::ExitFunc() { curr_func_def_ = nullptr; }
+void Parser::ExitFunc() { func_def_ = nullptr; }
 
-void Parser::EnterProto() { curr_scope_ = Scope::Get(curr_scope_, kFuncProto); }
+void Parser::EnterProto() { scope_ = Scope::Get(scope_, kFuncProto); }
 
-void Parser::ExitProto() { curr_scope_ = curr_scope_->GetParent(); }
+void Parser::ExitProto() { scope_ = scope_->GetParent(); }
 
 bool Parser::IsTypeName(const Token& tok) {
   if (tok.IsTypeSpecQual()) {
     return true;
   } else if (tok.IsIdentifier()) {
-    auto ident{curr_scope_->FindUsual(tok)};
+    auto ident{scope_->FindUsual(tok)};
     if (ident && ident->IsTypeName()) {
       return true;
     }
@@ -103,7 +103,7 @@ bool Parser::IsDecl(const Token& tok) {
   if (tok.IsDeclSpec()) {
     return true;
   } else if (tok.IsIdentifier()) {
-    auto ident{curr_scope_->FindUsual(tok)};
+    auto ident{scope_->FindUsual(tok)};
     if (ident && ident->IsTypeName()) {
       return true;
     }
@@ -111,6 +111,8 @@ bool Parser::IsDecl(const Token& tok) {
 
   return false;
 }
+
+bool Parser::InGlobal() const { return func_def_ == nullptr; }
 
 Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
                                      std::uint32_t storage_class_spec,
@@ -121,7 +123,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
       Error(loc_, "'_Alignas' attribute applies to typedef");
     }
 
-    auto ident{curr_scope_->FindUsualInCurrScope(name)};
+    auto ident{scope_->FindUsualInCurrScope(name)};
     if (ident) {
       // 如果两次定义的类型兼容是可以的
       if (!type->Compatible(ident->GetType())) {
@@ -132,8 +134,8 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
         return nullptr;
       }
     } else {
-      curr_scope_->InsertUsual(
-          name, MakeAstNode<IdentifierExpr>(name, type, kNone, true));
+      scope_->InsertUsual(name,
+                          MakeAstNode<IdentifierExpr>(name, type, kNone, true));
       if (type->IsStructOrUnionTy()) {
         type->StructSetName(name);
       }
@@ -147,12 +149,12 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
 
   if (type->IsVoidTy()) {
     Error(loc_, "variable or field '{}' declared void", name);
-  } else if (type->IsFunctionTy() && !curr_scope_->IsFileScope()) {
+  } else if (type->IsFunctionTy() && !scope_->IsFileScope()) {
     Error(loc_, "function declaration is not allowed here");
   }
 
   Linkage linkage;
-  if (curr_scope_->IsFileScope()) {
+  if (scope_->IsFileScope()) {
     if (storage_class_spec & kStatic) {
       linkage = kInternal;
     } else {
@@ -162,7 +164,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     linkage = kNone;
   }
 
-  auto ident{curr_scope_->FindUsualInCurrScope(name)};
+  auto ident{scope_->FindUsualInCurrScope(name)};
   //有链接对象(外部或内部)的声明可以重复
   if (ident) {
     if (!type->Compatible(ident->GetType())) {
@@ -207,7 +209,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
   }
 
   if (storage_class_spec & kExtern) {
-    ident = curr_scope_->FindUsual(name);
+    ident = scope_->FindUsual(name);
     if (ident) {
       if (!type->Compatible(ident->GetType())) {
         Error(loc_, "conflicting types '{}' vs '{}'", type->ToString(),
@@ -231,13 +233,13 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
     type->FuncSetName(name);
     ret = MakeAstNode<IdentifierExpr>(name, type, linkage, false);
 
-    curr_scope_->InsertUsual(name, ret);
+    scope_->InsertUsual(name, ret);
     return MakeAstNode<Declaration>(ret);
   } else {
     auto obj{MakeAstNode<ObjectExpr>(name, type, storage_class_spec, linkage,
                                      false)};
-    if (curr_func_def_) {
-      obj->SetFuncName(curr_func_def_->GetFuncType()->FuncGetName());
+    if (func_def_) {
+      obj->SetFuncName(func_def_->GetFuncType()->FuncGetName());
     }
 
     if (align > 0) {
@@ -252,7 +254,7 @@ Declaration* Parser::MakeDeclaration(const std::string& name, QualType type,
 
     ret = obj;
 
-    curr_scope_->InsertUsual(name, ret);
+    scope_->InsertUsual(name, ret);
     auto decl{MakeAstNode<Declaration>(ret)};
     obj->SetDecl(decl);
     return decl;
@@ -293,11 +295,11 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
   }
 
   EnterFunc(ident);
-  curr_func_def_->SetBody(ParseCompoundStmt(ident->GetType()));
-  auto ret{curr_func_def_};
+  func_def_->SetBody(ParseCompoundStmt(ident->GetType()));
+  auto ret{func_def_};
   ExitFunc();
 
-  for (auto&& goto_item : unresolved_gotos_) {
+  for (auto&& goto_item : gotos_) {
     auto label{FindLabel(goto_item->GetName())};
     if (label) {
       goto_item->SetLabel(label);
@@ -305,7 +307,7 @@ FuncDef* Parser::ParseFuncDef(const Declaration* decl) {
       Error(goto_item->GetLoc(), "unknowen label: {}", goto_item->GetName());
     }
   }
-  unresolved_gotos_.clear();
+  gotos_.clear();
   labels_.clear();
 
   return ret;
@@ -752,27 +754,22 @@ Expr* Parser::TryParseCompoundLiteral() {
 }
 
 Expr* Parser::ParseCompoundLiteral(QualType type) {
-  if (curr_func_def_ == nullptr) {
+  if (InGlobal()) {
     auto obj{MakeAstNode<ObjectExpr>("", type, 0, kInternal, true)};
     auto decl{MakeAstNode<Declaration>(obj)};
+
     decl->SetConstant(
         ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
+    assert(decl->GetConstant() != nullptr);
 
-    assert(decl->GetGlobalInit() != nullptr);
-    auto global_var{
-        new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(), false,
-                                 llvm::GlobalValue::InternalLinkage,
-                                 decl->GetGlobalInit(), ".compoundliteral")};
-    global_var->setAlignment(obj->GetAlign());
-
-    obj->SetGlobalPtr(global_var);
+    obj->SetGlobalPtr(CreateGlobalCompoundLiteral(type, decl->GetConstant()));
 
     return obj;
   } else {
     auto obj{MakeAstNode<ObjectExpr>("", type, 0, kNone, true)};
     auto decl{MakeAstNode<Declaration>(obj)};
 
-    decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
+    ParseInitDeclaratorSub(decl);
     compound_stmt_.top()->AddStmt(decl);
 
     return obj;
@@ -871,7 +868,7 @@ Expr* Parser::ParsePrimaryExpr() {
 
   if (Peek().IsIdentifier()) {
     auto name{Next().GetIdentifier()};
-    auto ident{curr_scope_->FindUsual(name)};
+    auto ident{scope_->FindUsual(name)};
 
     if (ident) {
       return ident;
@@ -889,17 +886,17 @@ Expr* Parser::ParsePrimaryExpr() {
   } else if (Try(Tag::kGeneric)) {
     return ParseGenericSelection();
   } else if (Try(Tag::kFuncName)) {
-    if (curr_func_def_ == nullptr) {
+    if (func_def_ == nullptr) {
       Error(loc_, "Not allowed to use __func__ or __FUNCTION__ here");
     }
-    return MakeAstNode<StringLiteralExpr>(curr_func_def_->GetName() + '\0');
+    return MakeAstNode<StringLiteralExpr>(func_def_->GetName() + '\0');
   } else if (Try(Tag::kFuncSignature)) {
-    if (curr_func_def_ == nullptr) {
+    if (func_def_ == nullptr) {
       Error(loc_, "Not allowed to use __PRETTY_FUNCTION__ here");
     }
     return MakeAstNode<StringLiteralExpr>(
-        curr_func_def_->GetFuncType()->ToString() + ": " +
-        curr_func_def_->GetFuncType()->FuncGetName() + '\0');
+        func_def_->GetFuncType()->ToString() + ": " +
+        func_def_->GetFuncType()->FuncGetName() + '\0');
   } else {
     Error(loc_, "{} unexpected", Peek().GetStr());
   }
@@ -1267,7 +1264,7 @@ Stmt* Parser::ParseLabelStmt() {
   TryParseAttributeSpec();
 
   auto label{MakeAstNode<LabelStmt>(tok.GetIdentifier(), ParseStmt())};
-  labels_.push_back(label);
+  labels_[tok.GetIdentifier()] = label;
 
   return label;
 }
@@ -1452,7 +1449,7 @@ Stmt* Parser::ParseGotoStmt() {
     return MakeAstNode<GotoStmt>(label);
   } else {
     auto ret{MakeAstNode<GotoStmt>(tok.GetIdentifier())};
-    unresolved_gotos_.push_back(ret);
+    gotos_.push_back(ret);
     return ret;
   }
 }
@@ -1486,8 +1483,7 @@ Stmt* Parser::ParseReturnStmt() {
     auto expr{ParseExpr()};
     Expect(Tag::kSemicolon);
 
-    expr = Expr::MayCastTo(expr,
-                           curr_func_def_->GetFuncType()->FuncGetReturnType());
+    expr = Expr::MayCastTo(expr, func_def_->GetFuncType()->FuncGetReturnType());
     return MakeAstNode<ReturnStmt>(expr);
   }
 }
@@ -1711,7 +1707,7 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
 
       default: {
         if (type_spec == 0 && IsTypeName(tok)) {
-          auto ident{curr_scope_->FindUsual(tok.GetIdentifier())};
+          auto ident{scope_->FindUsual(tok.GetIdentifier())};
           type = ident->GetQualType();
           type_spec |= kTypedefName;
 
@@ -1770,12 +1766,12 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
     tag_name = tok.GetIdentifier();
     // 定义
     if (Try(Tag::kLeftBrace)) {
-      auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
+      auto tag{scope_->FindTagInCurrScope(tag_name)};
       // 无前向声明
       if (!tag) {
-        auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
+        auto type{StructType::Get(is_struct, tag_name, scope_)};
         auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
-        curr_scope_->InsertTag(tag_name, ident);
+        scope_->InsertTag(tag_name, ident);
 
         ParseStructDeclList(type);
         Expect(Tag::kRightBrace);
@@ -1792,14 +1788,14 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
       }
     } else {
       // 可能是前向声明或普通的声明
-      auto tag{curr_scope_->FindTag(tag_name)};
+      auto tag{scope_->FindTag(tag_name)};
 
       if (tag) {
         return tag->GetType();
       } else {
-        auto type{StructType::Get(is_struct, tag_name, curr_scope_)};
+        auto type{StructType::Get(is_struct, tag_name, scope_)};
         auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
-        curr_scope_->InsertTag(tag_name, ident);
+        scope_->InsertTag(tag_name, ident);
         return type;
       }
     }
@@ -1807,7 +1803,7 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
     // 无标识符只能是定义
     Expect(Tag::kLeftBrace);
 
-    auto type{StructType::Get(is_struct, "", curr_scope_)};
+    auto type{StructType::Get(is_struct, "", scope_)};
     ParseStructDeclList(type);
 
     Expect(Tag::kRightBrace);
@@ -1818,8 +1814,8 @@ Type* Parser::ParseStructUnionSpec(bool is_struct) {
 void Parser::ParseStructDeclList(StructType* type) {
   assert(!type->IsComplete());
 
-  auto scope_backup{curr_scope_};
-  curr_scope_ = type->GetScope();
+  auto scope_backup{scope_};
+  scope_ = type->GetScope();
 
   while (!Test(Tag::kRightBrace)) {
     if (Try(Tag::kStaticAssert)) {
@@ -1892,7 +1888,7 @@ finalize:
   type->SetComplete(true);
 
   // struct / union 中的 tag 的作用域与该 struct / union 所在的作用域相同
-  for (const auto& [name, tag] : curr_scope_->AllTagInCurrScope()) {
+  for (const auto& [name, tag] : scope_->AllTagInCurrScope()) {
     if (scope_backup->FindTagInCurrScope(name)) {
       Error(tag->GetLoc(), "redefinition of tag {}", tag->GetName());
     } else {
@@ -1900,7 +1896,7 @@ finalize:
     }
   }
 
-  curr_scope_ = scope_backup;
+  scope_ = scope_backup;
 }
 
 Type* Parser::ParseEnumSpec() {
@@ -1913,12 +1909,12 @@ Type* Parser::ParseEnumSpec() {
     tag_name = tok.GetIdentifier();
     // 定义
     if (Try(Tag::kLeftBrace)) {
-      auto tag{curr_scope_->FindTagInCurrScope(tag_name)};
+      auto tag{scope_->FindTagInCurrScope(tag_name)};
 
       if (!tag) {
         auto type{ArithmeticType::Get(32)};
         auto ident{MakeAstNode<IdentifierExpr>(tag_name, type, kNone, true)};
-        curr_scope_->InsertTag(tag_name, ident);
+        scope_->InsertTag(tag_name, ident);
         ParseEnumerator();
 
         Expect(Tag::kRightBrace);
@@ -1929,7 +1925,7 @@ Type* Parser::ParseEnumSpec() {
       }
     } else {
       // 只能是普通声明
-      auto tag{curr_scope_->FindTag(tag_name)};
+      auto tag{scope_->FindTag(tag_name)};
       if (tag) {
         return tag->GetType();
       } else {
@@ -1952,7 +1948,7 @@ void Parser::ParseEnumerator() {
     TryParseAttributeSpec();
 
     auto name{tok.GetIdentifier()};
-    auto ident{curr_scope_->FindUsualInCurrScope(name)};
+    auto ident{scope_->FindUsualInCurrScope(name)};
 
     if (ident) {
       Error(tok, "redefinition of enumerator '{}'", name);
@@ -1965,7 +1961,7 @@ void Parser::ParseEnumerator() {
 
     auto enumer{MakeAstNode<EnumeratorExpr>(tok.GetIdentifier(), val)};
     ++val;
-    curr_scope_->InsertUsual(name, enumer);
+    scope_->InsertUsual(name, enumer);
 
     Try(Tag::kComma);
   } while (!Test(Tag::kRightBrace));
@@ -2028,27 +2024,25 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
                             func_spec, align)};
 
   if (decl && Try(Tag::kEqual) && decl->IsObjDecl()) {
-    if (curr_func_def_ != nullptr && !(storage_class_spec & kStatic)) {
-      decl->AddInits(ParseInitDeclaratorSub(decl->GetIdent()));
+    if (!InGlobal() && !(storage_class_spec & kStatic)) {
+      ParseInitDeclaratorSub(decl);
     } else {
       decl->SetConstant(
           ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
 
-      auto obj{dynamic_cast<ObjectExpr*>(decl->GetIdent())};
+      auto obj{decl->GetIdent()->ToObjectExpr()};
 
       std::string name;
-      if ((storage_class_spec & kStatic) && curr_func_def_ != nullptr) {
-        name = curr_func_def_->GetName() + "." + obj->GetName();
+      if ((storage_class_spec & kStatic) && !InGlobal()) {
+        name = func_def_->GetName() + "." + obj->GetName();
       } else {
         name = obj->GetName();
       }
-      auto var{new llvm::GlobalVariable(
-          *Module, decl->GetIdent()->GetType()->GetLLVMType(), false,
-          decl->GetIdent()->GetLinkage() == kInternal
-              ? llvm::GlobalValue::InternalLinkage
-              : llvm::GlobalValue::ExternalLinkage,
-          decl->GetGlobalInit(), name)};
-      obj->SetGlobalPtr(var);
+
+      auto ident{decl->GetIdent()};
+      obj->SetGlobalPtr(CreateGlobalVar(ident->GetQualType(),
+                                        decl->GetConstant(),
+                                        ident->GetLinkage(), ident->GetName()));
     }
   }
 
@@ -2248,8 +2242,10 @@ void Parser::ParseDirectAbstractDeclarator(QualType& type) {
 /*
  * Init
  */
-Initializers Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
-  if (!curr_scope_->IsFileScope() && ident->GetLinkage() == kExternal) {
+void Parser::ParseInitDeclaratorSub(Declaration* decl) {
+  auto ident{decl->GetIdent()};
+
+  if (!scope_->IsFileScope() && ident->GetLinkage() == kExternal) {
     Error(ident->GetLoc(), "{} has both 'extern' and initializer",
           ident->GetName());
   }
@@ -2259,18 +2255,21 @@ Initializers Parser::ParseInitDeclaratorSub(IdentifierExpr* ident) {
           ident->GetName());
   }
 
-  Initializers inits;
-  ParseInitializer(inits, ident->GetType(), 0, false, true);
-  return inits;
+  std::vector<Initializer> inits;
+  if (auto constant{ParseInitializer(inits, ident->GetType(), false, true)}) {
+    decl->SetConstant(constant);
+  } else {
+    decl->AddInits(inits);
+  }
 }
 
 // initializer:
 //  assignment-expression
 //  { initializer-list }
 //  { initializer-list , }
-void Parser::ParseInitializer(Initializers& inits, QualType type,
-                              std::int32_t offset, bool designated,
-                              bool force_brace) {
+llvm::Constant* Parser::ParseInitializer(std::vector<Initializer>& inits,
+                                         QualType type, bool designated,
+                                         bool force_brace) {
   // 比如解析 {[2]=1}
   if (designated && !Test(Tag::kPeriod) && !Test(Tag::kLeftSquare)) {
     Expect(Tag::kEqual);
@@ -2281,11 +2280,11 @@ void Parser::ParseInitializer(Initializers& inits, QualType type,
     // 不能直接 Expect , 如果有 '{' , 只能由 ParseArrayInitializer 来处理
     if (force_brace && !Test(Tag::kLeftBrace) && !Test(Tag::kStringLiteral)) {
       Expect(Tag::kLeftBrace);
-    } else if (!ParseLiteralInitializer(inits, type.GetType(), offset)) {
-      ParseArrayInitializer(inits, type.GetType(), offset, designated);
+    } else if (auto str{ParseLiteralInitializer(type.GetType())}; !str) {
+      ParseArrayInitializer(inits, type.GetType(), designated);
       type->SetComplete(true);
     } else {
-      return;
+      return str;
     }
   } else if (type->IsStructOrUnionTy()) {
     if (!Test(Tag::kPeriod) && !Test(Tag::kLeftBrace)) {
@@ -2307,14 +2306,14 @@ void Parser::ParseInitializer(Initializers& inits, QualType type,
       auto begin{index_};
       auto expr{ParseAssignExpr()};
       if (type->Compatible(expr->GetType())) {
-        inits.AddInit({type.GetType(), offset, expr, indexs_});
-        return;
+        inits.emplace_back(type.GetType(), expr, indexs_);
+        return nullptr;
       } else {
         index_ = begin;
       }
     }
 
-    ParseStructInitializer(inits, type.GetType(), offset, designated);
+    ParseStructInitializer(inits, type.GetType(), designated);
   } else {
     // 标量类型
     // int a={10}; / int a={10,}; 都是合法的
@@ -2326,15 +2325,15 @@ void Parser::ParseInitializer(Initializers& inits, QualType type,
       Expect(Tag::kRightBrace);
     }
 
-    inits.AddInit({type.GetType(), offset, expr, indexs_});
+    inits.emplace_back(type.GetType(), expr, indexs_);
   }
+
+  return nullptr;
 }
 
-void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
-                                   std::int32_t offset,
+void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
                                    std::int32_t designated) {
   std::int32_t index{};
-  auto width{type->ArrayGetElementType()->GetWidth()};
   auto has_brace{Try(Tag::kLeftBrace)};
 
   while (true) {
@@ -2370,8 +2369,7 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
     }
 
     indexs_.push_back({type, index});
-    ParseInitializer(inits, type->ArrayGetElementType(), offset + index * width,
-                     designated, false);
+    ParseInitializer(inits, type->ArrayGetElementType(), designated, false);
     indexs_.pop_back();
     designated = false;
     ++index;
@@ -2391,10 +2389,9 @@ void Parser::ParseArrayInitializer(Initializers& inits, Type* type,
   }
 }
 
-bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
-                                     std::int32_t offset) {
+llvm::Constant* Parser::ParseLiteralInitializer(Type* type) {
   if (!type->ArrayGetElementType()->IsIntegerTy()) {
-    return false;
+    return nullptr;
   }
 
   auto has_brace{Try(Tag::kLeftBrace)};
@@ -2402,7 +2399,7 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
     if (has_brace) {
       PutBack();
     }
-    return false;
+    return nullptr;
   }
 
   auto str_node{ParseStringLiteral()};
@@ -2417,8 +2414,6 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
     type->SetComplete(true);
   }
 
-  // TODO 若数组大小已知, 则它可以比字符串字面量的大小少一,
-  // 此情况下空终止字符被忽略
   if (str_node->GetType()->ArrayGetNumElements() >
       type->ArrayGetNumElements()) {
     Error(str_node->GetLoc(),
@@ -2434,57 +2429,11 @@ bool Parser::ParseLiteralInitializer(Initializers& inits, Type* type,
           type->ArrayGetElementType()->ToString());
   }
 
-  auto width{type->ArrayGetElementType()->GetWidth()};
-  auto size{str_node->GetType()->ArrayGetNumElements()};
-  auto temp{str_node->GetStr()};
-  auto str{temp.c_str()};
-
-  switch (width) {
-    case 1: {
-      auto char_type{ArithmeticType::Get(kChar | kUnsigned)};
-      std::size_t i{};
-      for (; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
-        auto value{
-            ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value, {{type, i}}});
-        offset += 1;
-        str += 1;
-      }
-    } break;
-    case 2: {
-      auto char_type{ArithmeticType::Get(kShort | kUnsigned)};
-      std::size_t i{};
-      for (; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
-        auto value{
-            ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value, {{type, i}}});
-        offset += 2;
-        str += 2;
-      }
-    } break;
-    case 4: {
-      auto char_type{ArithmeticType::Get(kInt | kUnsigned)};
-      std::size_t i{};
-      for (; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
-        auto value{
-            ConstantExpr::Get(char_type, static_cast<std::uint64_t>(*ptr))};
-        inits.AddInit({char_type, offset, value, {{type, i}}});
-        offset += 4;
-        str += 4;
-      }
-    } break;
-    default:
-      assert(false);
-  }
-
-  return true;
+  return str_node->GetPtr();
 }
 
-void Parser::ParseStructInitializer(Initializers& inits, Type* type,
-                                    std::int32_t offset, bool designated) {
+void Parser::ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
+                                    bool designated) {
   auto has_brace{Try(Tag::kLeftBrace)};
   auto member_iter{std::begin(type->StructGetMembers())};
 
@@ -2525,14 +2474,12 @@ void Parser::ParseStructInitializer(Initializers& inits, Type* type,
 
       indexs_.push_back(
           {type, member_iter - std::begin(type->StructGetMembers())});
-      ParseInitializer(inits, (*member_iter)->GetType(), offset, designated,
-                       false);
+      ParseInitializer(inits, (*member_iter)->GetType(), designated, false);
       indexs_.pop_back();
     } else {
       indexs_.push_back(
           {type, member_iter - std::begin(type->StructGetMembers())});
-      ParseInitializer(inits, (*member_iter)->GetType(),
-                       offset + (*member_iter)->GetOffset(), designated, false);
+      ParseInitializer(inits, (*member_iter)->GetType(), designated, false);
       indexs_.pop_back();
     }
 
@@ -2987,16 +2934,16 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
 }
 
 LabelStmt* Parser::FindLabel(const std::string& name) const {
-  for (const auto& item : labels_) {
-    if (item->GetName() == name) {
-      return item;
-    }
+  auto iter{labels_.find(name)};
+  if (iter != std::end(labels_)) {
+    return iter->second;
+  } else {
+    return nullptr;
   }
-  return nullptr;
 }
 
 void Parser::AddBuiltin() {
-  auto va_list{StructType::Get(true, "__va_list_tag", curr_scope_)};
+  auto va_list{StructType::Get(true, "__va_list_tag", scope_)};
   va_list->AddMember(
       MakeAstNode<ObjectExpr>("gp_offset", ArithmeticType::Get(kInt)));
   va_list->AddMember(
@@ -3007,7 +2954,7 @@ void Parser::AddBuiltin() {
       "reg_save_area", PointerType::Get(VoidType::Get())));
   va_list->SetComplete(true);
 
-  curr_scope_->InsertUsual(
+  scope_->InsertUsual(
       "__builtin_va_list",
       MakeAstNode<IdentifierExpr>("__builtin_va_list",
                                   ArrayType::Get(va_list, 1), kNone, true));
@@ -3024,16 +2971,16 @@ void Parser::AddBuiltin() {
   auto copy{FunctionType::Get(VoidType::Get(), {param1, param1})};
   copy->SetName("__builtin_va_copy");
 
-  curr_scope_->InsertUsual("__builtin_va_start",
-                           MakeAstNode<IdentifierExpr>(
-                               "__builtin_va_start", start, kExternal, false));
-  curr_scope_->InsertUsual(
+  scope_->InsertUsual("__builtin_va_start",
+                      MakeAstNode<IdentifierExpr>("__builtin_va_start", start,
+                                                  kExternal, false));
+  scope_->InsertUsual(
       "__builtin_va_end",
       MakeAstNode<IdentifierExpr>("__builtin_va_end", end, kExternal, false));
-  curr_scope_->InsertUsual("__builtin_va_arg_sub",
-                           MakeAstNode<IdentifierExpr>("__builtin_va_arg_sub",
-                                                       arg, kExternal, false));
-  curr_scope_->InsertUsual(
+  scope_->InsertUsual("__builtin_va_arg_sub",
+                      MakeAstNode<IdentifierExpr>("__builtin_va_arg_sub", arg,
+                                                  kExternal, false));
+  scope_->InsertUsual(
       "__builtin_va_copy",
       MakeAstNode<IdentifierExpr>("__builtin_va_copy", copy, kExternal, false));
 }
