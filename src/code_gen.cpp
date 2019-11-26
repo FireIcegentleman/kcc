@@ -304,6 +304,7 @@ CodeGen::LValue CodeGen::EmitLValue(const Expr& expr) {
       return EmitIdentifierLValue(dynamic_cast<const IdentifierExpr&>(expr));
     default:
       assert(false);
+      return LValue{};
   }
 }
 

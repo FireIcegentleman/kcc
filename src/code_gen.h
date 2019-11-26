@@ -90,7 +90,8 @@ class CodeGen : public Visitor {
   static RValue EmitLoadOfLValue(LValue l_value, QualType type);
   static llvm::Value *EmitLoadOfScalar(llvm::Value *addr, QualType type);
   static void EmitStoreThroughLValue(RValue src, LValue dst, QualType type);
-  static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr, QualType type);
+  static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr,
+                                QualType type);
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
