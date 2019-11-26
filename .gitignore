@@ -35,11 +35,9 @@
 .idea
 cmake-build-*
 build
-.clang
 compile_commands.json
 
 # Dev files
-test/dev
 *.html
 *.i
 *.txt
