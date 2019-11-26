@@ -1,0 +1,13 @@
+{
+  "configurations": [
+    {
+      "name": "Linux",
+      "includePath": [
+        "${workspaceFolder}/src"
+      ],
+      "compileCommands": "${workspaceFolder}/compile_commands.json",
+      "configurationProvider": "vector-of-bool.cmake-tools"
+    }
+  ],
+  "version": 4
+}
