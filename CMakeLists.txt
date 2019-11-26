@@ -6,6 +6,7 @@ project(
   LANGUAGES CXX)
 
 file(GLOB cppsrc src/*.cpp)
+file(GLOB cppheader src/*.h)
 file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
 
 if(NOT (CMAKE_BUILD_TYPE MATCHES "Debug"))
@@ -18,6 +19,7 @@ endif()
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(check)
 include(sanitizers)
+include(clang-tidy)
 include(compiler-options)
 
 set(CMAKE_AUTOMOC ON)
@@ -36,7 +38,6 @@ add_executable(${PROJECT_NAME} ${cppsrc})
 
 add_definitions(-DDEV)
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
-  message(STATUS "cmake-format found")
   include(format)
 endif()
 
