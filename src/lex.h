@@ -66,7 +66,7 @@ class Scanner {
   Token token_;
   std::string buffer_;
 
-  constexpr static std::size_t kTokenReserve{1024};
+  constexpr static std::size_t TokenReserve{1024};
 
   inline static KeywordsDictionary Keywords;
 };

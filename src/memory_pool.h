@@ -15,7 +15,7 @@
 
 namespace kcc {
 
-template <typename T, std::size_t BlockSize = 4096>
+template <typename T, std::size_t block_size = 4096>
 class MemoryPool {
  public:
   using ValueType = T;
@@ -51,11 +51,11 @@ class MemoryPool {
   void AllocateBlock();
   SizeType PadPointer(DataPointer p, SizeType align) const noexcept;
 
-  static_assert(BlockSize >= 2 * sizeof(SlotType), "BlockSize too small");
+  static_assert(block_size >= 2 * sizeof(SlotType), "BlockSize too small");
 };
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::~MemoryPool() noexcept {
+template <typename T, size_t block_size>
+MemoryPool<T, block_size>::~MemoryPool() noexcept {
   auto curr{current_block_};
   while (curr != nullptr) {
     auto prev{curr->next};
@@ -64,9 +64,9 @@ MemoryPool<T, BlockSize>::~MemoryPool() noexcept {
   }
 }
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::Pointer
-MemoryPool<T, BlockSize>::Allocate(SizeType, ConstPointer) {
+template <typename T, size_t block_size>
+inline typename MemoryPool<T, block_size>::Pointer
+MemoryPool<T, block_size>::Allocate(SizeType, ConstPointer) {
   if (free_slots_ != nullptr) {
     auto result{reinterpret_cast<Pointer>(free_slots_)};
     free_slots_ = free_slots_->next;
@@ -79,22 +79,22 @@ MemoryPool<T, BlockSize>::Allocate(SizeType, ConstPointer) {
   }
 }
 
-template <typename T, size_t BlockSize>
-void MemoryPool<T, BlockSize>::AllocateBlock() {
-  auto new_block{reinterpret_cast<DataPointer>(operator new(BlockSize))};
+template <typename T, size_t block_size>
+void MemoryPool<T, block_size>::AllocateBlock() {
+  auto new_block{reinterpret_cast<DataPointer>(operator new(block_size))};
   reinterpret_cast<SlotPointer>(new_block)->next = current_block_;
   current_block_ = reinterpret_cast<SlotPointer>(new_block);
 
   auto body{new_block + sizeof(SlotPointer)};
   auto body_padding{PadPointer(body, alignof(SlotType))};
   current_slot_ = reinterpret_cast<SlotPointer>(body + body_padding);
-  last_slot_ = reinterpret_cast<SlotPointer>(new_block + BlockSize -
+  last_slot_ = reinterpret_cast<SlotPointer>(new_block + block_size -
                                              sizeof(SlotType) + 1);
 }
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::SizeType
-MemoryPool<T, BlockSize>::PadPointer(DataPointer p, SizeType align) const
+template <typename T, size_t block_size>
+inline typename MemoryPool<T, block_size>::SizeType
+MemoryPool<T, block_size>::PadPointer(DataPointer p, SizeType align) const
     noexcept {
   auto result{reinterpret_cast<std::uintptr_t>(p)};
   return ((align - result) % align);

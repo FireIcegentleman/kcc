@@ -451,7 +451,10 @@ class StmtExpr : public Expr {
   CompoundStmt* block_;
 };
 
-class Stmt : public AstNode {};
+class Stmt : public AstNode {
+ public:
+  virtual std::vector<Stmt*> Children() const;
+};
 
 class LabelStmt : public Stmt {
  public:
@@ -552,6 +555,7 @@ class IfStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   const Expr* GetCond() const;
   const Stmt* GetThenBlock() const;
@@ -572,6 +576,7 @@ class SwitchStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   const Expr* GetCond() const;
   const Stmt* GetStmt() const;
@@ -590,6 +595,7 @@ class WhileStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   const Expr* GetCond() const;
   const Stmt* GetBlock() const;
@@ -608,6 +614,7 @@ class DoWhileStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   const Expr* GetCond() const;
   const Stmt* GetBlock() const;
@@ -627,6 +634,7 @@ class ForStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   const Expr* GetInit() const;
   const Expr* GetCond() const;

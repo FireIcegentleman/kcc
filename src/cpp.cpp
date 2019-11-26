@@ -105,7 +105,7 @@ std::string Preprocessor::Cpp(const std::string &input_file) {
   ci_.getDiagnosticClient().BeginSourceFile(ci_.getLangOpts(), pp_);
 
   std::string code;
-  code.reserve(Preprocessor::kStrReserve);
+  code.reserve(Preprocessor::StrReserve);
   llvm::raw_string_ostream os{code};
 
   clang::PreprocessorOutputOptions opts;

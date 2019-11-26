@@ -23,7 +23,7 @@ void JsonGen::GenJson(const TranslationUnit* root,
   QJsonDocument document{result_};
 
   std::ofstream ofs{file_name};
-  ofs << JsonGen::kBefore << document.toJson().toStdString() << JsonGen::kAfter
+  ofs << JsonGen::Before << document.toJson().toStdString() << JsonGen::After
       << std::flush;
 }
 

@@ -27,8 +27,32 @@ class CodeGen : public Visitor {
   void GenCode(const TranslationUnit *root);
 
  private:
-  struct BreakContinue {
+  class LValue {
    public:
+    static LValue MakeAddr(llvm::Value *value);
+    llvm::Value *GetAddr() const;
+
+   private:
+    llvm::Value *value_{};
+  };
+
+  class RValue {
+   public:
+    static RValue Get(llvm::Value *value);
+    static RValue GetAggregate(llvm::Value *value);
+
+    bool IsScalar() const;
+    bool IsAggregate() const;
+
+    llvm::Value *GetScalarVal() const;
+    llvm::Value *GetAggregateAddr() const;
+
+   private:
+    enum { kScalar, kAggregate } flavor_;
+    llvm::Value *value_{};
+  };
+
+  struct BreakContinue {
     BreakContinue(llvm::BasicBlock *break_block,
                   llvm::BasicBlock *continue_block);
 
@@ -52,13 +76,21 @@ class CodeGen : public Visitor {
   void EnsureInsertPoint();
   llvm::Value *EvaluateExprAsBool(const Expr *expr);
   bool TestAndClearIgnoreResultAssign();
+  static bool ContainsLabel(const Stmt *stmt, bool ignore_case = false);
 
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
-  llvm::Value *GetPtr(const AstNode &node);
-  static llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
-                             std::int32_t align);
+
+  LValue EmitLValue(const Expr &expr);
+  LValue EmitUnaryLValue(const UnaryOpExpr &unary);
+  LValue EmitBinaryLValue(const BinaryOpExpr &binary);
+  static LValue EmitObjectLValue(const ObjectExpr &obj);
+  LValue EmitIdentifierLValue(const IdentifierExpr &ident);
+  static RValue EmitLoadOfLValue(LValue l_value, QualType type);
+  static llvm::Value *EmitLoadOfScalar(llvm::Value *addr, QualType type);
+  static void EmitStoreThroughLValue(RValue src, LValue dst, QualType type);
+  static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr, QualType type);
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
@@ -91,7 +123,21 @@ class CodeGen : public Visitor {
   virtual void Visit(const Declaration &node) override;
   virtual void Visit(const FuncDef &node) override;
 
-  llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
+  llvm::Value *VisitPrePostIncDec(const UnaryOpExpr &unary, bool is_inc,
+                                  bool is_postfix);
+  llvm::Value *VisitUnaryPreDec(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryPreInc(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryPostDec(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryPostInc(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryAddr(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryDeref(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryPlus(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryMinus(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryNot(const UnaryOpExpr &unary);
+  llvm::Value *VisitUnaryLogicNot(const UnaryOpExpr &unary);
+
+  llvm::Value *VisitBinaryMemRef(const BinaryOpExpr &binary);
+
   static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
   static llvm::Value *LogicNotOp(llvm::Value *value);
 
@@ -147,10 +193,6 @@ class CodeGen : public Visitor {
 
   // 是否加载等号左边的值
   bool ignore_result_assign_{false};
-
-  // temp
-  std::int32_t align_{};
-  bool load_{false};
 };
 
 }  // namespace kcc

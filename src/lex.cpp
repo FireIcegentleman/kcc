@@ -42,7 +42,7 @@ Scanner::Scanner(std::string code, const Location& loc)
 
 std::vector<Token> Scanner::Tokenize() {
   std::vector<Token> token_sequence;
-  token_sequence.reserve(Scanner::kTokenReserve);
+  token_sequence.reserve(Scanner::TokenReserve);
 
   while (true) {
     auto token{Scan()};

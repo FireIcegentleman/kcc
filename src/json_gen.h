@@ -57,7 +57,7 @@ class JsonGen : public Visitor {
   std::string filter_;
   QJsonObject result_;
 
-  constexpr static std::string_view kBefore{
+  constexpr static std::string_view Before{
       "<!DOCTYPE html>\n"
       "<html lang=\"zh\">\n"
       "\n"
@@ -91,7 +91,7 @@ class JsonGen : public Visitor {
       "\n"
       "    var treeData = "};
 
-  constexpr static std::string_view kAfter{
+  constexpr static std::string_view After{
       "// Set the dimensions and margins of the diagram\n"
       "    var margin = { top: 20, right: 90, bottom: 30, left: 120 },\n"
       "      width = 5000 - margin.left - margin.right,\n"

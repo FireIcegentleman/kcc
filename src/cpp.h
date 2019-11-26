@@ -26,7 +26,7 @@ class Preprocessor {
  private:
   void AddIncludePath(const std::string &path, bool is_system);
 
-  constexpr static std::size_t kStrReserve{4096};
+  constexpr static std::size_t StrReserve{4096};
 
   clang::CompilerInstance ci_;
   clang::Preprocessor *pp_;

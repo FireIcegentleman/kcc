@@ -946,6 +946,11 @@ const CompoundStmt* StmtExpr::GetBlock() const { return block_; }
 StmtExpr::StmtExpr(CompoundStmt* block) : block_{block} {}
 
 /*
+ * Stmt
+ */
+std::vector<Stmt*> Stmt::Children() const { return {}; }
+
+/*
  * LabelStmt
  */
 LabelStmt* LabelStmt::Get(const std::string& name, Stmt* stmt) {
@@ -1079,6 +1084,10 @@ void IfStmt::Check() {
   }
 }
 
+std::vector<Stmt*> IfStmt::Children() const {
+  return {then_block_, else_block_};
+}
+
 const Expr* IfStmt::GetCond() const { return cond_; }
 
 const Stmt* IfStmt::GetThenBlock() const { return then_block_; }
@@ -1109,6 +1118,8 @@ void SwitchStmt::Check() {
   cond_ = Expr::MayCastTo(cond_, ArithmeticType::Get(kLong));
 }
 
+std::vector<Stmt*> SwitchStmt::Children() const { return {stmt_}; }
+
 const Expr* SwitchStmt::GetCond() const { return cond_; }
 
 const Stmt* SwitchStmt::GetStmt() const { return stmt_; }
@@ -1133,6 +1144,8 @@ void WhileStmt::Check() {
           cond_->GetQualType().ToString());
   }
 }
+
+std::vector<Stmt*> WhileStmt::Children() const { return {block_}; }
 
 const Expr* WhileStmt::GetCond() const { return cond_; }
 
@@ -1159,6 +1172,8 @@ void DoWhileStmt::Check() {
   }
 }
 
+std::vector<Stmt*> DoWhileStmt::Children() const { return {block_}; }
+
 const Expr* DoWhileStmt::GetCond() const { return cond_; }
 
 const Stmt* DoWhileStmt::GetBlock() const { return block_; }
@@ -1184,6 +1199,8 @@ void ForStmt::Check() {
           cond_->GetQualType().ToString());
   }
 }
+
+std::vector<Stmt*> ForStmt::Children() const { return {block_}; }
 
 const Expr* ForStmt::GetInit() const { return init_; }
 
