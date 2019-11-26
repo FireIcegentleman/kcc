@@ -1,3 +1,6 @@
-int printf(const char *s, ...);
+#include <stdio.h>
 
-int main(void) {}
+int main(void) {
+  int a = 10;
+  printf("%d\n", a);
+}
