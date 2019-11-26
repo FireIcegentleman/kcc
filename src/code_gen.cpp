@@ -4,6 +4,7 @@
 
 #include "code_gen.h"
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <vector>
@@ -25,6 +26,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
+#include "calc.h"
 #include "error.h"
 #include "llvm_common.h"
 #include "util.h"
@@ -192,8 +194,7 @@ void CodeGen::EmitBlock(llvm::BasicBlock* bb, bool is_finished) {
 void CodeGen::EmitBranch(llvm::BasicBlock* target) {
   auto curr{Builder.GetInsertBlock()};
 
-  if (!curr || curr->getTerminator()) {
-  } else {
+  if (curr && !curr->getTerminator()) {
     Builder.CreateBr(target);
   }
 
@@ -208,8 +209,13 @@ void CodeGen::EmitStmt(const Stmt* stmt) {
     return;
   }
 
+  // 检查是否在生成不可访问的代码
   if (!HaveInsertPoint()) {
+    // 如果语句不包含 label 则可以不生成它,
+    // 这样是安全的, 因为 (1) 改代码不可访问
+    // (2) 已经处理了声明
     if (!ContainsLabel(stmt)) {
+      assert(stmt->Kind() != AstNodeType::kDeclaration);
       return;
     } else {
       EnsureInsertPoint();
@@ -261,7 +267,9 @@ bool CodeGen::TestAndClearIgnoreResultAssign() {
 
 // 如果该语句不能正常执行, 那么如果没有 label 的话就可以删除代码
 bool CodeGen::ContainsLabel(const Stmt* stmt, bool ignore_case) {
-  assert(stmt != nullptr);
+  if (stmt == nullptr) {
+    return false;
+  }
 
   if (stmt->Kind() == AstNodeType::kLabelStmt) {
     return true;
@@ -680,7 +688,7 @@ void CodeGen::Visit(const StmtExpr& node) {
 }
 
 void CodeGen::Visit(const LabelStmt& node) {
-  EmitBlock(GetBasicBlockForLabel(&node));
+  EmitLabel(node);
   EmitStmt(node.GetStmt());
 }
 
@@ -689,9 +697,9 @@ void CodeGen::Visit(const CaseStmt& node) {
   EmitBlock(block);
   std::int64_t begin, end;
 
-  if (node.GetRHS()) {
+  if (auto rhs{node.GetRHS()}) {
     begin = node.GetLHS();
-    end = *node.GetRHS();
+    end = *rhs;
   } else {
     begin = node.GetLHS();
     end = begin;
@@ -707,40 +715,85 @@ void CodeGen::Visit(const CaseStmt& node) {
 
 void CodeGen::Visit(const DefaultStmt& node) {
   auto default_block{switch_inst_->getDefaultDest()};
+  assert(default_block->empty());
   EmitBlock(default_block);
   EmitStmt(node.GetStmt());
 }
 
 void CodeGen::Visit(const CompoundStmt& node) {
-  for (auto& item : node.GetStmts()) {
-    EmitStmt(item);
+  auto stmts{node.GetStmts()};
+  for (auto iter{std::begin(stmts)}, end{std::end(stmts) - get_last_};
+       iter != end; ++iter) {
+    EmitStmt(*iter);
+  }
+
+  if (get_last_) {
+    // 当最后一个语句是 label 语句时, 该语句表达式的值是 label 语句
+    // 的子语句(必须是表达式语句)的值
+    auto last_stmt{stmts.back()};
+    while (auto label_stmt{dynamic_cast<LabelStmt*>(last_stmt)}) {
+      EmitLabel(*label_stmt);
+      last_stmt = label_stmt->GetStmt();
+    }
+
+    EnsureInsertPoint();
+
+    auto expr_stmt{dynamic_cast<ExprStmt*>(last_stmt)};
+    assert(expr_stmt != nullptr);
+    expr_stmt->GetExpr()->Accept(*this);
+
+    last_value_ = RValue::Get(result_);
   }
 }
 
 void CodeGen::Visit(const ExprStmt& node) {
   if (node.GetExpr()) {
     node.GetExpr()->Accept(*this);
+  } else {
+    return;
+  }
+
+  if (auto bb{Builder.GetInsertBlock()}) {
+    if (bb->empty() && bb->use_empty()) {
+      bb->eraseFromParent();
+      Builder.ClearInsertionPoint();
+    }
   }
 }
 
 void CodeGen::Visit(const IfStmt& node) {
+  if (auto cond{CalcConstantExpr{}.Calc(node.GetCond())}) {
+    auto executed{node.GetThen()}, skipped{node.GetElse()};
+    if (cond->isZeroValue()) {
+      std::swap(executed, skipped);
+    }
+
+    // 如果 skipped block 不包含 label, 那么可以不生成它
+    if (!ContainsLabel(skipped)) {
+      if (executed) {
+        EmitStmt(executed);
+      }
+      return;
+    }
+  }
+
   auto then_block{CreateBasicBlock("if.then")};
   auto end_block{CreateBasicBlock("if.end")};
   auto else_block{end_block};
 
-  if (node.GetElseBlock()) {
+  if (node.GetElse()) {
     else_block = CreateBasicBlock("if.else");
   }
 
   EmitBranchOnBoolExpr(node.GetCond(), then_block, else_block);
 
   EmitBlock(then_block);
-  EmitStmt(node.GetThenBlock());
+  EmitStmt(node.GetThen());
   EmitBranch(end_block);
 
-  if (node.GetElseBlock()) {
+  if (auto else_stmt{node.GetElse()}) {
     EmitBlock(else_block);
-    EmitStmt(node.GetElseBlock());
+    EmitStmt(else_stmt);
     EmitBranch(end_block);
   }
 
@@ -758,6 +811,7 @@ void CodeGen::Visit(const SwitchStmt& node) {
   switch_inst_ = Builder.CreateSwitch(cond_val, default_block);
 
   Builder.ClearInsertionPoint();
+
   llvm::BasicBlock* continue_block{};
   if (!std::empty(break_continue_stack_)) {
     continue_block = break_continue_stack_.top().continue_block;
@@ -780,13 +834,23 @@ void CodeGen::Visit(const WhileStmt& node) {
   auto cond_block{CreateBasicBlock("while.cond")};
   EmitBlock(cond_block);
 
-  auto end_block{CreateBasicBlock("while.end")};
   auto body_block{CreateBasicBlock("while.body")};
+  auto end_block{CreateBasicBlock("while.end")};
 
   PushBlock(end_block, cond_block);
 
   auto cond_val{EvaluateExprAsBool(node.GetCond())};
-  Builder.CreateCondBr(cond_val, body_block, end_block);
+
+  // while(1)
+  bool emit_br{true};
+  if (auto constant{llvm::dyn_cast<llvm::ConstantInt>(cond_val)}) {
+    if (constant->isOne()) {
+      emit_br = false;
+    }
+  }
+  if (emit_br) {
+    Builder.CreateCondBr(cond_val, body_block, end_block);
+  }
 
   EmitBlock(body_block);
   EmitStmt(node.GetBlock());
@@ -794,6 +858,10 @@ void CodeGen::Visit(const WhileStmt& node) {
 
   EmitBranch(cond_block);
   EmitBlock(end_block, true);
+
+  if (!emit_br) {
+    SimplifyForwardingBlocks(cond_block);
+  }
 }
 
 void CodeGen::Visit(const DoWhileStmt& node) {
@@ -808,9 +876,23 @@ void CodeGen::Visit(const DoWhileStmt& node) {
 
   EmitBlock(cond_block);
   auto cond_val{EvaluateExprAsBool(node.GetCond())};
-  Builder.CreateCondBr(cond_val, body_block, end_block);
+
+  // do{}while(0)
+  bool emit_br{true};
+  if (auto constant{llvm::dyn_cast<llvm::ConstantInt>(cond_val)}) {
+    if (constant->isZero()) {
+      emit_br = false;
+    }
+  }
+  if (emit_br) {
+    Builder.CreateCondBr(cond_val, body_block, end_block);
+  }
 
   EmitBlock(end_block);
+
+  if (!emit_br) {
+    SimplifyForwardingBlocks(cond_block);
+  }
 }
 
 void CodeGen::Visit(const ForStmt& node) {
@@ -853,22 +935,14 @@ void CodeGen::Visit(const ForStmt& node) {
 }
 
 void CodeGen::Visit(const GotoStmt& node) {
-  if (!HaveInsertPoint()) {
-    return;
-  }
-  Builder.CreateBr(GetBasicBlockForLabel(node.GetLabel()));
-  Builder.ClearInsertionPoint();
+  EmitBranchThroughCleanup(GetBasicBlockForLabel(node.GetLabel()));
 }
 
 void CodeGen::Visit(const ContinueStmt& node) {
   if (std::empty(break_continue_stack_)) {
     Error(node.GetLoc(), "continue stmt not in a loop or switch");
   } else {
-    if (!HaveInsertPoint()) {
-      return;
-    }
-    Builder.CreateBr(break_continue_stack_.top().continue_block);
-    Builder.ClearInsertionPoint();
+    EmitBranchThroughCleanup(break_continue_stack_.top().continue_block);
   }
 }
 
@@ -876,14 +950,11 @@ void CodeGen::Visit(const BreakStmt& node) {
   if (std::empty(break_continue_stack_)) {
     Error(node.GetLoc(), "break stmt not in a loop or switch");
   } else {
-    if (!HaveInsertPoint()) {
-      return;
-    }
-    Builder.CreateBr(break_continue_stack_.top().break_block);
-    Builder.ClearInsertionPoint();
+    EmitBranchThroughCleanup(break_continue_stack_.top().break_block);
   }
 }
 
+// TODO
 void CodeGen::Visit(const ReturnStmt& node) {
   if (node.GetExpr()) {
     node.GetExpr()->Accept(*this);
@@ -1646,6 +1717,32 @@ void CodeGen::InitLocalAggregate(const Declaration& node) {
     result_ =
         Builder.CreateAlignedStore(value, ptr, item.GetType()->GetAlign());
   }
+}
+
+void CodeGen::EmitLabel(const LabelStmt& label_stmt) {
+  EmitBlock(GetBasicBlockForLabel(&label_stmt));
+}
+
+void CodeGen::SimplifyForwardingBlocks(llvm::BasicBlock* bb) {
+  auto bi{llvm::dyn_cast<llvm::BranchInst>(bb->getTerminator())};
+
+  if (!bi || !bi->isUnconditional()) {
+    return;
+  }
+
+  // getSuccessor 获取要跳转到的 BasicBlock
+  bb->replaceAllUsesWith(bi->getSuccessor(0));
+  bi->eraseFromParent();
+  bb->eraseFromParent();
+}
+
+void CodeGen::EmitBranchThroughCleanup(llvm::BasicBlock* dest) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
+
+  Builder.CreateBr(dest);
+  Builder.ClearInsertionPoint();
 }
 
 }  // namespace kcc

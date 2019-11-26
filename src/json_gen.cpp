@@ -320,10 +320,10 @@ void JsonGen::Visit(const IfStmt& node) {
   node.GetCond()->Accept(*this);
   children.append(result_);
 
-  node.GetThenBlock()->Accept(*this);
+  node.GetThen()->Accept(*this);
   children.append(result_);
 
-  if (auto else_block{node.GetElseBlock()}) {
+  if (auto else_block{node.GetElse()}) {
     else_block->Accept(*this);
     children.append(result_);
   }

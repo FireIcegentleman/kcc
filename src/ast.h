@@ -558,8 +558,8 @@ class IfStmt : public Stmt {
   virtual std::vector<Stmt*> Children() const override;
 
   const Expr* GetCond() const;
-  const Stmt* GetThenBlock() const;
-  const Stmt* GetElseBlock() const;
+  const Stmt* GetThen() const;
+  const Stmt* GetElse() const;
 
  private:
   IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block = nullptr);

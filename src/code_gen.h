@@ -77,6 +77,7 @@ class CodeGen : public Visitor {
   llvm::Value *EvaluateExprAsBool(const Expr *expr);
   bool TestAndClearIgnoreResultAssign();
   static bool ContainsLabel(const Stmt *stmt, bool ignore_case = false);
+  void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
 
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
@@ -92,6 +93,7 @@ class CodeGen : public Visitor {
   static void EmitStoreThroughLValue(RValue src, LValue dst, QualType type);
   static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr,
                                 QualType type);
+  void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
@@ -124,6 +126,7 @@ class CodeGen : public Visitor {
   virtual void Visit(const Declaration &node) override;
   virtual void Visit(const FuncDef &node) override;
 
+  void EmitLabel(const LabelStmt &label_stmt);
   llvm::Value *VisitPrePostIncDec(const UnaryOpExpr &unary, bool is_inc,
                                   bool is_postfix);
   llvm::Value *VisitUnaryPreDec(const UnaryOpExpr &unary);
@@ -194,6 +197,10 @@ class CodeGen : public Visitor {
 
   // 是否加载等号左边的值
   bool ignore_result_assign_{false};
+  // 处理语句表达式时, 是否获取最后一个语句的值
+  bool get_last_{false};
+  // 最后一个语句的值
+  RValue last_value_;
 };
 
 }  // namespace kcc

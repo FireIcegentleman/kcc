@@ -1090,9 +1090,9 @@ std::vector<Stmt*> IfStmt::Children() const {
 
 const Expr* IfStmt::GetCond() const { return cond_; }
 
-const Stmt* IfStmt::GetThenBlock() const { return then_block_; }
+const Stmt* IfStmt::GetThen() const { return then_block_; }
 
-const Stmt* IfStmt::GetElseBlock() const { return else_block_; }
+const Stmt* IfStmt::GetElse() const { return else_block_; }
 
 IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
     : cond_{cond}, then_block_{then_block}, else_block_{else_block} {}
