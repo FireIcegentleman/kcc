@@ -64,16 +64,13 @@ void std() {
     expect_string("18", fmtint(LDBL_DIG));
     expect_string("0x8p-66", fmtldbl(LDBL_EPSILON));
     expect_string("64", fmtint(LDBL_MANT_DIG));
-    // TODO
-    //expect_string("0xf.fffffffffffffffp+16380", fmtldbl(LDBL_MAX));
+    expect_string("0xf.fffffffffffffffp+16380", fmtldbl(LDBL_MAX));
     expect_string("4932", fmtint(LDBL_MAX_10_EXP));
     expect_string("16384", fmtint(LDBL_MAX_EXP));
-    //expect_string("0x8p-16385", fmtldbl(LDBL_MIN));
+    expect_string("0x8p-16385", fmtldbl(LDBL_MIN));
     expect_string("-4931", fmtint(LDBL_MIN_10_EXP));
     expect_string("-16381", fmtint(LDBL_MIN_EXP));
-    // TODO 用例不正确
-    //expectd(*(double *)&(uint64_t){1}, LDBL_TRUE_MIN);
-    //expect_string("0x0.000000000000001p-16385", fmtldbl(LDBL_TRUE_MIN));
+    expect_string("0x0.000000000000001p-16385", fmtldbl(LDBL_TRUE_MIN));
 }
 
 void testmain() {

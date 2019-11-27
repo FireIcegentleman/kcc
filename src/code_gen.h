@@ -77,7 +77,7 @@ class CodeGen : public Visitor {
   llvm::Value *EvaluateExprAsBool(const Expr *expr);
   bool TestAndClearIgnoreResultAssign();
   static bool ContainsLabel(const Stmt *stmt, bool ignore_case = false);
-  void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
+  static void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
 
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);

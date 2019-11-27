@@ -284,4 +284,17 @@ llvm::GlobalVariable *CreateGlobalVar(QualType type, llvm::Constant *init,
   return var;
 }
 
+const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type) {
+  assert(type->isFloatingPointTy());
+  if (type->isFloatTy()) {
+    return TargetInfo->getFloatFormat();
+  } else if (type->isDoubleTy()) {
+    return TargetInfo->getDoubleFormat();
+  } else if (type->isX86_FP80Ty()) {
+    return TargetInfo->getLongDoubleFormat();
+  } else {
+    assert(false);
+  }
+}
+
 }  // namespace kcc

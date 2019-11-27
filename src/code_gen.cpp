@@ -608,7 +608,10 @@ void CodeGen::Visit(const ConstantExpr& node) {
         Context, llvm::APInt(type->getIntegerBitWidth(), node.GetIntegerVal(),
                              !node.GetType()->IsUnsigned()));
   } else if (type->isFloatingPointTy()) {
-    result_ = llvm::ConstantFP::get(type, node.GetFloatPointVal());
+    // TODO ast 使用 APInt / APFloat 保存值
+    llvm::APFloat value{GetFloatTypeSemantics(type),
+                        std::to_string(node.GetFloatPointVal())};
+    result_ = llvm::ConstantFP::get(type, value);
   } else {
     assert(false);
   }
@@ -954,7 +957,6 @@ void CodeGen::Visit(const BreakStmt& node) {
   }
 }
 
-// TODO
 void CodeGen::Visit(const ReturnStmt& node) {
   if (node.GetExpr()) {
     node.GetExpr()->Accept(*this);
@@ -999,7 +1001,6 @@ void CodeGen::Visit(const FuncDef& node) {
   func_ = func;
 
   // TODO Attribute DSOLocal 用法
-  // TODO 实现 inline
   if (node.GetLinkage() != kInternal) {
     func->setDSOLocal(true);
   }

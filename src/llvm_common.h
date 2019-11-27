@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include <clang/Basic/TargetInfo.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/IRBuilder.h>
@@ -29,6 +30,8 @@ inline llvm::LLVMContext Context;
 inline llvm::IRBuilder<> Builder{Context};
 // 包含函数和全局变量, 它拥有生成的所有 IR 的内存
 inline std::unique_ptr<llvm::Module> Module;
+
+inline clang::TargetInfo *TargetInfo;
 
 inline std::unique_ptr<llvm::TargetMachine> TargetMachine;
 
@@ -71,6 +74,8 @@ llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
 
 llvm::GlobalVariable *CreateGlobalVar(QualType type, llvm::Constant *init,
                                       Linkage linkage, const std::string &name);
+
+const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type);
 
 }  // namespace kcc
 

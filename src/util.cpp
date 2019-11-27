@@ -60,7 +60,7 @@ void InitCommandLine(int argc, char *argv[]) {
   llvm::cl::HideUnrelatedOptions(Category);
 
   llvm::cl::SetVersionPrinter([](llvm::raw_ostream &os) {
-    os << "Kaiser's C compiler\n";
+    os << "Kaiser's C Compiler\n";
     os << "Version " << KCC_VERSION << '\n';
     os << "InstalledDir: " << GetPath() << '\n';
   });

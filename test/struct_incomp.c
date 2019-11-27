@@ -15,7 +15,7 @@ static void test_incomp() {
 typedef struct {
   int a;
   int b;
-  // TODO
+  // TODO 大小为零的数组
   //long long arr[0];
 } bar_t;
 

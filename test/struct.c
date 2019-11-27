@@ -397,8 +397,6 @@ void test9()
 
   foo_t foo = {1, 2, 5, .d=3, 4};
   expect(3, foo.a);
-  // TODO
-  //expect(0, foo.b);
   expect(3, foo.c);
   expect(3, foo.d);
   expect(4, foo.e);

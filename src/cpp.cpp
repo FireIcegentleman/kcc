@@ -8,7 +8,6 @@
 
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
-#include <clang/Basic/TargetInfo.h>
 #include <clang/Basic/TargetOptions.h>
 #include <clang/Frontend/FrontendOptions.h>
 #include <clang/Frontend/LangStandard.h>
@@ -22,6 +21,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include "error.h"
+#include "llvm_common.h"
 
 namespace kcc {
 
@@ -34,9 +34,9 @@ Preprocessor::Preprocessor() {
 
   auto pto{std::make_shared<clang::TargetOptions>()};
   pto->Triple = llvm::sys::getDefaultTargetTriple();
-  auto pti{clang::TargetInfo::CreateTargetInfo(ci_.getDiagnostics(), pto)};
+  TargetInfo = clang::TargetInfo::CreateTargetInfo(ci_.getDiagnostics(), pto);
 
-  ci_.setTarget(pti);
+  ci_.setTarget(TargetInfo);
 
   ci_.getInvocation().setLangDefaults(
       ci_.getLangOpts(), clang::InputKind::C, llvm::Triple{pto->Triple},
