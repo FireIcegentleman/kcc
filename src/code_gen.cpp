@@ -306,6 +306,7 @@ CodeGen::LValue CodeGen::EmitLValue(const Expr& expr) {
       return EmitUnaryLValue(dynamic_cast<const UnaryOpExpr&>(expr));
     case AstNodeType::kBinaryOpExpr:
       return EmitBinaryLValue(dynamic_cast<const BinaryOpExpr&>(expr));
+      // 函数指针
     case AstNodeType::kObjectExpr:
       return EmitObjectLValue(dynamic_cast<const ObjectExpr&>(expr));
     case AstNodeType::kIdentifierExpr:
@@ -323,27 +324,24 @@ CodeGen::LValue CodeGen::EmitUnaryLValue(const UnaryOpExpr& unary) {
 }
 
 CodeGen::LValue CodeGen::EmitBinaryLValue(const BinaryOpExpr& binary) {
-  if (binary.GetOp() == Tag::kPeriod) {
-    auto lhs_ptr{EmitLValue(*binary.GetLHS())};
-    auto obj{dynamic_cast<const ObjectExpr*>(binary.GetRHS())};
-    assert(obj != nullptr);
+  assert(binary.GetOp() == Tag::kPeriod);
 
-    auto indexs{obj->GetIndexs()};
-    for (const auto& [type, index] : indexs) {
-      if (type->IsStructTy()) {
-        lhs_ptr =
-            LValue::MakeAddr(Builder.CreateStructGEP(lhs_ptr.GetAddr(), index));
-      } else {
-        lhs_ptr = LValue::MakeAddr(Builder.CreateBitCast(
-            lhs_ptr.GetAddr(),
-            type->StructGetMemberType(index)->GetLLVMType()->getPointerTo()));
-      }
+  auto lhs_ptr{EmitLValue(*binary.GetLHS()).GetAddr()};
+  auto obj{dynamic_cast<const ObjectExpr*>(binary.GetRHS())};
+  assert(obj != nullptr);
+
+  auto indexs{obj->GetIndexs()};
+  for (const auto& [type, index] : indexs) {
+    if (type->IsStructTy()) {
+      lhs_ptr = Builder.CreateStructGEP(lhs_ptr, index);
+    } else {
+      lhs_ptr = Builder.CreateBitCast(
+          lhs_ptr,
+          type->StructGetMemberType(index)->GetLLVMType()->getPointerTo());
     }
-    return lhs_ptr;
-  } else {
-    assert(false);
-    return LValue{};
   }
+
+  return LValue::MakeAddr(lhs_ptr);
 }
 
 CodeGen::LValue CodeGen::EmitObjectLValue(const ObjectExpr& obj) {
@@ -359,14 +357,8 @@ CodeGen::LValue CodeGen::EmitIdentifierLValue(const IdentifierExpr& ident) {
   return LValue::MakeAddr(result_);
 }
 
-CodeGen::RValue CodeGen::EmitLoadOfLValue(CodeGen::LValue l_value,
-                                          QualType type) {
-  auto addr{l_value.GetAddr()};
-  if (addr->getType()->getPointerElementType()->isFunctionTy()) {
-    return RValue::Get(addr);
-  } else {
-    return RValue::Get(EmitLoadOfScalar(addr, type));
-  }
+llvm::Value* CodeGen::EmitLoadOfLValue(CodeGen::LValue l_value, QualType type) {
+  return LoadOfLValue(l_value, type).GetScalarVal();
 }
 
 llvm::Value* CodeGen::EmitLoadOfScalar(llvm::Value* addr, QualType type) {
@@ -444,9 +436,6 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
 }
 
 void CodeGen::Visit(const TypeCastExpr& node) {
-  if (!HaveInsertPoint()) {
-    return;
-  }
   node.GetExpr()->Accept(*this);
   result_ = CastTo(result_, node.GetCastToType()->GetLLVMType(),
                    node.GetExpr()->GetType()->IsUnsigned());
@@ -576,9 +565,6 @@ void CodeGen::Visit(const ConditionOpExpr& node) {
 
 // LLVM 默认使用本机 C 调用约定
 void CodeGen::Visit(const FuncCallExpr& node) {
-  if (!HaveInsertPoint()) {
-    return;
-  }
   if (MayCallBuiltinFunc(node)) {
     return;
   }
@@ -598,17 +584,14 @@ void CodeGen::Visit(const FuncCallExpr& node) {
 // 常量用 ConstantFP / ConstantInt 类表示
 // 在 LLVM IR 中, 常量都是唯一且共享的
 void CodeGen::Visit(const ConstantExpr& node) {
-  if (!HaveInsertPoint()) {
-    return;
-  }
   auto type{node.GetType()->GetLLVMType()};
 
+  // TODO ast 使用 APInt / APFloat 保存值
   if (type->isIntegerTy()) {
-    result_ = llvm::ConstantInt::get(
-        Context, llvm::APInt(type->getIntegerBitWidth(), node.GetIntegerVal(),
-                             !node.GetType()->IsUnsigned()));
+    llvm::APInt value{type->getIntegerBitWidth(), node.GetIntegerVal(),
+                      !node.GetType()->IsUnsigned()};
+    result_ = llvm::ConstantInt::get(Context, value);
   } else if (type->isFloatingPointTy()) {
-    // TODO ast 使用 APInt / APFloat 保存值
     llvm::APFloat value{GetFloatTypeSemantics(type),
                         std::to_string(node.GetFloatPointVal())};
     result_ = llvm::ConstantFP::get(type, value);
@@ -619,13 +602,7 @@ void CodeGen::Visit(const ConstantExpr& node) {
 
 // 1 / 2 / 4
 // 注意已经添加空字符了
-void CodeGen::Visit(const StringLiteralExpr& node) {
-  if (!HaveInsertPoint()) {
-    return;
-  }
-
-  result_ = node.GetPtr();
-}
+void CodeGen::Visit(const StringLiteralExpr& node) { result_ = node.GetPtr(); }
 
 void CodeGen::Visit(const IdentifierExpr& node) {
   if (!HaveInsertPoint()) {
@@ -1050,8 +1027,8 @@ llvm::Value* CodeGen::VisitPrePostIncDec(const UnaryOpExpr& unary, bool is_inc,
                                          bool is_postfix) {
   auto expr_type{unary.GetExpr()->GetQualType()};
   auto is_unsigned{expr_type->IsUnsigned()};
-  auto lhs_ptr{EmitLValue(unary)};
-  auto lhs_value{EmitLoadOfLValue(lhs_ptr, expr_type).GetScalarVal()};
+  auto lhs_ptr{EmitLValue(*unary.GetExpr())};
+  auto lhs_value{LoadOfLValue(lhs_ptr, expr_type).GetScalarVal()};
 
   llvm::Value* rhs_value{};
 
@@ -1101,7 +1078,7 @@ llvm::Value* CodeGen::VisitUnaryAddr(const UnaryOpExpr& unary) {
 }
 
 llvm::Value* CodeGen::VisitUnaryDeref(const UnaryOpExpr& unary) {
-  return EmitLoadOfLValue(EmitLValue(unary), unary.GetExpr()->GetQualType())
+  return LoadOfLValue(EmitLValue(unary), unary.GetExpr()->GetQualType())
       .GetScalarVal();
 }
 
@@ -1129,8 +1106,7 @@ llvm::Value* CodeGen::VisitUnaryLogicNot(const UnaryOpExpr& unary) {
 }
 
 llvm::Value* CodeGen::VisitBinaryMemRef(const BinaryOpExpr& binary) {
-  auto ptr{EmitLValue(binary)};
-  return EmitLoadOfLValue(ptr, binary.GetQualType()).GetScalarVal();
+  return EmitLoadOfLValue(&binary);
 }
 
 llvm::Value* CodeGen::NegOp(llvm::Value* value, bool is_unsigned) {
@@ -1445,7 +1421,7 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
   if (ignore) {
     return nullptr;
   } else {
-    return EmitLoadOfLValue(lhs, node.GetQualType()).GetScalarVal();
+    return LoadOfLValue(lhs, node.GetQualType()).GetScalarVal();
   }
 }
 
@@ -1744,6 +1720,19 @@ void CodeGen::EmitBranchThroughCleanup(llvm::BasicBlock* dest) {
 
   Builder.CreateBr(dest);
   Builder.ClearInsertionPoint();
+}
+
+llvm::Value* CodeGen::EmitLoadOfLValue(const Expr* expr) {
+  return EmitLoadOfLValue(EmitLValue(*expr), expr->GetQualType());
+}
+
+CodeGen::RValue CodeGen::LoadOfLValue(CodeGen::LValue l_value, QualType type) {
+  auto addr{l_value.GetAddr()};
+  if (addr->getType()->getPointerElementType()->isFunctionTy()) {
+    return RValue::Get(addr);
+  } else {
+    return RValue::Get(EmitLoadOfScalar(addr, type));
+  }
 }
 
 }  // namespace kcc

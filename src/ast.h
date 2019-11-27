@@ -273,7 +273,7 @@ class ConstantExpr : public Expr {
   virtual void Check() override;
   virtual bool IsLValue() const override;
 
-  long GetIntegerVal() const;
+  std::uint64_t GetIntegerVal() const;
   long double GetFloatPointVal() const;
 
  private:

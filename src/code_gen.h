@@ -88,7 +88,9 @@ class CodeGen : public Visitor {
   LValue EmitBinaryLValue(const BinaryOpExpr &binary);
   static LValue EmitObjectLValue(const ObjectExpr &obj);
   LValue EmitIdentifierLValue(const IdentifierExpr &ident);
-  static RValue EmitLoadOfLValue(LValue l_value, QualType type);
+  llvm::Value *EmitLoadOfLValue(const Expr *expr);
+  llvm::Value *EmitLoadOfLValue(LValue l_value, QualType type);
+  static RValue LoadOfLValue(LValue l_value, QualType type);
   static llvm::Value *EmitLoadOfScalar(llvm::Value *addr, QualType type);
   static void EmitStoreThroughLValue(RValue src, LValue dst, QualType type);
   static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr,

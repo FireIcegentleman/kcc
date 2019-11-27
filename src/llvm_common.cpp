@@ -294,6 +294,7 @@ const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type) {
     return TargetInfo->getLongDoubleFormat();
   } else {
     assert(false);
+    return TargetInfo->getDoubleFormat();
   }
 }
 

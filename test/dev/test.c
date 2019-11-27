@@ -1,3 +1,8 @@
 int printf(const char *s, ...);
 
-int main(void) { long double fuck = 0xf.fffffffffffffffp+16380L; }
+int main(void) {
+  int a = 10;
+  printf("%d\n", a);
+  printf("%d\n", a++);
+  printf("%d\n", ++a);
+}

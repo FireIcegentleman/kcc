@@ -657,7 +657,7 @@ void ConstantExpr::Check() {}
 
 bool ConstantExpr::IsLValue() const { return false; }
 
-long ConstantExpr::GetIntegerVal() const { return integer_val_; }
+std::uint64_t ConstantExpr::GetIntegerVal() const { return integer_val_; }
 
 long double ConstantExpr::GetFloatPointVal() const { return float_point_val_; }
 
