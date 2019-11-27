@@ -485,7 +485,7 @@ void JsonGen::Visit(const Declaration& node) {
   node.GetIdent()->Accept(*this);
   children.append(result_);
 
-  if (node.HasConstantInit()) {
+  if (node.HasConstantInit() && !node.ValueInit()) {
     QJsonObject obj;
     obj["name"] = QString::fromStdString(LLVMConstantToStr(node.GetConstant()));
     children.append(obj);

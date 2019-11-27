@@ -38,6 +38,7 @@ build
 compile_commands.json
 
 # Dev files
+test/dev/standard.cpp
 *.html
 *.i
 *.txt

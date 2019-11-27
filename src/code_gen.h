@@ -80,7 +80,8 @@ class CodeGen : public Visitor {
   bool TestAndClearIgnoreResultAssign();
   static bool ContainsLabel(const Stmt *stmt, bool ignore_case = false);
   static void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
-
+  void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
+  static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
@@ -90,18 +91,17 @@ class CodeGen : public Visitor {
   LValue EmitBinaryLValue(const BinaryOpExpr &binary);
   static LValue EmitObjectLValue(const ObjectExpr &obj);
   LValue EmitIdentifierLValue(const IdentifierExpr &ident);
+
   llvm::Value *EmitLoadOfLValue(const Expr *expr);
-  llvm::Value *EmitLoadOfLValue(LValue l_value, QualType type);
-  static RValue LoadOfLValue(LValue l_value, QualType type);
-  static llvm::Value *EmitLoadOfScalar(llvm::Value *addr, QualType type);
+  static RValue EmitLoadOfLValue(LValue l_value, QualType type);
   static void EmitStoreThroughLValue(RValue src, LValue dst, QualType type);
+
+  static llvm::Value *EmitLoadOfScalar(llvm::Value *addr, QualType type);
   static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr,
                                 QualType type);
-  void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
-  static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
+
   void EmitAggLoadOfLValue(const Expr *expr);
   void EmitFinalDestCopy(const Expr *expr, LValue src, bool ignore = false);
-  void EmitFinalDestCopy(const Expr *expr, RValue src, bool ignore = false);
   static void EmitAggregateCopy(llvm::Value *dest_ptr, llvm::Value *src_ptr,
                                 QualType type);
 
