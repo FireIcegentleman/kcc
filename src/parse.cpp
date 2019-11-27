@@ -113,8 +113,6 @@ bool Parser::IsDecl(const Token& tok) {
   return false;
 }
 
-bool Parser::InGlobal() const { return func_def_ == nullptr; }
-
 std::int64_t Parser::ParseInt64Constant() {
   auto expr{ParseExpr()};
   if (!expr->GetType()->IsIntegerTy()) {
@@ -292,6 +290,15 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
     scope_->InsertUsual(obj);
     auto decl{MakeAstNode<Declaration>(token, obj)};
     obj->SetDecl(decl);
+
+    // 全局变量和局部静态变量提前生成
+    if (scope_->IsFileScope()) {
+      CreateGlobalVar(obj);
+    } else if (scope_->IsBlockScope() && storage_class_spec & kStatic) {
+      obj->SetName(func_def_->GetName() + "." + obj->GetName());
+      obj->SetGlobalPtr(
+          CreateLocalStaticVar(obj->GetQualType(), obj->GetName()));
+    }
 
     return decl;
   }
@@ -757,7 +764,7 @@ Expr* Parser::TryParseCompoundLiteral() {
 }
 
 Expr* Parser::ParseCompoundLiteral(QualType type) {
-  if (InGlobal()) {
+  if (scope_->IsFileScope()) {
     auto obj{MakeAstNode<ObjectExpr>(Peek(), "", type, 0, kInternal, true)};
     auto decl{MakeAstNode<Declaration>(Peek(), obj)};
 
@@ -888,12 +895,12 @@ Expr* Parser::ParsePrimaryExpr() {
   } else if (Try(Tag::kGeneric)) {
     return ParseGenericSelection();
   } else if (Try(Tag::kFuncName)) {
-    if (InGlobal()) {
+    if (func_def_ == nullptr) {
       Error(token, "Not allowed to use __func__ or __FUNCTION__ here");
     }
     return MakeAstNode<StringLiteralExpr>(token, func_def_->GetName());
   } else if (Try(Tag::kFuncSignature)) {
-    if (InGlobal()) {
+    if (func_def_ == nullptr) {
       Error(token, "Not allowed to use __PRETTY_FUNCTION__ here");
     }
     return MakeAstNode<StringLiteralExpr>(
@@ -1978,29 +1985,38 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
   auto decl{
       MakeDeclaration(tok, base_type, storage_class_spec, func_spec, align)};
 
-  if (decl && Try(Tag::kEqual) && decl->IsObjDecl()) {
-    if (!InGlobal() && !(storage_class_spec & kStatic)) {
-      // TODO 尝试使用 ParseConstantInitializer
-      ParseInitDeclaratorSub(decl);
-    } else {
-      decl->SetConstant(
-          ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
+  if (decl && decl->IsObjDecl()) {
+    if (Try(Tag::kEqual)) {
+      if (!scope_->IsFileScope() &&
+          !(scope_->IsBlockScope() && storage_class_spec & kStatic)) {
+        // TODO 尝试使用 ParseConstantInitializer
+        ParseInitDeclaratorSub(decl);
+      } else {
+        decl->SetConstant(
+            ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
+      }
+    }
 
-      if (InGlobal() || (storage_class_spec & kStatic)) {
-        auto obj{decl->GetIdent()->ToObjectExpr()};
+    if (scope_->IsFileScope() ||
+        (scope_->IsBlockScope() && storage_class_spec & kStatic)) {
+      auto obj{decl->GetIdent()->ToObjectExpr()};
+      assert(obj != nullptr);
 
-        // 局部静态变量
-        if ((storage_class_spec & kStatic) && !InGlobal()) {
-          obj->SetName(func_def_->GetName() + "." + obj->GetName());
+      if (!obj->IsStatic() && !obj->IsExtern() && !decl->HasConstantInit()) {
+        obj->GetGlobalPtr()->setLinkage(llvm::GlobalVariable::CommonLinkage);
+      }
+
+      if (decl->HasConstantInit()) {
+        obj->GetGlobalPtr()->setInitializer(decl->GetConstant());
+      } else {
+        if (!obj->IsExtern()) {
+          obj->GetGlobalPtr()->setInitializer(
+              GetConstantZero(obj->GetType()->GetLLVMType()));
         }
-
-        auto ident{decl->GetIdent()};
-        obj->SetGlobalPtr(
-            CreateGlobalVar(ident->GetQualType(), decl->GetConstant(),
-                            ident->GetLinkage(), ident->GetName()));
       }
     }
   }
+
   return decl;
 }
 

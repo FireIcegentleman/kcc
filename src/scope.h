@@ -58,6 +58,7 @@ class Scope {
   Scope* GetParent();
 
   bool IsFileScope() const;
+  bool IsBlockScope() const;
 
  private:
   Scope(Scope* parent, enum ScopeType type);

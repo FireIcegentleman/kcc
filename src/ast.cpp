@@ -877,7 +877,9 @@ void ObjectExpr::SetDecl(Declaration* decl) { decl_ = decl; }
 
 bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
-bool ObjectExpr::InGlobal() const { return linkage_ != kNone; }
+bool ObjectExpr::InGlobal() const {
+  return linkage_ != kNone || (linkage_ == kNone && IsStatic());
+}
 
 void ObjectExpr::SetLocalPtr(llvm::AllocaInst* local_ptr) {
   assert(local_ptr_ == nullptr && global_ptr_ == nullptr);

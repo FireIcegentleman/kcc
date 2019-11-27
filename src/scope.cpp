@@ -89,6 +89,8 @@ Scope* Scope::GetParent() { return parent_; }
 
 bool Scope::IsFileScope() const { return type_ == kFile; }
 
+bool Scope::IsBlockScope() const { return type_ == kBlock; }
+
 Scope::Scope(Scope* parent, enum ScopeType type)
     : parent_{parent}, type_{type} {}
 

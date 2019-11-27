@@ -12,15 +12,19 @@
 
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/ValueHandle.h>
 
 #include "ast.h"
+#include "type.h"
 #include "visitor.h"
 
 namespace kcc {
 
+// TODO  & -> *
 class CodeGen : public Visitor {
  public:
   CodeGen();
@@ -63,9 +67,7 @@ class CodeGen : public Visitor {
   static llvm::BasicBlock *CreateBasicBlock(
       const std::string &name = "", llvm::Function *parent = nullptr,
       llvm::BasicBlock *insert_before = nullptr);
-  static llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *parent,
-                                                  llvm::Type *type,
-                                                  std::int32_t align);
+  llvm::AllocaInst *CreateTempAlloca(QualType type);
   void EmitBranchOnBoolExpr(const Expr *expr, llvm::BasicBlock *true_block,
                             llvm::BasicBlock *false_block);
   void EmitBlock(llvm::BasicBlock *bb, bool is_finished = false);
@@ -97,7 +99,11 @@ class CodeGen : public Visitor {
                                 QualType type);
   void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
   static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
-  llvm::Value *EmitAggLoadOfLValue(const Expr *expr);
+  void EmitAggLoadOfLValue(const Expr *expr);
+  void EmitFinalDestCopy(const Expr *expr, LValue src, bool ignore = false);
+  void EmitFinalDestCopy(const Expr *expr, RValue src, bool ignore = false);
+  static void EmitAggregateCopy(llvm::Value *dest_ptr, llvm::Value *src_ptr,
+                                QualType type);
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
@@ -130,6 +136,11 @@ class CodeGen : public Visitor {
   virtual void Visit(const Declaration &node) override;
   virtual void Visit(const FuncDef &node) override;
 
+  void StartFunction(const FuncDef &node);
+  void FinishFunction(const FuncDef &node);
+  void EmitFunctionEpilog(const FuncDef &node);
+  void EmitReturnBlock();
+
   void EmitLabel(const LabelStmt &label_stmt);
   llvm::Value *VisitPrePostIncDec(const UnaryOpExpr &unary, bool is_inc,
                                   bool is_postfix);
@@ -143,8 +154,12 @@ class CodeGen : public Visitor {
   llvm::Value *VisitUnaryMinus(const UnaryOpExpr &unary);
   llvm::Value *VisitUnaryNot(const UnaryOpExpr &unary);
   llvm::Value *VisitUnaryLogicNot(const UnaryOpExpr &unary);
-
   llvm::Value *VisitBinaryMemRef(const BinaryOpExpr &binary);
+
+  void VisitAggBinaryMemRef(const BinaryOpExpr &binary);
+  void VisitAggUnaryDeref(const UnaryOpExpr &unary);
+  void VisitAggBinaryAssign(const BinaryOpExpr &node);
+  void VisitConditionOpExpr(const ConditionOpExpr &node);
 
   static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
   static llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs,
@@ -182,7 +197,6 @@ class CodeGen : public Visitor {
 
   llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
 
-  static void DealGlobalDecl(const Declaration &node);
   void DealLocaleDecl(const Declaration &node);
   void InitLocalAggregate(const Declaration &node);
 
@@ -203,6 +217,11 @@ class CodeGen : public Visitor {
   bool get_last_{false};
   // 最后一个语句的值
   RValue last_value_;
+  llvm::Value *dest_ptr_{};
+  bool ignore_result_{false};
+  llvm::AssertingVH<llvm::Instruction> alloc_insert_point_;
+  llvm::BasicBlock *return_block_{};
+  llvm::Value *return_value_{};
 };
 
 }  // namespace kcc

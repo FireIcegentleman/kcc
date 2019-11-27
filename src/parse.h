@@ -45,7 +45,6 @@ class Parser {
   void ExitProto();
   bool IsTypeName(const Token& tok);
   bool IsDecl(const Token& tok);
-  bool InGlobal() const;
   std::int64_t ParseInt64Constant();
   LabelStmt* FindLabel(const std::string& name) const;
   static auto GetStructDesignator(Type* type, const std::string& name)

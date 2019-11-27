@@ -72,8 +72,10 @@ llvm::GlobalVariable *CreateGlobalCompoundLiteral(QualType type,
 llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
                                          std::int32_t align);
 
-llvm::GlobalVariable *CreateGlobalVar(QualType type, llvm::Constant *init,
-                                      Linkage linkage, const std::string &name);
+void CreateGlobalVar(ObjectExpr *obj);
+
+llvm::GlobalVariable *CreateLocalStaticVar(QualType type,
+                                           const std::string &name);
 
 const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type);
 

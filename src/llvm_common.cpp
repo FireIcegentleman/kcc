@@ -270,15 +270,31 @@ llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
   return var;
 }
 
-llvm::GlobalVariable *CreateGlobalVar(QualType type, llvm::Constant *init,
-                                      Linkage linkage,
-                                      const std::string &name) {
-  assert(init != nullptr);
-  auto var{new llvm::GlobalVariable(
-      *Module, type->GetLLVMType(), type.IsConst(),
-      linkage == kInternal ? llvm::GlobalValue::InternalLinkage
-                           : llvm::GlobalValue::ExternalLinkage,
-      init, name)};
+void CreateGlobalVar(ObjectExpr *obj) {
+  auto type{obj->GetType()->GetLLVMType()};
+  auto name{obj->GetName()};
+
+  // 在符号表中查找指定的全局变量, 如果不存在则添加并返回它
+  Module->getOrInsertGlobal(name, type);
+  auto ptr{Module->getNamedGlobal(name)};
+  obj->SetGlobalPtr(ptr);
+
+  ptr->setAlignment(obj->GetAlign());
+  if (obj->IsStatic()) {
+    ptr->setLinkage(llvm::GlobalVariable::InternalLinkage);
+  } else if (obj->IsExtern()) {
+    ptr->setLinkage(llvm::GlobalVariable::ExternalLinkage);
+  } else {
+    ptr->setDSOLocal(true);
+  }
+}
+
+llvm::GlobalVariable *CreateLocalStaticVar(QualType type,
+                                           const std::string &name) {
+  auto var{
+      new llvm::GlobalVariable(*Module, type->GetLLVMType(), type.IsConst(),
+                               llvm::GlobalValue::InternalLinkage,
+                               GetConstantZero(type->GetLLVMType()), name)};
   var->setAlignment(type->GetAlign());
 
   return var;
