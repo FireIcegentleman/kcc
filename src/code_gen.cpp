@@ -527,10 +527,29 @@ void CodeGen::Visit(const BinaryOpExpr& node) {
 }
 
 void CodeGen::Visit(const ConditionOpExpr& node) {
-  if (!HaveInsertPoint()) {
+  TestAndClearIgnoreResultAssign();
+
+  if (auto cond{CalcConstantExpr{}.Calc(node.GetCond())}) {
+    auto live{node.GetLHS()}, dead{node.GetRHS()};
+    if (cond->isZeroValue()) {
+      std::swap(live, dead);
+    }
+
+    live->Accept(*this);
     return;
   }
-  TestAndClearIgnoreResultAssign();
+
+  // x ? 4 : 5
+  if (IsCheapEnoughToEvaluateUnconditionally(node.GetLHS()) &&
+      IsCheapEnoughToEvaluateUnconditionally(node.GetRHS())) {
+    auto cond{EvaluateExprAsBool(node.GetCond())};
+    node.GetLHS()->Accept(*this);
+    auto lhs{result_};
+    node.GetRHS()->Accept(*this);
+    auto rhs{result_};
+    result_ = Builder.CreateSelect(cond, lhs, rhs);
+    return;
+  }
 
   auto lhs_block{CreateBasicBlock("cond.true")};
   auto rhs_block{CreateBasicBlock("cond.false")};
@@ -1078,8 +1097,7 @@ llvm::Value* CodeGen::VisitUnaryAddr(const UnaryOpExpr& unary) {
 }
 
 llvm::Value* CodeGen::VisitUnaryDeref(const UnaryOpExpr& unary) {
-  return LoadOfLValue(EmitLValue(unary), unary.GetExpr()->GetQualType())
-      .GetScalarVal();
+  return EmitLoadOfLValue(&unary);
 }
 
 llvm::Value* CodeGen::VisitUnaryPlus(const UnaryOpExpr& unary) {
@@ -1101,8 +1119,9 @@ llvm::Value* CodeGen::VisitUnaryNot(const UnaryOpExpr& unary) {
 }
 
 llvm::Value* CodeGen::VisitUnaryLogicNot(const UnaryOpExpr& unary) {
-  unary.GetExpr()->Accept(*this);
-  return LogicNotOp(result_);
+  auto value{EvaluateExprAsBool(unary.GetExpr())};
+  value = Builder.CreateNot(value);
+  return CastTo(value, Builder.getInt32Ty(), true);
 }
 
 llvm::Value* CodeGen::VisitBinaryMemRef(const BinaryOpExpr& binary) {
@@ -1122,13 +1141,6 @@ llvm::Value* CodeGen::NegOp(llvm::Value* value, bool is_unsigned) {
     assert(false);
     return nullptr;
   }
-}
-
-llvm::Value* CodeGen::LogicNotOp(llvm::Value* value) {
-  value = CastToBool(value);
-  value = Builder.CreateXor(value, Builder.getTrue());
-
-  return CastTo(value, Builder.getInt32Ty(), true);
 }
 
 llvm::Value* CodeGen::AddOp(llvm::Value* lhs, llvm::Value* rhs,
@@ -1364,8 +1376,17 @@ llvm::Value* CodeGen::NotEqualOp(llvm::Value* lhs, llvm::Value* rhs) {
 }
 
 llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
-  auto end_block{CreateBasicBlock("logic.or.end")};
+  if (auto cond{CalcConstantExpr{}.Calc(node.GetLHS())}) {
+    if (cond->isZeroValue()) {
+      auto rhs{EvaluateExprAsBool(node.GetRHS())};
+      return Builder.CreateZExt(rhs, Builder.getInt32Ty());
+    } else {
+      return Builder.getTrue();
+    }
+  }
+
   auto rhs_block{CreateBasicBlock("logic.or.rhs")};
+  auto end_block{CreateBasicBlock("logic.or.end")};
 
   EmitBranchOnBoolExpr(node.GetLHS(), end_block, rhs_block);
   auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
@@ -1387,8 +1408,17 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
 }
 
 llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
-  auto end_block{CreateBasicBlock("logic.and.end")};
+  if (auto cond{CalcConstantExpr{}.Calc(node.GetLHS())}) {
+    if (cond->isOneValue()) {
+      auto rhs{EvaluateExprAsBool(node.GetRHS())};
+      return Builder.CreateZExt(rhs, Builder.getInt32Ty());
+    } else {
+      return Builder.getFalse();
+    }
+  }
+
   auto rhs_block{CreateBasicBlock("logic.and.rhs")};
+  auto end_block{CreateBasicBlock("logic.and.end")};
 
   EmitBranchOnBoolExpr(node.GetLHS(), rhs_block, end_block);
   auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
@@ -1421,7 +1451,7 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
   if (ignore) {
     return nullptr;
   } else {
-    return LoadOfLValue(lhs, node.GetQualType()).GetScalarVal();
+    return EmitLoadOfLValue(lhs, node.GetQualType());
   }
 }
 
@@ -1733,6 +1763,14 @@ CodeGen::RValue CodeGen::LoadOfLValue(CodeGen::LValue l_value, QualType type) {
   } else {
     return RValue::Get(EmitLoadOfScalar(addr, type));
   }
+}
+
+bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
+  return expr->Kind() == AstNodeType::kConstantExpr;
+}
+
+llvm::Value* CodeGen::EmitAggLoadOfLValue(const Expr* expr) {
+  return EmitLoadOfLValue(expr);
 }
 
 }  // namespace kcc

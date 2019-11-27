@@ -465,6 +465,11 @@ void BinaryOpExpr::EqualityOpCheck() {
     EnsureCompatibleConvertVoidPtr(lhs_, rhs_);
   } else if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     Expr::Convert(lhs_, rhs_);
+  } else if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
+    // TODO
+    Error(this, "not support");
+  } else if (lhs_type->IsIntegerTy() && rhs_type->IsPointerTy()) {
+    Error(this, "not support");
   } else {
     Error(this, "the operand should be pointer or arithmetic type");
   }

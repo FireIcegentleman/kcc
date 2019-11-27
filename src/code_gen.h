@@ -96,6 +96,8 @@ class CodeGen : public Visitor {
   static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr,
                                 QualType type);
   void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
+  static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
+  llvm::Value *EmitAggLoadOfLValue(const Expr *expr);
 
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
@@ -145,8 +147,6 @@ class CodeGen : public Visitor {
   llvm::Value *VisitBinaryMemRef(const BinaryOpExpr &binary);
 
   static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
-  static llvm::Value *LogicNotOp(llvm::Value *value);
-
   static llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs,
                             bool is_unsigned);
   static llvm::Value *SubOp(llvm::Value *lhs, llvm::Value *rhs,
