@@ -80,11 +80,10 @@ struct tag10 {
     } y;
 } v10;
 static void t10() {
-  // FIXME
-//    v10.a = 71;
-//    v10.y.b = 3;
-//    v10.y.c = 3;
-//    expect(77, v10.a + v10.y.b + v10.y.c);
+    v10.a = 71;
+    v10.y.b = 3;
+    v10.y.c = 3;
+    expect(77, v10.a + v10.y.b + v10.y.c);
 }
 
 struct tag11 { int a; } v11;

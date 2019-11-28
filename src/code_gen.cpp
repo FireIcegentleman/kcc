@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-#include <llvm/ADT/APInt.h>
 #include <llvm/ADT/Optional.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CFG.h>

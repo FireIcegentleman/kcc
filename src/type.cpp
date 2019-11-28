@@ -993,7 +993,9 @@ void StructType::Finish() {
     }
   }
 
-  llvm::cast<llvm::StructType>(llvm_type_)->setBody(members);
+  auto struct_type{llvm::cast<llvm::StructType>(llvm_type_)};
+  assert(struct_type->getStructNumElements() == 0);
+  struct_type->setBody(members);
 }
 
 bool StructType::HasFlexibleArray() const { return has_flexible_array_; }
@@ -1006,15 +1008,7 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
   std::string prefix{is_struct ? "struct." : "union."};
 
   if (HasName()) {
-    auto new_name{prefix + name};
-    for (const auto& item : Module->getIdentifiedStructTypes()) {
-      if (item->getName() == new_name) {
-        llvm_type_ = item;
-        return;
-      }
-    }
-
-    llvm_type_ = llvm::StructType::create(Context, new_name);
+    llvm_type_ = llvm::StructType::create(Context, prefix + name);
   } else {
     llvm_type_ = llvm::StructType::create(Context, prefix + "anon");
   }
