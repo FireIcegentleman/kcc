@@ -264,6 +264,12 @@ llvm::Value* CodeGen::GetPtr(const AstNode& node) {
 
 llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
                              std::int32_t align) {
+  auto type{lhs_ptr->getType()->getPointerElementType()};
+
+  if (type->isPointerTy() && rhs->getType()->isIntegerTy()) {
+    rhs = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
+  }
+
   return Builder.CreateAlignedStore(rhs, lhs_ptr, align);
 }
 

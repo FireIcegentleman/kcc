@@ -353,6 +353,17 @@ void BinaryOpExpr::AssignOpCheck() {
           TokenTag::ToString(op_), lhs_type.ToString());
   }
 
+  if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
+    if (auto constant{dynamic_cast<ConstantExpr*>(rhs_)}) {
+      if (constant->GetType()->IsIntegerTy() &&
+          constant->GetIntegerVal().getSExtValue() == 0) {
+        type_ = lhs_type;
+        return;
+      }
+    }
+    Error(this, "must be pointer and zero");
+  }
+
   if ((!lhs_type->IsArithmeticTy() || !rhs_type->IsArithmeticTy()) &&
       !(lhs_type->IsBoolTy() && rhs_type->IsPointerTy())) {
     // 注意, 目前 NULL 预处理之后为 (void*)0
