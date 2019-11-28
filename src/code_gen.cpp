@@ -1194,10 +1194,18 @@ llvm::Value* CodeGen::GreaterOp(llvm::Value* lhs, llvm::Value* rhs,
 llvm::Value* CodeGen::EqualOp(llvm::Value* lhs, llvm::Value* rhs) {
   llvm::Value* value{};
 
-  if (IsIntegerTy(lhs) || IsPointerTy(lhs)) {
+  if (IsIntegerTy(lhs)) {
     value = Builder.CreateICmpEQ(lhs, rhs);
   } else if (IsFloatingPointTy(lhs)) {
     value = Builder.CreateFCmpOEQ(lhs, rhs);
+  } else if (IsPointerTy(lhs)) {
+    if (IsIntegerTy(rhs)) {
+      value = Builder.CreateICmpEQ(
+          lhs, llvm::ConstantPointerNull::get(
+                   llvm::cast<llvm::PointerType>(lhs->getType())));
+    } else if (IsPointerTy(rhs)) {
+      value = Builder.CreateICmpEQ(lhs, rhs);
+    }
   } else {
     assert(false);
     return nullptr;

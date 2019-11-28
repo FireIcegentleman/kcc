@@ -466,14 +466,27 @@ void BinaryOpExpr::EqualityOpCheck() {
   } else if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     Expr::Convert(lhs_, rhs_);
   } else if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
-    // TODO
-    Error(this, "not support");
+    if (auto constant{dynamic_cast<ConstantExpr*>(rhs_)}) {
+      if (constant->GetType()->IsIntegerTy() &&
+          constant->GetIntegerVal().getSExtValue() == 0) {
+        goto ok;
+      }
+    }
+    Error(this, "must be pointer and zero");
   } else if (lhs_type->IsIntegerTy() && rhs_type->IsPointerTy()) {
-    Error(this, "not support");
+    if (auto constant{dynamic_cast<ConstantExpr*>(lhs_)}) {
+      if (constant->GetType()->IsIntegerTy() &&
+          constant->GetIntegerVal().getSExtValue() == 0) {
+        std::swap(lhs_, rhs_);
+        goto ok;
+      }
+    }
+    Error(this, "must be pointer and zero");
   } else {
     Error(this, "the operand should be pointer or arithmetic type");
   }
 
+ok:
   type_ = ArithmeticType::Get(kInt);
 }
 
