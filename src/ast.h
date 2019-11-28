@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/APInt.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/Instructions.h>
@@ -266,23 +268,23 @@ class ConstantExpr : public Expr {
  public:
   static ConstantExpr* Get(std::int32_t val);
   static ConstantExpr* Get(Type* type, std::uint64_t val);
-  static ConstantExpr* Get(Type* type, long double val);
+  static ConstantExpr* Get(Type* type, const std::string& str);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
   virtual bool IsLValue() const override;
 
-  std::uint64_t GetIntegerVal() const;
-  long double GetFloatPointVal() const;
+  llvm::APInt GetIntegerVal() const;
+  llvm::APFloat GetFloatPointVal() const;
 
  private:
   ConstantExpr(std::int32_t val);
   ConstantExpr(Type* type, std::uint64_t val);
-  ConstantExpr(Type* type, long double val);
+  ConstantExpr(Type* type, const std::string& str);
 
-  std::uint64_t integer_val_{};
-  long double float_point_val_{};
+  llvm::APInt integer_val_;
+  llvm::APFloat float_point_val_;
 };
 
 class StringLiteralExpr : public Expr {

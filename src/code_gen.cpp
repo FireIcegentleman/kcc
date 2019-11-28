@@ -531,15 +531,10 @@ void CodeGen::Visit(const FuncCallExpr& node) {
 void CodeGen::Visit(const ConstantExpr& node) {
   auto type{node.GetType()->GetLLVMType()};
 
-  // TODO ast 使用 APInt / APFloat 保存值
   if (type->isIntegerTy()) {
-    llvm::APInt value{type->getIntegerBitWidth(), node.GetIntegerVal(),
-                      !node.GetType()->IsUnsigned()};
-    result_ = llvm::ConstantInt::get(Context, value);
+    result_ = llvm::ConstantInt::get(Context, node.GetIntegerVal());
   } else if (type->isFloatingPointTy()) {
-    llvm::APFloat value{GetFloatTypeSemantics(type),
-                        std::to_string(node.GetFloatPointVal())};
-    result_ = llvm::ConstantFP::get(type, value);
+    result_ = llvm::ConstantFP::get(type, node.GetFloatPointVal());
   } else {
     assert(false);
   }
@@ -662,7 +657,9 @@ bool CodeGen::ContainsLabel(const Stmt* stmt, bool ignore_case) {
     return false;
   }
 
-  if (stmt->Kind() == AstNodeType::kLabelStmt) {
+  if (stmt->Kind() == AstNodeType::kLabelStmt ||
+      stmt->Kind() == AstNodeType::kCaseStmt ||
+      stmt->Kind() == AstNodeType::kDefaultStmt) {
     return true;
   }
 

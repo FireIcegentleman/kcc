@@ -1105,7 +1105,8 @@ Expr* Parser::ParseFloat() {
     Error(tok, "invalid suffix:{}", str.substr(backup));
   }
 
-  return MakeAstNode<ConstantExpr>(tok, ArithmeticType::Get(type_spec), val);
+  return MakeAstNode<ConstantExpr>(tok, ArithmeticType::Get(type_spec),
+                                   str.substr(0, backup));
 }
 
 StringLiteralExpr* Parser::ParseStringLiteral(bool handle_escape) {

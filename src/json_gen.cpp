@@ -126,9 +126,9 @@ void JsonGen::Visit(const ConstantExpr& node) {
   auto str{node.KindQString().append(": ")};
 
   if (node.GetType()->IsIntegerTy()) {
-    str.append(QString::number(node.GetIntegerVal()));
+    str.append(QString::number(node.GetIntegerVal().getSExtValue()));
   } else if (node.GetType()->IsFloatPointTy()) {
-    str.append(QString::fromStdString(std::to_string(node.GetFloatPointVal())));
+    str.append(QString::number(node.GetFloatPointVal().convertToDouble()));
   } else {
     assert(false);
   }

@@ -649,9 +649,9 @@ ConstantExpr* ConstantExpr::Get(Type* type, std::uint64_t val) {
   return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
 }
 
-ConstantExpr* ConstantExpr::Get(Type* type, long double val) {
+ConstantExpr* ConstantExpr::Get(Type* type, const std::string& str) {
   assert(type != nullptr);
-  return new (ConstantExprPool.Allocate()) ConstantExpr{type, val};
+  return new (ConstantExprPool.Allocate()) ConstantExpr{type, str};
 }
 
 AstNodeType ConstantExpr::Kind() const { return AstNodeType::kConstantExpr; }
@@ -662,18 +662,28 @@ void ConstantExpr::Check() {}
 
 bool ConstantExpr::IsLValue() const { return false; }
 
-std::uint64_t ConstantExpr::GetIntegerVal() const { return integer_val_; }
+llvm::APInt ConstantExpr::GetIntegerVal() const { return integer_val_; }
 
-long double ConstantExpr::GetFloatPointVal() const { return float_point_val_; }
+llvm::APFloat ConstantExpr::GetFloatPointVal() const {
+  return float_point_val_;
+}
 
 ConstantExpr::ConstantExpr(std::int32_t val)
-    : Expr(ArithmeticType::Get(kInt)), integer_val_(val) {}
+    : Expr(ArithmeticType::Get(kInt)), float_point_val_{llvm::APFloat{0.0}} {
+  integer_val_ = llvm::APInt{type_->GetLLVMType()->getIntegerBitWidth(),
+                             static_cast<std::uint64_t>(val), true};
+}
 
 ConstantExpr::ConstantExpr(Type* type, std::uint64_t val)
-    : Expr(type), integer_val_(val) {}
+    : Expr(type), float_point_val_{llvm::APFloat{0.0}} {
+  integer_val_ = llvm::APInt{type_->GetLLVMType()->getIntegerBitWidth(),
+                             static_cast<std::uint64_t>(val), true};
+}
 
-ConstantExpr::ConstantExpr(Type* type, long double val)
-    : Expr(type), float_point_val_(val) {}
+ConstantExpr::ConstantExpr(Type* type, const std::string& str)
+    : Expr(type),
+      float_point_val_{
+          llvm::APFloat{GetFloatTypeSemantics(type->GetLLVMType()), str}} {}
 
 /*
  * StringLiteral
