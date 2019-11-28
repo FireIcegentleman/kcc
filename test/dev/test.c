@@ -1,7 +1,19 @@
-int printf(const char *s, ...);
+#include <stdio.h>
+struct tag10 {
+  int a;
+  struct tag10a {
+    char b;
+    int c;
+  } y;
+} v10;
+static void t10() {
+  v10.a = 71;
+  v10.y.b = 3;
+  v10.y.c = 3;
+}
 int main(void) {
-  int a[3][3] = {};
-  printf("%d\n", a[0][1]);
-  int b = 10;
-  printf("%d\n", b);
+  t10();
+  printf("%d\n", v10.a);
+  printf("%d\n", v10.y.b);
+  printf("%d\n", v10.y.c);
 }

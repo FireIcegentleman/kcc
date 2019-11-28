@@ -32,8 +32,8 @@ class CalcConstantExpr : public Visitor {
   virtual void Visit(const ConstantExpr& node) override;
   virtual void Visit(const EnumeratorExpr& node) override;
   virtual void Visit(const StmtExpr& node) override;
-
   virtual void Visit(const StringLiteralExpr& node) override;
+
   virtual void Visit(const FuncCallExpr& node) override;
   virtual void Visit(const IdentifierExpr& node) override;
   virtual void Visit(const ObjectExpr& node) override;

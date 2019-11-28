@@ -291,13 +291,15 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
     auto decl{MakeAstNode<Declaration>(token, obj)};
     obj->SetDecl(decl);
 
-    // 全局变量和局部静态变量提前生成
-    if (scope_->IsFileScope()) {
-      CreateGlobalVar(obj);
-    } else if (scope_->IsBlockScope() && storage_class_spec & kStatic) {
-      obj->SetName(func_def_->GetName() + "." + obj->GetName());
-      obj->SetGlobalPtr(
-          CreateLocalStaticVar(obj->GetQualType(), obj->GetName()));
+    if (obj->GetType()->IsComplete()) {
+      // 全局变量和局部静态变量提前生成
+      if (scope_->IsFileScope()) {
+        CreateGlobalVar(obj);
+      } else if (scope_->IsBlockScope() && storage_class_spec & kStatic) {
+        obj->SetName(func_def_->GetName() + "." + obj->GetName());
+        obj->SetGlobalPtr(
+            CreateLocalStaticVar(obj->GetQualType(), obj->GetName()));
+      }
     }
 
     return decl;
@@ -1985,6 +1987,12 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
   auto decl{
       MakeDeclaration(tok, base_type, storage_class_spec, func_spec, align)};
 
+  bool flag{false};
+
+  if (decl && decl->IsObjDecl() && !decl->GetIdent()->GetType()->IsComplete()) {
+    flag = true;
+  }
+
   if (decl && decl->IsObjDecl()) {
     if (Try(Tag::kEqual)) {
       if (!scope_->IsFileScope() &&
@@ -1994,6 +2002,17 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
       } else {
         decl->SetConstant(
             ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
+      }
+    }
+
+    if (flag) {
+      auto obj{decl->GetIdent()->ToObjectExpr()};
+      if (scope_->IsFileScope()) {
+        CreateGlobalVar(obj);
+      } else if (scope_->IsBlockScope() && storage_class_spec & kStatic) {
+        obj->SetName(func_def_->GetName() + "." + obj->GetName());
+        obj->SetGlobalPtr(
+            CreateLocalStaticVar(obj->GetQualType(), obj->GetName()));
       }
     }
 

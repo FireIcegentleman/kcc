@@ -19,44 +19,18 @@
 #include <llvm/IR/ValueHandle.h>
 
 #include "ast.h"
-#include "type.h"
 #include "visitor.h"
 
 namespace kcc {
 
-// TODO  & -> *
 class CodeGen : public Visitor {
  public:
   CodeGen();
   void GenCode(const TranslationUnit *root);
 
  private:
-  class LValue {
-   public:
-    static LValue MakeAddr(llvm::Value *value);
-    llvm::Value *GetAddr() const;
-
-   private:
-    llvm::Value *value_{};
-  };
-
-  class RValue {
-   public:
-    static RValue Get(llvm::Value *value);
-    static RValue GetAggregate(llvm::Value *value);
-
-    bool IsScalar() const;
-    bool IsAggregate() const;
-
-    llvm::Value *GetScalarVal() const;
-    llvm::Value *GetAggregateAddr() const;
-
-   private:
-    enum { kScalar, kAggregate } flavor_;
-    llvm::Value *value_{};
-  };
-
   struct BreakContinue {
+   public:
     BreakContinue(llvm::BasicBlock *break_block,
                   llvm::BasicBlock *continue_block);
 
@@ -67,7 +41,8 @@ class CodeGen : public Visitor {
   static llvm::BasicBlock *CreateBasicBlock(
       const std::string &name = "", llvm::Function *parent = nullptr,
       llvm::BasicBlock *insert_before = nullptr);
-  llvm::AllocaInst *CreateTempAlloca(QualType type);
+  llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type,
+                                           std::int32_t align);
   void EmitBranchOnBoolExpr(const Expr *expr, llvm::BasicBlock *true_block,
                             llvm::BasicBlock *false_block);
   void EmitBlock(llvm::BasicBlock *bb, bool is_finished = false);
@@ -78,33 +53,17 @@ class CodeGen : public Visitor {
   void EnsureInsertPoint();
   llvm::Value *EvaluateExprAsBool(const Expr *expr);
   bool TestAndClearIgnoreResultAssign();
-  static bool ContainsLabel(const Stmt *stmt, bool ignore_case = false);
-  static void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
-  void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
-  static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
+
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
-
-  LValue EmitLValue(const Expr &expr);
-  LValue EmitUnaryLValue(const UnaryOpExpr &unary);
-  LValue EmitBinaryLValue(const BinaryOpExpr &binary);
-  static LValue EmitObjectLValue(const ObjectExpr &obj);
-  LValue EmitIdentifierLValue(const IdentifierExpr &ident);
-
-  llvm::Value *EmitLoadOfLValue(const Expr *expr);
-  static RValue EmitLoadOfLValue(LValue l_value, QualType type);
-  static void EmitStoreThroughLValue(RValue src, LValue dst, QualType type);
-
-  static llvm::Value *EmitLoadOfScalar(llvm::Value *addr, QualType type);
-  static void EmitStoreOfScalar(llvm::Value *value, llvm::Value *addr,
-                                QualType type);
-
-  void EmitAggLoadOfLValue(const Expr *expr);
-  void EmitFinalDestCopy(const Expr *expr, LValue src, bool ignore = false);
-  static void EmitAggregateCopy(llvm::Value *dest_ptr, llvm::Value *src_ptr,
-                                QualType type);
-
+  llvm::Value *GetPtr(const AstNode &node);
+  static llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
+                             std::int32_t align);
+  bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
+  void EmitLabel(const LabelStmt& label_stmt);
+  bool ContainsLabel(const Stmt* stmt, bool ignore_case= false);
+  void SimplifyForwardingBlocks(llvm::BasicBlock* bb);
   virtual void Visit(const UnaryOpExpr &node) override;
   virtual void Visit(const TypeCastExpr &node) override;
   virtual void Visit(const BinaryOpExpr &node) override;
@@ -138,30 +97,14 @@ class CodeGen : public Visitor {
 
   void StartFunction(const FuncDef &node);
   void FinishFunction(const FuncDef &node);
-  void EmitFunctionEpilog(const FuncDef &node);
+  void EmitFunctionEpilog();
   void EmitReturnBlock();
+  void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
 
-  void EmitLabel(const LabelStmt &label_stmt);
-  llvm::Value *VisitPrePostIncDec(const UnaryOpExpr &unary, bool is_inc,
-                                  bool is_postfix);
-  llvm::Value *VisitUnaryPreDec(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryPreInc(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryPostDec(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryPostInc(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryAddr(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryDeref(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryPlus(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryMinus(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryNot(const UnaryOpExpr &unary);
-  llvm::Value *VisitUnaryLogicNot(const UnaryOpExpr &unary);
-  llvm::Value *VisitBinaryMemRef(const BinaryOpExpr &binary);
-
-  void VisitAggBinaryMemRef(const BinaryOpExpr &binary);
-  void VisitAggUnaryDeref(const UnaryOpExpr &unary);
-  void VisitAggBinaryAssign(const BinaryOpExpr &node);
-  void VisitConditionOpExpr(const ConditionOpExpr &node);
-
+  llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
   static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
+  static llvm::Value *LogicNotOp(llvm::Value *value);
+
   static llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs,
                             bool is_unsigned);
   static llvm::Value *SubOp(llvm::Value *lhs, llvm::Value *rhs,
@@ -213,15 +156,14 @@ class CodeGen : public Visitor {
 
   // 是否加载等号左边的值
   bool ignore_result_assign_{false};
-  // 处理语句表达式时, 是否获取最后一个语句的值
-  bool get_last_{false};
-  // 最后一个语句的值
-  RValue last_value_;
-  llvm::Value *dest_ptr_{};
-  bool ignore_result_{false};
+
   llvm::AssertingVH<llvm::Instruction> alloc_insert_point_;
   llvm::BasicBlock *return_block_{};
   llvm::Value *return_value_{};
+
+  // temp
+  std::int32_t align_{};
+  bool load_{false};
 };
 
 }  // namespace kcc
