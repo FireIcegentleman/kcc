@@ -112,7 +112,7 @@ UnaryOpExpr* UnaryOpExpr::Get(Tag tag, Expr* expr) {
 
 AstNodeType UnaryOpExpr::Kind() const { return AstNodeType::kUnaryOpExpr; }
 
-void UnaryOpExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void UnaryOpExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void UnaryOpExpr::Check() {
   switch (op_) {
@@ -231,7 +231,7 @@ TypeCastExpr* TypeCastExpr::Get(Expr* expr, QualType to) {
 
 AstNodeType TypeCastExpr::Kind() const { return AstNodeType::kTypeCastExpr; }
 
-void TypeCastExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void TypeCastExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void TypeCastExpr::Check() {
   if (type_->IsFloatPointTy() && expr_->GetType()->IsPointerTy()) {
@@ -261,7 +261,7 @@ BinaryOpExpr* BinaryOpExpr::Get(Tag tag, Expr* lhs, Expr* rhs) {
 
 AstNodeType BinaryOpExpr::Kind() const { return AstNodeType::kBinaryOpExpr; }
 
-void BinaryOpExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void BinaryOpExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void BinaryOpExpr::Check() {
   switch (op_) {
@@ -532,7 +532,7 @@ AstNodeType ConditionOpExpr::Kind() const {
   return AstNodeType::kConditionOpExpr;
 }
 
-void ConditionOpExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void ConditionOpExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void ConditionOpExpr::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -589,7 +589,7 @@ FuncCallExpr* FuncCallExpr::Get(Expr* callee, std::vector<Expr*> args) {
 
 AstNodeType FuncCallExpr::Kind() const { return AstNodeType::kFuncCallExpr; }
 
-void FuncCallExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void FuncCallExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void FuncCallExpr::Check() {
   if (callee_->GetType()->IsPointerTy()) {
@@ -680,7 +680,7 @@ ConstantExpr* ConstantExpr::Get(Type* type, const std::string& str) {
 
 AstNodeType ConstantExpr::Kind() const { return AstNodeType::kConstantExpr; }
 
-void ConstantExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void ConstantExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void ConstantExpr::Check() {}
 
@@ -725,7 +725,7 @@ AstNodeType StringLiteralExpr::Kind() const {
   return AstNodeType::kStringLiteralExpr;
 }
 
-void StringLiteralExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void StringLiteralExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void StringLiteralExpr::Check() {
   auto iter{StringMap.find(str_)};
@@ -816,7 +816,7 @@ AstNodeType IdentifierExpr::Kind() const {
   return AstNodeType::kIdentifierExpr;
 }
 
-void IdentifierExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void IdentifierExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void IdentifierExpr::Check() {}
 
@@ -857,7 +857,7 @@ AstNodeType EnumeratorExpr::Kind() const {
   return AstNodeType::kEnumeratorExpr;
 }
 
-void EnumeratorExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void EnumeratorExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void EnumeratorExpr::Check() {}
 
@@ -881,7 +881,7 @@ ObjectExpr* ObjectExpr::Get(const std::string& name, QualType type,
 
 AstNodeType ObjectExpr::Kind() const { return AstNodeType::kObjectExpr; }
 
-void ObjectExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void ObjectExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void ObjectExpr::Check() {}
 
@@ -963,7 +963,7 @@ StmtExpr* StmtExpr::Get(CompoundStmt* block) {
 
 AstNodeType StmtExpr::Kind() const { return AstNodeType::kStmtExpr; }
 
-void StmtExpr::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void StmtExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void StmtExpr::Check() {
   auto stmts{block_->GetStmts()};
@@ -1001,7 +1001,7 @@ LabelStmt* LabelStmt::Get(const std::string& name, Stmt* stmt) {
 
 AstNodeType LabelStmt::Kind() const { return AstNodeType::kLabelStmt; }
 
-void LabelStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void LabelStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void LabelStmt::Check() {}
 
@@ -1027,7 +1027,7 @@ CaseStmt* CaseStmt::Get(std::int64_t lhs, std::int64_t rhs, Stmt* stmt) {
 
 AstNodeType CaseStmt::Kind() const { return AstNodeType::kCaseStmt; }
 
-void CaseStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void CaseStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void CaseStmt::Check() {}
 
@@ -1052,7 +1052,7 @@ DefaultStmt* DefaultStmt::Get(Stmt* block) {
 
 AstNodeType DefaultStmt::Kind() const { return AstNodeType::kDefaultStmt; }
 
-void DefaultStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void DefaultStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void DefaultStmt::Check() {}
 
@@ -1073,7 +1073,7 @@ CompoundStmt* CompoundStmt::Get(std::vector<Stmt*> stmts) {
 
 AstNodeType CompoundStmt::Kind() const { return AstNodeType::kCompoundStmt; }
 
-void CompoundStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void CompoundStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void CompoundStmt::Check() {}
 
@@ -1098,7 +1098,7 @@ ExprStmt* ExprStmt::Get(Expr* expr) {
 
 AstNodeType ExprStmt::Kind() const { return AstNodeType::kExprStmt; }
 
-void ExprStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void ExprStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void ExprStmt::Check() {}
 
@@ -1116,7 +1116,7 @@ IfStmt* IfStmt::Get(Expr* cond, Stmt* then_block, Stmt* else_block) {
 
 AstNodeType IfStmt::Kind() const { return AstNodeType::kIfStmt; }
 
-void IfStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void IfStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void IfStmt::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -1148,7 +1148,7 @@ SwitchStmt* SwitchStmt::Get(Expr* cond, Stmt* block) {
 
 AstNodeType SwitchStmt::Kind() const { return AstNodeType::kSwitchStmt; }
 
-void SwitchStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void SwitchStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void SwitchStmt::Check() {
   if (!cond_->GetType()->IsIntegerTy()) {
@@ -1177,7 +1177,7 @@ WhileStmt* WhileStmt::Get(Expr* cond, Stmt* block) {
 
 AstNodeType WhileStmt::Kind() const { return AstNodeType::kWhileStmt; }
 
-void WhileStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void WhileStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void WhileStmt::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -1204,7 +1204,7 @@ DoWhileStmt* DoWhileStmt::Get(Expr* cond, Stmt* block) {
 
 AstNodeType DoWhileStmt::Kind() const { return AstNodeType::kDoWhileStmt; }
 
-void DoWhileStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void DoWhileStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void DoWhileStmt::Check() {
   if (!cond_->GetType()->IsScalarTy()) {
@@ -1232,7 +1232,7 @@ ForStmt* ForStmt::Get(Expr* init, Expr* cond, Expr* inc, Stmt* block,
 
 AstNodeType ForStmt::Kind() const { return AstNodeType::kForStmt; }
 
-void ForStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void ForStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void ForStmt::Check() {
   if (cond_ && !cond_->GetType()->IsScalarTy()) {
@@ -1270,7 +1270,7 @@ GotoStmt* GotoStmt::Get(LabelStmt* label) {
 
 AstNodeType GotoStmt::Kind() const { return AstNodeType::kGotoStmt; }
 
-void GotoStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void GotoStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void GotoStmt::Check() {}
 
@@ -1293,7 +1293,7 @@ ContinueStmt* ContinueStmt::Get() {
 
 AstNodeType ContinueStmt::Kind() const { return AstNodeType::kContinueStmt; }
 
-void ContinueStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void ContinueStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void ContinueStmt::Check() {}
 
@@ -1306,7 +1306,7 @@ BreakStmt* BreakStmt::Get() {
 
 AstNodeType BreakStmt::Kind() const { return AstNodeType::kBreakStmt; }
 
-void BreakStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void BreakStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void BreakStmt::Check() {}
 
@@ -1319,7 +1319,7 @@ ReturnStmt* ReturnStmt::Get(Expr* expr) {
 
 AstNodeType ReturnStmt::Kind() const { return AstNodeType::kReturnStmt; }
 
-void ReturnStmt::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void ReturnStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void ReturnStmt::Check() {}
 
@@ -1338,7 +1338,7 @@ AstNodeType TranslationUnit::Kind() const {
   return AstNodeType::kTranslationUnit;
 }
 
-void TranslationUnit::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void TranslationUnit::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void TranslationUnit::Check() {}
 
@@ -1392,7 +1392,7 @@ Declaration* Declaration::Get(IdentifierExpr* ident) {
 
 AstNodeType Declaration::Kind() const { return AstNodeType::kDeclaration; }
 
-void Declaration::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void Declaration::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void Declaration::Check() {}
 
@@ -1477,7 +1477,7 @@ FuncDef* FuncDef::Get(IdentifierExpr* ident) {
 
 AstNodeType FuncDef::Kind() const { return AstNodeType::kFuncDef; }
 
-void FuncDef::Accept(Visitor& visitor) const { visitor.Visit(*this); }
+void FuncDef::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void FuncDef::Check() {
   for (const auto& param : ident_->GetQualType()->FuncGetParams()) {

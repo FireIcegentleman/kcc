@@ -57,51 +57,51 @@ class CodeGen : public Visitor {
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
-  llvm::Value *GetPtr(const AstNode &node);
+  llvm::Value *GetPtr(const AstNode *node);
   static llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
                              std::int32_t align);
-  bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
-  void EmitLabel(const LabelStmt& label_stmt);
-  bool ContainsLabel(const Stmt* stmt, bool ignore_case= false);
-  void SimplifyForwardingBlocks(llvm::BasicBlock* bb);
-  virtual void Visit(const UnaryOpExpr &node) override;
-  virtual void Visit(const TypeCastExpr &node) override;
-  virtual void Visit(const BinaryOpExpr &node) override;
-  virtual void Visit(const ConditionOpExpr &node) override;
-  virtual void Visit(const FuncCallExpr &node) override;
-  virtual void Visit(const ConstantExpr &node) override;
-  virtual void Visit(const StringLiteralExpr &node) override;
-  virtual void Visit(const IdentifierExpr &node) override;
-  virtual void Visit(const EnumeratorExpr &node) override;
-  virtual void Visit(const ObjectExpr &node) override;
-  virtual void Visit(const StmtExpr &node) override;
+  static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
+  void EmitLabel(const LabelStmt *label_stmt);
+  static bool ContainsLabel(const Stmt *stmt, bool ignore_case = false);
+  static void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
+  virtual void Visit(const UnaryOpExpr *node) override;
+  virtual void Visit(const TypeCastExpr *node) override;
+  virtual void Visit(const BinaryOpExpr *node) override;
+  virtual void Visit(const ConditionOpExpr *node) override;
+  virtual void Visit(const FuncCallExpr *node) override;
+  virtual void Visit(const ConstantExpr *node) override;
+  virtual void Visit(const StringLiteralExpr *node) override;
+  virtual void Visit(const IdentifierExpr *node) override;
+  virtual void Visit(const EnumeratorExpr *node) override;
+  virtual void Visit(const ObjectExpr *node) override;
+  virtual void Visit(const StmtExpr *node) override;
 
-  virtual void Visit(const LabelStmt &node) override;
-  virtual void Visit(const CaseStmt &node) override;
-  virtual void Visit(const DefaultStmt &node) override;
-  virtual void Visit(const CompoundStmt &node) override;
-  virtual void Visit(const ExprStmt &node) override;
-  virtual void Visit(const IfStmt &node) override;
-  virtual void Visit(const SwitchStmt &node) override;
-  virtual void Visit(const WhileStmt &node) override;
-  virtual void Visit(const DoWhileStmt &node) override;
-  virtual void Visit(const ForStmt &node) override;
-  virtual void Visit(const GotoStmt &node) override;
-  virtual void Visit(const ContinueStmt &node) override;
-  virtual void Visit(const BreakStmt &node) override;
-  virtual void Visit(const ReturnStmt &node) override;
+  virtual void Visit(const LabelStmt *node) override;
+  virtual void Visit(const CaseStmt *node) override;
+  virtual void Visit(const DefaultStmt *node) override;
+  virtual void Visit(const CompoundStmt *node) override;
+  virtual void Visit(const ExprStmt *node) override;
+  virtual void Visit(const IfStmt *node) override;
+  virtual void Visit(const SwitchStmt *node) override;
+  virtual void Visit(const WhileStmt *node) override;
+  virtual void Visit(const DoWhileStmt *node) override;
+  virtual void Visit(const ForStmt *node) override;
+  virtual void Visit(const GotoStmt *node) override;
+  virtual void Visit(const ContinueStmt *node) override;
+  virtual void Visit(const BreakStmt *node) override;
+  virtual void Visit(const ReturnStmt *node) override;
 
-  virtual void Visit(const TranslationUnit &node) override;
-  virtual void Visit(const Declaration &node) override;
-  virtual void Visit(const FuncDef &node) override;
+  virtual void Visit(const TranslationUnit *node) override;
+  virtual void Visit(const Declaration *node) override;
+  virtual void Visit(const FuncDef *node) override;
 
-  void StartFunction(const FuncDef &node);
-  void FinishFunction(const FuncDef &node);
+  void StartFunction(const FuncDef *node);
+  void FinishFunction(const FuncDef *node);
   void EmitFunctionEpilog();
   void EmitReturnBlock();
   void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
 
-  llvm::Value *IncOrDec(const Expr &expr, bool is_inc, bool is_postfix);
+  llvm::Value *IncOrDec(const Expr *expr, bool is_inc, bool is_postfix);
   static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
   static llvm::Value *LogicNotOp(llvm::Value *value);
 
@@ -131,17 +131,17 @@ class CodeGen : public Visitor {
                                 bool is_unsigned);
   static llvm::Value *EqualOp(llvm::Value *lhs, llvm::Value *rhs);
   static llvm::Value *NotEqualOp(llvm::Value *lhs, llvm::Value *rhs);
-  llvm::Value *LogicOrOp(const BinaryOpExpr &node);
-  llvm::Value *LogicAndOp(const BinaryOpExpr &node);
-  llvm::Value *AssignOp(const BinaryOpExpr &node);
+  llvm::Value *LogicOrOp(const BinaryOpExpr *node);
+  llvm::Value *LogicAndOp(const BinaryOpExpr *node);
+  llvm::Value *AssignOp(const BinaryOpExpr *node);
 
-  bool MayCallBuiltinFunc(const FuncCallExpr &node);
+  bool MayCallBuiltinFunc(const FuncCallExpr *node);
   llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
 
   llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
 
-  void DealLocaleDecl(const Declaration &node);
-  void InitLocalAggregate(const Declaration &node);
+  void DealLocaleDecl(const Declaration *node);
+  void InitLocalAggregate(const Declaration *node);
 
   llvm::Value *result_{};
 

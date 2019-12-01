@@ -218,30 +218,29 @@ void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
 
 void CodeGen::PopBlock() { break_continue_stack_.pop(); }
 
-// * / .(maybe) / obj
-llvm::Value* CodeGen::GetPtr(const AstNode& node) {
-  if (node.Kind() == AstNodeType::kObjectExpr) {
-    auto obj{dynamic_cast<const ObjectExpr&>(node)};
-    align_ = obj.GetAlign();
-    if (obj.InGlobal() || obj.IsStatic()) {
-      return obj.GetGlobalPtr();
+llvm::Value* CodeGen::GetPtr(const AstNode* node) {
+  if (node->Kind() == AstNodeType::kObjectExpr) {
+    auto obj{dynamic_cast<const ObjectExpr*>(node)};
+    align_ = obj->GetAlign();
+    if (obj->InGlobal() || obj->IsStatic()) {
+      return obj->GetGlobalPtr();
     } else {
-      return obj.GetLocalPtr();
+      return obj->GetLocalPtr();
     }
-  } else if (node.Kind() == AstNodeType::kIdentifierExpr) {
+  } else if (node->Kind() == AstNodeType::kIdentifierExpr) {
     // 函数指针
-    node.Accept(*this);
+    node->Accept(*this);
     return result_;
-  } else if (node.Kind() == AstNodeType::kUnaryOpExpr) {
-    auto unary{dynamic_cast<const UnaryOpExpr&>(node)};
-    assert(unary.GetOp() == Tag::kStar);
-    unary.GetExpr()->Accept(*this);
+  } else if (node->Kind() == AstNodeType::kUnaryOpExpr) {
+    auto unary{dynamic_cast<const UnaryOpExpr*>(node)};
+    assert(unary->GetOp() == Tag::kStar);
+    unary->GetExpr()->Accept(*this);
     return result_;
-  } else if (node.Kind() == AstNodeType::kBinaryOpExpr) {
-    auto binary{dynamic_cast<const BinaryOpExpr&>(node)};
-    if (binary.GetOp() == Tag::kPeriod) {
-      auto lhs_ptr{GetPtr(*binary.GetLHS())};
-      auto obj{dynamic_cast<const ObjectExpr*>(binary.GetRHS())};
+  } else if (node->Kind() == AstNodeType::kBinaryOpExpr) {
+    auto binary{dynamic_cast<const BinaryOpExpr*>(node)};
+    if (binary->GetOp() == Tag::kPeriod) {
+      auto lhs_ptr{GetPtr(binary->GetLHS())};
+      auto obj{dynamic_cast<const ObjectExpr*>(binary->GetRHS())};
       assert(obj != nullptr);
 
       auto indexs{obj->GetIndexs()};
@@ -273,42 +272,42 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
   return Builder.CreateAlignedStore(rhs, lhs_ptr, align);
 }
 
-void CodeGen::Visit(const UnaryOpExpr& node) {
-  auto is_unsigned{node.GetExpr()->GetType()->IsUnsigned()};
+void CodeGen::Visit(const UnaryOpExpr* node) {
+  auto is_unsigned{node->GetExpr()->GetType()->IsUnsigned()};
 
-  switch (node.GetOp()) {
+  switch (node->GetOp()) {
     case Tag::kPlusPlus:
-      result_ = IncOrDec(*node.GetExpr(), true, false);
+      result_ = IncOrDec(node->GetExpr(), true, false);
       break;
     case Tag::kPostfixPlusPlus:
-      result_ = IncOrDec(*node.GetExpr(), true, true);
+      result_ = IncOrDec(node->GetExpr(), true, true);
       break;
     case Tag::kMinusMinus:
-      result_ = IncOrDec(*node.GetExpr(), false, false);
+      result_ = IncOrDec(node->GetExpr(), false, false);
       break;
     case Tag::kPostfixMinusMinus:
-      result_ = IncOrDec(*node.GetExpr(), false, true);
+      result_ = IncOrDec(node->GetExpr(), false, true);
       break;
     case Tag::kPlus:
       TestAndClearIgnoreResultAssign();
-      node.GetExpr()->Accept(*this);
+      node->GetExpr()->Accept(*this);
       break;
     case Tag::kMinus:
       TestAndClearIgnoreResultAssign();
-      node.GetExpr()->Accept(*this);
+      node->GetExpr()->Accept(*this);
       result_ = NegOp(result_, is_unsigned);
       break;
     case Tag::kTilde:
       TestAndClearIgnoreResultAssign();
-      node.GetExpr()->Accept(*this);
+      node->GetExpr()->Accept(*this);
       result_ = Builder.CreateNot(result_);
       break;
     case Tag::kExclaim:
-      node.GetExpr()->Accept(*this);
+      node->GetExpr()->Accept(*this);
       result_ = LogicNotOp(result_);
       break;
     case Tag::kStar: {
-      auto binary{dynamic_cast<const BinaryOpExpr*>(node.GetExpr())};
+      auto binary{dynamic_cast<const BinaryOpExpr*>(node->GetExpr())};
       if (binary && binary->GetOp() == Tag::kPlus) {
         // e.g. a[1]
         auto backup{load_};
@@ -325,28 +324,28 @@ void CodeGen::Visit(const UnaryOpExpr& node) {
           result_ = Builder.CreateInBoundsGEP(lhs, {result_});
           result_ = Builder.CreateAlignedLoad(result_, align_);
         }
-      } else if (node.GetExpr()->GetType()->IsPointerTy() &&
-                 node.GetExpr()
+      } else if (node->GetExpr()->GetType()->IsPointerTy() &&
+                 node->GetExpr()
                      ->GetType()
                      ->PointerGetElementType()
                      ->IsFunctionTy()) {
-        node.GetExpr()->Accept(*this);
+        node->GetExpr()->Accept(*this);
       } else {
         result_ = Builder.CreateAlignedLoad(GetPtr(node), align_);
       }
     } break;
     case Tag::kAmp:
-      result_ = GetPtr(*node.GetExpr());
+      result_ = GetPtr(node->GetExpr());
       break;
     default:
       assert(false);
   }
 }
 
-void CodeGen::Visit(const TypeCastExpr& node) {
-  node.GetExpr()->Accept(*this);
-  result_ = CastTo(result_, node.GetCastToType()->GetLLVMType(),
-                   node.GetExpr()->GetType()->IsUnsigned());
+void CodeGen::Visit(const TypeCastExpr* node) {
+  node->GetExpr()->Accept(*this);
+  result_ = CastTo(result_, node->GetCastToType()->GetLLVMType(),
+                   node->GetExpr()->GetType()->IsUnsigned());
 }
 
 /*
@@ -357,8 +356,8 @@ void CodeGen::Visit(const TypeCastExpr& node) {
  * .
  * ,
  */
-void CodeGen::Visit(const BinaryOpExpr& node) {
-  switch (node.GetOp()) {
+void CodeGen::Visit(const BinaryOpExpr* node) {
+  switch (node->GetOp()) {
     case Tag::kPipePipe:
       result_ = LogicOrOp(node);
       return;
@@ -387,14 +386,14 @@ void CodeGen::Visit(const BinaryOpExpr& node) {
   }
 
   TestAndClearIgnoreResultAssign();
-  node.GetLHS()->Accept(*this);
+  node->GetLHS()->Accept(*this);
   auto lhs{result_};
-  node.GetRHS()->Accept(*this);
+  node->GetRHS()->Accept(*this);
   auto rhs{result_};
 
-  bool is_unsigned{node.GetLHS()->GetType()->IsUnsigned()};
+  bool is_unsigned{node->GetLHS()->GetType()->IsUnsigned()};
 
-  switch (node.GetOp()) {
+  switch (node->GetOp()) {
     case Tag::kPlus:
       result_ = AddOp(lhs, rhs, is_unsigned);
       break;
@@ -455,11 +454,11 @@ bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
   return expr->Kind() == AstNodeType::kConstantExpr;
 }
 
-void CodeGen::Visit(const ConditionOpExpr& node) {
+void CodeGen::Visit(const ConditionOpExpr* node) {
   TestAndClearIgnoreResultAssign();
 
-  if (auto cond{CalcConstantExpr{}.Calc(node.GetCond())}) {
-    auto live{node.GetLHS()}, dead{node.GetRHS()};
+  if (auto cond{CalcConstantExpr{}.Calc(node->GetCond())}) {
+    auto live{node->GetLHS()}, dead{node->GetRHS()};
     if (cond->isZeroValue()) {
       std::swap(live, dead);
     }
@@ -469,12 +468,12 @@ void CodeGen::Visit(const ConditionOpExpr& node) {
   }
 
   // x ? 4 : 5
-  if (IsCheapEnoughToEvaluateUnconditionally(node.GetLHS()) &&
-      IsCheapEnoughToEvaluateUnconditionally(node.GetRHS())) {
-    auto cond{EvaluateExprAsBool(node.GetCond())};
-    node.GetLHS()->Accept(*this);
+  if (IsCheapEnoughToEvaluateUnconditionally(node->GetLHS()) &&
+      IsCheapEnoughToEvaluateUnconditionally(node->GetRHS())) {
+    auto cond{EvaluateExprAsBool(node->GetCond())};
+    node->GetLHS()->Accept(*this);
     auto lhs{result_};
-    node.GetRHS()->Accept(*this);
+    node->GetRHS()->Accept(*this);
     auto rhs{result_};
     Builder.CreateSelect(cond, lhs, rhs);
     return;
@@ -484,16 +483,16 @@ void CodeGen::Visit(const ConditionOpExpr& node) {
   auto rhs_block{CreateBasicBlock("cond.false")};
   auto end_block{CreateBasicBlock("cond.end")};
 
-  EmitBranchOnBoolExpr(node.GetCond(), lhs_block, rhs_block);
+  EmitBranchOnBoolExpr(node->GetCond(), lhs_block, rhs_block);
 
   EmitBlock(lhs_block);
-  node.GetLHS()->Accept(*this);
+  node->GetLHS()->Accept(*this);
   auto lhs{result_};
   lhs_block = Builder.GetInsertBlock();
   EmitBranch(end_block);
 
   EmitBlock(rhs_block);
-  node.GetRHS()->Accept(*this);
+  node->GetRHS()->Accept(*this);
   auto rhs{result_};
   rhs_block = Builder.GetInsertBlock();
   EmitBranch(end_block);
@@ -512,17 +511,17 @@ void CodeGen::Visit(const ConditionOpExpr& node) {
 }
 
 // LLVM 默认使用本机 C 调用约定
-void CodeGen::Visit(const FuncCallExpr& node) {
+void CodeGen::Visit(const FuncCallExpr* node) {
   if (MayCallBuiltinFunc(node)) {
     return;
   }
 
-  node.GetCallee()->Accept(*this);
+  node->GetCallee()->Accept(*this);
   auto callee{result_};
 
   std::vector<llvm::Value*> values;
   load_ = true;
-  for (auto& item : node.GetArgs()) {
+  for (auto& item : node->GetArgs()) {
     item->Accept(*this);
     values.push_back(result_);
   }
@@ -533,13 +532,13 @@ void CodeGen::Visit(const FuncCallExpr& node) {
 
 // 常量用 ConstantFP / ConstantInt 类表示
 // 在 LLVM IR 中, 常量都是唯一且共享的
-void CodeGen::Visit(const ConstantExpr& node) {
-  auto type{node.GetType()->GetLLVMType()};
+void CodeGen::Visit(const ConstantExpr* node) {
+  auto type{node->GetType()->GetLLVMType()};
 
   if (type->isIntegerTy()) {
-    result_ = llvm::ConstantInt::get(Context, node.GetIntegerVal());
+    result_ = llvm::ConstantInt::get(Context, node->GetIntegerVal());
   } else if (type->isFloatingPointTy()) {
-    result_ = llvm::ConstantFP::get(type, node.GetFloatPointVal());
+    result_ = llvm::ConstantFP::get(type, node->GetFloatPointVal());
   } else {
     assert(false);
   }
@@ -547,77 +546,78 @@ void CodeGen::Visit(const ConstantExpr& node) {
 
 // 1 / 2 / 4
 // 注意已经添加空字符了
-void CodeGen::Visit(const StringLiteralExpr& node) { result_ = node.GetPtr(); }
+void CodeGen::Visit(const StringLiteralExpr* node) { result_ = node->GetPtr(); }
 
-void CodeGen::Visit(const IdentifierExpr& node) {
-  auto type{node.GetType()};
+void CodeGen::Visit(const IdentifierExpr* node) {
+  auto type{node->GetType()};
   assert(type->IsFunctionTy());
 
-  auto name{node.GetName()};
+  auto name{node->GetName()};
 
   auto func{Module->getFunction(name)};
   if (!func) {
     func = llvm::Function::Create(
         llvm::cast<llvm::FunctionType>(type->GetLLVMType()),
-        node.GetLinkage() == kInternal ? llvm::Function::InternalLinkage
-                                       : llvm::Function::ExternalLinkage,
+        node->GetLinkage() == kInternal ? llvm::Function::InternalLinkage
+                                        : llvm::Function::ExternalLinkage,
         name, Module.get());
   }
 
   result_ = func;
 }
 
-void CodeGen::Visit(const EnumeratorExpr& node) {
-  result_ = llvm::ConstantInt::get(Builder.getInt32Ty(), node.GetVal());
+void CodeGen::Visit(const EnumeratorExpr* node) {
+  result_ = llvm::ConstantInt::get(Builder.getInt32Ty(), node->GetVal());
 }
 
-void CodeGen::Visit(const ObjectExpr& node) {
-  align_ = node.GetAlign();
+void CodeGen::Visit(const ObjectExpr* node) {
+  align_ = node->GetAlign();
 
-  if (node.InGlobal() || node.IsStatic()) {
-    if (node.GetType()->IsAggregateTy()) {
-      if (node.GetType()->IsStructOrUnionTy() && load_) {
-        result_ = Builder.CreateAlignedLoad(node.GetGlobalPtr(), align_);
+  if (node->InGlobal() || node->IsStatic()) {
+    if (node->GetType()->IsAggregateTy()) {
+      if (node->GetType()->IsStructOrUnionTy() && load_) {
+        result_ = Builder.CreateAlignedLoad(node->GetGlobalPtr(), align_);
       } else {
-        result_ = node.GetGlobalPtr();
+        result_ = node->GetGlobalPtr();
       }
     } else {
-      result_ = Builder.CreateAlignedLoad(node.GetGlobalPtr(), align_);
+      result_ = Builder.CreateAlignedLoad(node->GetGlobalPtr(), align_);
     }
   } else {
-    if (node.GetType()->IsAggregateTy()) {
-      if (node.GetType()->IsStructOrUnionTy() && load_) {
-        result_ = Builder.CreateAlignedLoad(node.GetLocalPtr(), align_);
+    if (node->GetType()->IsAggregateTy()) {
+      if (node->GetType()->IsStructOrUnionTy() && load_) {
+        result_ = Builder.CreateAlignedLoad(node->GetLocalPtr(), align_);
       } else {
-        result_ = node.GetLocalPtr();
+        result_ = node->GetLocalPtr();
       }
     } else {
-      result_ = Builder.CreateAlignedLoad(node.GetLocalPtr(), node.GetAlign());
+      result_ =
+          Builder.CreateAlignedLoad(node->GetLocalPtr(), node->GetAlign());
     }
   }
 }
 
-void CodeGen::Visit(const StmtExpr& node) { node.GetBlock()->Accept(*this); }
+void CodeGen::Visit(const StmtExpr* node) { node->GetBlock()->Accept(*this); }
 
-void CodeGen::EmitLabel(const LabelStmt& label_stmt) {
-  EmitBlock(GetBasicBlockForLabel(&label_stmt));
+void CodeGen::EmitLabel(const LabelStmt* label_stmt) {
+  EmitBlock(GetBasicBlockForLabel(label_stmt));
 }
 
-void CodeGen::Visit(const LabelStmt& node) {
+void CodeGen::Visit(const LabelStmt* node) {
   EmitLabel(node);
-  EmitStmt(node.GetStmt());
+  EmitStmt(node->GetStmt());
 }
 
-void CodeGen::Visit(const CaseStmt& node) {
+void CodeGen::Visit(const CaseStmt* node) {
   auto block{CreateBasicBlock("switch.case")};
   EmitBlock(block);
   std::int64_t begin, end;
 
-  if (auto rhs{node.GetRHS()}) {
-    begin = node.GetLHS();
+  if (auto rhs{node->GetRHS()}) {
+    begin = node->GetLHS();
     end = *rhs;
   } else {
-    begin = node.GetLHS();
+    begin = node->GetLHS();
     end = begin;
   }
 
@@ -626,25 +626,25 @@ void CodeGen::Visit(const CaseStmt& node) {
                           block);
   }
 
-  EmitStmt(node.GetStmt());
+  EmitStmt(node->GetStmt());
 }
 
-void CodeGen::Visit(const DefaultStmt& node) {
+void CodeGen::Visit(const DefaultStmt* node) {
   auto default_block{switch_inst_->getDefaultDest()};
   assert(default_block->empty());
   EmitBlock(default_block);
-  EmitStmt(node.GetStmt());
+  EmitStmt(node->GetStmt());
 }
 
-void CodeGen::Visit(const CompoundStmt& node) {
-  for (auto& item : node.GetStmts()) {
+void CodeGen::Visit(const CompoundStmt* node) {
+  for (auto& item : node->GetStmts()) {
     EmitStmt(item);
   }
 }
 
-void CodeGen::Visit(const ExprStmt& node) {
-  if (node.GetExpr()) {
-    node.GetExpr()->Accept(*this);
+void CodeGen::Visit(const ExprStmt* node) {
+  if (node->GetExpr()) {
+    node->GetExpr()->Accept(*this);
   } else {
     return;
   }
@@ -685,9 +685,9 @@ bool CodeGen::ContainsLabel(const Stmt* stmt, bool ignore_case) {
   return false;
 }
 
-void CodeGen::Visit(const IfStmt& node) {
-  if (auto cond{CalcConstantExpr{}.Calc(node.GetCond())}) {
-    auto executed{node.GetThen()}, skipped{node.GetElse()};
+void CodeGen::Visit(const IfStmt* node) {
+  if (auto cond{CalcConstantExpr{}.Calc(node->GetCond())}) {
+    auto executed{node->GetThen()}, skipped{node->GetElse()};
     if (cond->isZeroValue()) {
       std::swap(executed, skipped);
     }
@@ -705,17 +705,17 @@ void CodeGen::Visit(const IfStmt& node) {
   auto end_block{CreateBasicBlock("if.end")};
   auto else_block{end_block};
 
-  if (node.GetElse()) {
+  if (node->GetElse()) {
     else_block = CreateBasicBlock("if.else");
   }
 
-  EmitBranchOnBoolExpr(node.GetCond(), then_block, else_block);
+  EmitBranchOnBoolExpr(node->GetCond(), then_block, else_block);
 
   EmitBlock(then_block);
-  EmitStmt(node.GetThen());
+  EmitStmt(node->GetThen());
   EmitBranch(end_block);
 
-  if (auto else_stmt{node.GetElse()}) {
+  if (auto else_stmt{node->GetElse()}) {
     EmitBlock(else_block);
     EmitStmt(else_stmt);
     EmitBranch(end_block);
@@ -724,8 +724,8 @@ void CodeGen::Visit(const IfStmt& node) {
   EmitBlock(end_block, true);
 }
 
-void CodeGen::Visit(const SwitchStmt& node) {
-  node.GetCond()->Accept(*this);
+void CodeGen::Visit(const SwitchStmt* node) {
+  node->GetCond()->Accept(*this);
   auto cond_val{result_};
 
   auto switch_inst_backup{switch_inst_};
@@ -741,7 +741,7 @@ void CodeGen::Visit(const SwitchStmt& node) {
     continue_block = break_continue_stack_.top().continue_block;
   }
   PushBlock(end_block, continue_block);
-  EmitStmt(node.GetStmt());
+  EmitStmt(node->GetStmt());
   PopBlock();
 
   if (!default_block->getParent()) {
@@ -753,6 +753,7 @@ void CodeGen::Visit(const SwitchStmt& node) {
 
   switch_inst_ = switch_inst_backup;
 }
+
 void CodeGen::SimplifyForwardingBlocks(llvm::BasicBlock* bb) {
   auto bi{llvm::dyn_cast<llvm::BranchInst>(bb->getTerminator())};
 
@@ -765,7 +766,8 @@ void CodeGen::SimplifyForwardingBlocks(llvm::BasicBlock* bb) {
   bi->eraseFromParent();
   bb->eraseFromParent();
 }
-void CodeGen::Visit(const WhileStmt& node) {
+
+void CodeGen::Visit(const WhileStmt* node) {
   auto cond_block{CreateBasicBlock("while.cond")};
   EmitBlock(cond_block);
 
@@ -774,7 +776,7 @@ void CodeGen::Visit(const WhileStmt& node) {
 
   PushBlock(end_block, cond_block);
 
-  auto cond_val{EvaluateExprAsBool(node.GetCond())};
+  auto cond_val{EvaluateExprAsBool(node->GetCond())};
 
   // while(1)
   bool emit_br{true};
@@ -788,7 +790,7 @@ void CodeGen::Visit(const WhileStmt& node) {
   }
 
   EmitBlock(body_block);
-  EmitStmt(node.GetBlock());
+  EmitStmt(node->GetBlock());
   PopBlock();
 
   EmitBranch(cond_block);
@@ -799,18 +801,18 @@ void CodeGen::Visit(const WhileStmt& node) {
   }
 }
 
-void CodeGen::Visit(const DoWhileStmt& node) {
+void CodeGen::Visit(const DoWhileStmt* node) {
   auto body_block{CreateBasicBlock("do.while.body")};
   auto cond_block{CreateBasicBlock("do.while.cond")};
   auto end_block{CreateBasicBlock("do.while.end")};
 
   EmitBlock(body_block);
   PushBlock(end_block, cond_block);
-  EmitStmt(node.GetBlock());
+  EmitStmt(node->GetBlock());
   PopBlock();
 
   EmitBlock(cond_block);
-  auto cond_val{EvaluateExprAsBool(node.GetCond())};
+  auto cond_val{EvaluateExprAsBool(node->GetCond())};
 
   // do{}while(0)
   bool emit_br{true};
@@ -830,11 +832,11 @@ void CodeGen::Visit(const DoWhileStmt& node) {
   }
 }
 
-void CodeGen::Visit(const ForStmt& node) {
-  if (node.GetInit()) {
-    node.GetInit()->Accept(*this);
-  } else if (node.GetDecl()) {
-    EmitStmt(node.GetDecl());
+void CodeGen::Visit(const ForStmt* node) {
+  if (node->GetInit()) {
+    node->GetInit()->Accept(*this);
+  } else if (node->GetDecl()) {
+    EmitStmt(node->GetDecl());
   }
 
   auto cond_block{CreateBasicBlock("for.cond")};
@@ -842,26 +844,26 @@ void CodeGen::Visit(const ForStmt& node) {
 
   EmitBlock(cond_block);
 
-  if (node.GetCond()) {
+  if (node->GetCond()) {
     auto body_block{CreateBasicBlock("for.body")};
-    EmitBranchOnBoolExpr(node.GetCond(), body_block, end_block);
+    EmitBranchOnBoolExpr(node->GetCond(), body_block, end_block);
     EmitBlock(body_block);
   }
 
   llvm::BasicBlock* continue_block;
-  if (node.GetInc()) {
+  if (node->GetInc()) {
     continue_block = CreateBasicBlock("for.inc");
   } else {
     continue_block = cond_block;
   }
 
   PushBlock(end_block, continue_block);
-  EmitStmt(node.GetBlock());
+  EmitStmt(node->GetBlock());
   PopBlock();
 
-  if (node.GetInc()) {
+  if (node->GetInc()) {
     EmitBlock(continue_block);
-    node.GetInc()->Accept(*this);
+    node->GetInc()->Accept(*this);
   }
 
   EmitBranch(cond_block);
@@ -869,21 +871,21 @@ void CodeGen::Visit(const ForStmt& node) {
   EmitBlock(end_block, true);
 }
 
-void CodeGen::Visit(const GotoStmt& node) {
-  EmitBranchThroughCleanup(GetBasicBlockForLabel(node.GetLabel()));
+void CodeGen::Visit(const GotoStmt* node) {
+  EmitBranchThroughCleanup(GetBasicBlockForLabel(node->GetLabel()));
 }
 
-void CodeGen::Visit(const ContinueStmt& node) {
+void CodeGen::Visit(const ContinueStmt* node) {
   if (std::empty(break_continue_stack_)) {
-    Error(node.GetLoc(), "continue stmt not in a loop or switch");
+    Error(node->GetLoc(), "continue stmt not in a loop or switch");
   } else {
     EmitBranchThroughCleanup(break_continue_stack_.top().continue_block);
   }
 }
 
-void CodeGen::Visit(const BreakStmt& node) {
+void CodeGen::Visit(const BreakStmt* node) {
   if (std::empty(break_continue_stack_)) {
-    Error(node.GetLoc(), "break stmt not in a loop or switch");
+    Error(node->GetLoc(), "break stmt not in a loop or switch");
   } else {
     EmitBranchThroughCleanup(break_continue_stack_.top().break_block);
   }
@@ -898,8 +900,8 @@ void CodeGen::EmitBranchThroughCleanup(llvm::BasicBlock* dest) {
   Builder.ClearInsertionPoint();
 }
 
-void CodeGen::Visit(const ReturnStmt& node) {
-  auto expr{node.GetExpr()};
+void CodeGen::Visit(const ReturnStmt* node) {
+  auto expr{node->GetExpr()};
 
   if (!expr) {
     EmitBranchThroughCleanup(return_block_);
@@ -909,48 +911,48 @@ void CodeGen::Visit(const ReturnStmt& node) {
   if (return_value_) {
     auto back{load_};
     load_ = true;
-    node.GetExpr()->Accept(*this);
+    node->GetExpr()->Accept(*this);
     load_ = back;
     Builder.CreateStore(result_, return_value_);
   } else {
-    Error(node.GetLoc(), "void function '{}' should not return a value",
+    Error(node->GetLoc(), "void function '{}' should not return a value",
           func_->getName().str());
   }
 
   EmitBranchThroughCleanup(return_block_);
 }
 
-void CodeGen::Visit(const TranslationUnit& node) {
-  for (const auto& item : node.GetExtDecl()) {
+void CodeGen::Visit(const TranslationUnit* node) {
+  for (const auto& item : node->GetExtDecl()) {
     item->Accept(*this);
   }
 }
 
-void CodeGen::Visit(const Declaration& node) {
+void CodeGen::Visit(const Declaration* node) {
   // 对于函数声明, 当函数调用或者定义时处理
   // 对于全局变量和局部静态变量, 在语法分析时已经处理完了
-  if (!node.IsObjDecl() || node.IsObjDeclInGlobal()) {
+  if (!node->IsObjDecl() || node->IsObjDeclInGlobal()) {
     return;
   }
 
   DealLocaleDecl(node);
 }
 
-void CodeGen::Visit(const FuncDef& node) {
+void CodeGen::Visit(const FuncDef* node) {
   StartFunction(node);
-  EmitStmt(node.GetBody());
+  EmitStmt(node->GetBody());
   FinishFunction(node);
 }
 
-llvm::Value* CodeGen::IncOrDec(const Expr& expr, bool is_inc, bool is_postfix) {
-  auto is_unsigned{expr.GetType()->IsUnsigned()};
+llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
+  auto is_unsigned{expr->GetType()->IsUnsigned()};
   auto lhs_ptr{GetPtr(expr)};
 
   auto lhs_value{Builder.CreateAlignedLoad(lhs_ptr, align_)};
   llvm::Value* rhs_value{};
 
   llvm::Value* one_value{};
-  auto type{expr.GetType()->GetLLVMType()};
+  auto type{expr->GetType()->GetLLVMType()};
 
   if (type->isIntegerTy()) {
     one_value = llvm::ConstantInt::get(type, 1);
@@ -1235,10 +1237,10 @@ llvm::Value* CodeGen::NotEqualOp(llvm::Value* lhs, llvm::Value* rhs) {
   return CastTo(value, Builder.getInt32Ty(), true);
 }
 
-llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
-  if (auto cond{CalcConstantExpr{}.Calc(node.GetLHS())}) {
+llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr* node) {
+  if (auto cond{CalcConstantExpr{}.Calc(node->GetLHS())}) {
     if (cond->isZeroValue()) {
-      auto rhs{EvaluateExprAsBool(node.GetRHS())};
+      auto rhs{EvaluateExprAsBool(node->GetRHS())};
       return Builder.CreateZExt(rhs, Builder.getInt32Ty());
     } else {
       return Builder.getInt32(1);
@@ -1248,7 +1250,7 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
   auto end_block{CreateBasicBlock("logic.or.end")};
   auto rhs_block{CreateBasicBlock("logic.or.rhs")};
 
-  EmitBranchOnBoolExpr(node.GetLHS(), end_block, rhs_block);
+  EmitBranchOnBoolExpr(node->GetLHS(), end_block, rhs_block);
   auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
 
   for (auto begin{llvm::pred_begin(end_block)};
@@ -1257,7 +1259,7 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
   }
 
   EmitBlock(rhs_block);
-  auto rhs_value{EvaluateExprAsBool(node.GetRHS())};
+  auto rhs_value{EvaluateExprAsBool(node->GetRHS())};
 
   rhs_block = Builder.GetInsertBlock();
   EmitBlock(end_block);
@@ -1267,10 +1269,10 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr& node) {
   return Builder.CreateZExt(phi, Builder.getInt32Ty());
 }
 
-llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
-  if (auto cond{CalcConstantExpr{}.Calc(node.GetLHS())}) {
+llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr* node) {
+  if (auto cond{CalcConstantExpr{}.Calc(node->GetLHS())}) {
     if (cond->isOneValue()) {
-      auto rhs{EvaluateExprAsBool(node.GetRHS())};
+      auto rhs{EvaluateExprAsBool(node->GetRHS())};
       return Builder.CreateZExt(rhs, Builder.getInt32Ty());
     } else {
       return Builder.getInt32(0);
@@ -1280,7 +1282,7 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
   auto end_block{CreateBasicBlock("logic.and.end")};
   auto rhs_block{CreateBasicBlock("logic.and.rhs")};
 
-  EmitBranchOnBoolExpr(node.GetLHS(), rhs_block, end_block);
+  EmitBranchOnBoolExpr(node->GetLHS(), rhs_block, end_block);
   auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
 
   for (auto begin{llvm::pred_begin(end_block)};
@@ -1289,7 +1291,7 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
   }
 
   EmitBlock(rhs_block);
-  auto rhs_value{EvaluateExprAsBool(node.GetRHS())};
+  auto rhs_value{EvaluateExprAsBool(node->GetRHS())};
 
   rhs_block = Builder.GetInsertBlock();
   EmitBlock(end_block);
@@ -1299,15 +1301,15 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr& node) {
   return Builder.CreateZExt(phi, Builder.getInt32Ty());
 }
 
-llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
+llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
   auto ignore{TestAndClearIgnoreResultAssign()};
 
   auto backup{load_};
   load_ = true;
-  node.GetRHS()->Accept(*this);
+  node->GetRHS()->Accept(*this);
   load_ = backup;
   auto rhs{result_};
-  auto ptr{GetPtr(*node.GetLHS())};
+  auto ptr{GetPtr(node->GetLHS())};
   Assign(ptr, rhs, align_);
 
   if (!ignore) {
@@ -1317,8 +1319,8 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr& node) {
   }
 }
 
-bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
-  auto func_name{node.GetFuncType()->FuncGetName()};
+bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
+  auto func_name{node->GetFuncType()->FuncGetName()};
 
   if (func_name == "__builtin_va_start") {
     auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
@@ -1329,9 +1331,9 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
                                  "llvm.va_start", Module.get());
     }
 
-    assert(std::size(node.GetArgs()) == 2);
+    assert(std::size(node->GetArgs()) == 2);
 
-    node.GetArgs().front()->Accept(*this);
+    node->GetArgs().front()->Accept(*this);
 
     result_ = Builder.CreateBitCast(result_, Builder.getInt8PtrTy());
     result_ = Builder.CreateCall(va_start_, {result_});
@@ -1346,21 +1348,21 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
                                  "llvm.va_end", Module.get());
     }
 
-    assert(std::size(node.GetArgs()) == 1);
+    assert(std::size(node->GetArgs()) == 1);
 
-    node.GetArgs().front()->Accept(*this);
+    node->GetArgs().front()->Accept(*this);
 
     result_ = Builder.CreateBitCast(result_, Builder.getInt8PtrTy());
     result_ = Builder.CreateCall(va_end_, {result_});
 
     return true;
   } else if (func_name == "__builtin_va_arg_sub") {
-    assert(std::size(node.GetArgs()) == 1);
+    assert(std::size(node->GetArgs()) == 1);
 
-    node.GetArgs().front()->Accept(*this);
-    assert(node.GetVaArgType() != nullptr);
+    node->GetArgs().front()->Accept(*this);
+    assert(node->GetVaArgType() != nullptr);
 
-    result_ = VaArg(result_, node.GetVaArgType()->GetLLVMType());
+    result_ = VaArg(result_, node->GetVaArgType()->GetLLVMType());
 
     return true;
   } else if (func_name == "__builtin_va_copy") {
@@ -1373,11 +1375,11 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr& node) {
                                  "llvm.va_copy", Module.get());
     }
 
-    assert(std::size(node.GetArgs()) == 2);
+    assert(std::size(node->GetArgs()) == 2);
 
-    node.GetArgs().front()->Accept(*this);
+    node->GetArgs().front()->Accept(*this);
     auto arg1{result_};
-    node.GetArgs()[1]->Accept(*this);
+    node->GetArgs()[1]->Accept(*this);
     auto arg2{result_};
 
     auto r1{Builder.CreateBitCast(arg1, Builder.getInt8PtrTy())};
@@ -1461,17 +1463,17 @@ llvm::BasicBlock* CodeGen::GetBasicBlockForLabel(const LabelStmt* label) {
   return bb = CreateBasicBlock(label->GetName());
 }
 
-void CodeGen::DealLocaleDecl(const Declaration& node) {
-  auto obj{node.GetObject()};
+void CodeGen::DealLocaleDecl(const Declaration* node) {
+  auto obj{node->GetObject()};
   auto type{obj->GetType()};
   auto name{obj->GetName()};
 
   obj->SetLocalPtr(
       CreateEntryBlockAlloca(type->GetLLVMType(), obj->GetAlign()));
 
-  if (node.HasLocalInit()) {
+  if (node->HasLocalInit()) {
     if (type->IsScalarTy()) {
-      auto init{node.GetLocalInits()};
+      auto init{node->GetLocalInits()};
       assert(std::size(init) == 1);
 
       init.front().GetExpr()->Accept(*this);
@@ -1481,30 +1483,30 @@ void CodeGen::DealLocaleDecl(const Declaration& node) {
     } else {
       assert(false);
     }
-  } else if (node.HasConstantInit()) {
+  } else if (node->HasConstantInit()) {
     auto ptr{obj->GetLocalPtr()};
     if (ptr->getType() != Builder.getInt8PtrTy()) {
       result_ = Builder.CreateBitCast(ptr, Builder.getInt8PtrTy());
     }
 
-    Builder.CreateMemCpy(result_, obj->GetAlign(), node.GetConstant(),
+    Builder.CreateMemCpy(result_, obj->GetAlign(), node->GetConstant(),
                          obj->GetAlign(), obj->GetType()->GetWidth());
   }
 }
 
-void CodeGen::InitLocalAggregate(const Declaration& node) {
-  auto obj{node.GetObject()};
+void CodeGen::InitLocalAggregate(const Declaration* node) {
+  auto obj{node->GetObject()};
   auto width{obj->GetType()->GetWidth()};
 
   Builder.CreateMemSet(
       Builder.CreateBitCast(obj->GetLocalPtr(), Builder.getInt8PtrTy()),
       Builder.getInt8(0), width, obj->GetAlign());
 
-  if (node.ValueInit()) {
+  if (node->ValueInit()) {
     return;
   }
 
-  for (const auto& item : node.GetLocalInits()) {
+  for (const auto& item : node->GetLocalInits()) {
     auto backup{load_};
     load_ = true;
     item.GetExpr()->Accept(*this);
@@ -1532,15 +1534,15 @@ void CodeGen::InitLocalAggregate(const Declaration& node) {
   }
 }
 
-void CodeGen::StartFunction(const FuncDef& node) {
-  node.GetIdent()->Accept(*this);
+void CodeGen::StartFunction(const FuncDef* node) {
+  node->GetIdent()->Accept(*this);
   func_ = llvm::cast<llvm::Function>(result_);
 
-  auto func_name{node.GetName()};
-  auto func_type{node.GetFuncType()};
+  auto func_name{node->GetName()};
+  auto func_type{node->GetFuncType()};
 
   // TODO Attribute DSOLocal 用法
-  if (node.GetLinkage() != kInternal) {
+  if (node->GetLinkage() != kInternal) {
     func_->setDSOLocal(true);
   }
 
@@ -1553,7 +1555,7 @@ void CodeGen::StartFunction(const FuncDef& node) {
     func_->addFnAttr(llvm::Attribute::OptimizeNone);
   }
 
-  auto entry{llvm::BasicBlock::Create(Context, "", func_)};
+  auto entry{CreateBasicBlock("entry", func_)};
 
   auto undef{llvm::UndefValue::get(Builder.getInt32Ty())};
   alloc_insert_point_ =
@@ -1570,7 +1572,7 @@ void CodeGen::StartFunction(const FuncDef& node) {
 
   Builder.SetInsertPoint(entry);
 
-  if (node.GetFuncType()->FuncGetName() == "main") {
+  if (node->GetFuncType()->FuncGetName() == "main") {
     Builder.CreateStore(Builder.getInt32(0), return_value_);
   }
 
@@ -1585,8 +1587,8 @@ void CodeGen::StartFunction(const FuncDef& node) {
   }
 }
 
-void CodeGen::FinishFunction(const FuncDef& node) {
-  auto func_name{node.GetName()};
+void CodeGen::FinishFunction(const FuncDef* node) {
+  auto func_name{node->GetName()};
   auto func{Module->getFunction(func_name)};
 
   EmitReturnBlock();
