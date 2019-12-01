@@ -90,6 +90,14 @@ bool IsPointerTy(llvm::Value *value) {
   return value->getType()->isPointerTy();
 }
 
+bool IsFuncPointer(llvm::Type *type) {
+  return type->isPointerTy() && type->getPointerElementType()->isFunctionTy();
+}
+
+bool IsArrayPointer(llvm::Type *type) {
+  return type->isPointerTy() && type->getPointerElementType()->isArrayTy();
+}
+
 llvm::Constant *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
                                bool is_unsigned) {
   assert(value != nullptr && to != nullptr);

@@ -31,6 +31,25 @@
 
 namespace kcc {
 
+#define LoadStructObj()        \
+  {                            \
+    auto backup{load_struct_}; \
+    load_struct_ = true;
+
+#define FinishLoad()     \
+  load_struct_ = backup; \
+  }
+
+/*
+ * BreakContinue
+ */
+CodeGen::BreakContinue::BreakContinue(llvm::BasicBlock* break_block,
+                                      llvm::BasicBlock* continue_block)
+    : break_block(break_block), continue_block(continue_block) {}
+
+/*
+ * CodeGen
+ */
 CodeGen::CodeGen() {
   // 获取当前计算机的目标三元组
   auto target_triple{llvm::sys::getDefaultTargetTriple()};
@@ -67,63 +86,14 @@ void CodeGen::GenCode(const TranslationUnit* root) {
   }
 }
 
-CodeGen::BreakContinue::BreakContinue(llvm::BasicBlock* break_block,
-                                      llvm::BasicBlock* continue_block)
-    : break_block(break_block), continue_block(continue_block) {}
-
 llvm::BasicBlock* CodeGen::CreateBasicBlock(const std::string& name,
-                                            llvm::Function* parent,
-                                            llvm::BasicBlock* insert_before) {
+                                            llvm::Function* parent) {
   (void)name;
 #ifdef NDEBUG
-  return llvm::BasicBlock::Create(Context, "", parent, insert_before);
+  return llvm::BasicBlock::Create(Context, "", parent);
 #else
-  return llvm::BasicBlock::Create(Context, name, parent, insert_before);
+  return llvm::BasicBlock::Create(Context, name, parent);
 #endif
-}
-
-llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type,
-                                                  std::int32_t align) {
-  auto ptr{new llvm::AllocaInst{type, 0, "", alloc_insert_point_}};
-  ptr->setAlignment(align);
-
-  return ptr;
-}
-
-void CodeGen::EmitBranchOnBoolExpr(const Expr* expr,
-                                   llvm::BasicBlock* true_block,
-                                   llvm::BasicBlock* false_block) {
-  if (auto cond_binary{dynamic_cast<const BinaryOpExpr*>(expr)}) {
-    if (cond_binary->GetOp() == Tag::kAmpAmp) {
-      auto lhs_true_block{CreateBasicBlock("logic.and.lhs.true")};
-      EmitBranchOnBoolExpr(cond_binary->GetLHS(), lhs_true_block, false_block);
-      EmitBlock(lhs_true_block);
-      EmitBranchOnBoolExpr(cond_binary->GetRHS(), true_block, false_block);
-      return;
-    } else if (cond_binary->GetOp() == Tag::kPipePipe) {
-      auto lhs_false_block{CreateBasicBlock("logic.or.lhs.false")};
-      EmitBranchOnBoolExpr(cond_binary->GetLHS(), true_block, lhs_false_block);
-      EmitBlock(lhs_false_block);
-      EmitBranchOnBoolExpr(cond_binary->GetRHS(), true_block, false_block);
-      return;
-    }
-  } else if (auto cond_unary{dynamic_cast<const UnaryOpExpr*>(expr)}) {
-    if (cond_unary->GetOp() == Tag::kExclaim) {
-      EmitBranchOnBoolExpr(cond_unary->GetExpr(), false_block, true_block);
-      return;
-    }
-  } else if (auto cond_op{dynamic_cast<const ConditionOpExpr*>(expr)}) {
-    auto lhs_block{CreateBasicBlock("cond.true")};
-    auto rhs_block{CreateBasicBlock("cond.false")};
-    EmitBranchOnBoolExpr(cond_op->GetCond(), lhs_block, rhs_block);
-    EmitBlock(lhs_block);
-    EmitBranchOnBoolExpr(cond_op->GetLHS(), true_block, false_block);
-    EmitBlock(rhs_block);
-    EmitBranchOnBoolExpr(cond_op->GetRHS(), true_block, false_block);
-    return;
-  }
-
-  Builder.CreateCondBr(EvaluateExprAsBool(expr), true_block, false_block);
 }
 
 void CodeGen::EmitBlock(llvm::BasicBlock* bb, bool is_finished) {
@@ -146,6 +116,74 @@ void CodeGen::EmitBranch(llvm::BasicBlock* target) {
   }
 
   Builder.ClearInsertionPoint();
+}
+
+bool CodeGen::HaveInsertPoint() const {
+  return Builder.GetInsertBlock() != nullptr;
+}
+
+void CodeGen::EnsureInsertPoint() {
+  if (!HaveInsertPoint()) {
+    EmitBlock(CreateBasicBlock());
+  }
+}
+
+llvm::Value* CodeGen::EvaluateExprAsBool(const Expr* expr) {
+  assert(expr != nullptr);
+  expr->Accept(*this);
+  return CastToBool(result_);
+}
+
+void CodeGen::EmitBranchOnBoolExpr(const Expr* expr,
+                                   llvm::BasicBlock* true_block,
+                                   llvm::BasicBlock* false_block) {
+  if (auto cond_binary{dynamic_cast<const BinaryOpExpr*>(expr)}) {
+    if (cond_binary->GetOp() == Tag::kAmpAmp) {
+      // (a && b) && c
+      auto lhs_true_block{CreateBasicBlock("logic.and.lhs.true")};
+      EmitBranchOnBoolExpr(cond_binary->GetLHS(), lhs_true_block, false_block);
+      EmitBlock(lhs_true_block);
+      EmitBranchOnBoolExpr(cond_binary->GetRHS(), true_block, false_block);
+      return;
+    } else if (cond_binary->GetOp() == Tag::kPipePipe) {
+      // (a || b) || c
+      auto lhs_false_block{CreateBasicBlock("logic.or.lhs.false")};
+      EmitBranchOnBoolExpr(cond_binary->GetLHS(), true_block, lhs_false_block);
+      EmitBlock(lhs_false_block);
+      EmitBranchOnBoolExpr(cond_binary->GetRHS(), true_block, false_block);
+      return;
+    }
+  } else if (auto cond_unary{dynamic_cast<const UnaryOpExpr*>(expr)}) {
+    if (cond_unary->GetOp() == Tag::kExclaim) {
+      EmitBranchOnBoolExpr(cond_unary->GetExpr(), false_block, true_block);
+      return;
+    }
+  } else if (auto cond_op{dynamic_cast<const ConditionOpExpr*>(expr)}) {
+    // (x ? a : b) ? c: d
+    auto lhs_block{CreateBasicBlock("cond.true")};
+    auto rhs_block{CreateBasicBlock("cond.false")};
+    EmitBranchOnBoolExpr(cond_op->GetCond(), lhs_block, rhs_block);
+    EmitBlock(lhs_block);
+    EmitBranchOnBoolExpr(cond_op->GetLHS(), true_block, false_block);
+    EmitBlock(rhs_block);
+    EmitBranchOnBoolExpr(cond_op->GetRHS(), true_block, false_block);
+    return;
+  }
+
+  Builder.CreateCondBr(EvaluateExprAsBool(expr), true_block, false_block);
+}
+
+void CodeGen::SimplifyForwardingBlocks(llvm::BasicBlock* bb) {
+  auto bi{llvm::dyn_cast<llvm::BranchInst>(bb->getTerminator())};
+
+  if (!bi || !bi->isUnconditional()) {
+    return;
+  }
+
+  // getSuccessor 获取后继
+  bb->replaceAllUsesWith(bi->getSuccessor(0));
+  bi->eraseFromParent();
+  bb->eraseFromParent();
 }
 
 void CodeGen::EmitStmt(const Stmt* stmt) {
@@ -189,39 +227,58 @@ bool CodeGen::EmitSimpleStmt(const Stmt* stmt) {
   }
 }
 
-bool CodeGen::HaveInsertPoint() const {
-  return Builder.GetInsertBlock() != nullptr;
-}
-
-void CodeGen::EnsureInsertPoint() {
-  if (!HaveInsertPoint()) {
-    EmitBlock(CreateBasicBlock());
+bool CodeGen::ContainsLabel(const Stmt* stmt) {
+  if (stmt == nullptr) {
+    return false;
   }
+
+  // 比如 if(0){label:...} goto label;
+  // 依旧需要生成代码
+  if (stmt->Kind() == AstNodeType::kLabelStmt ||
+      stmt->Kind() == AstNodeType::kCaseStmt ||
+      stmt->Kind() == AstNodeType::kDefaultStmt ||
+      stmt->Kind() == AstNodeType::kSwitchStmt) {
+    return true;
+  }
+
+  for (const auto& item : stmt->Children()) {
+    if (ContainsLabel(item)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
-llvm::Value* CodeGen::EvaluateExprAsBool(const Expr* expr) {
-  assert(expr != nullptr);
-  expr->Accept(*this);
-  return CastToBool(result_);
+void CodeGen::EmitBranchThroughCleanup(llvm::BasicBlock* dest) {
+  if (!HaveInsertPoint()) {
+    return;
+  }
+
+  Builder.CreateBr(dest);
+  Builder.ClearInsertionPoint();
 }
 
-bool CodeGen::TestAndClearIgnoreResultAssign() {
-  bool ret{ignore_result_assign_};
-  ignore_result_assign_ = false;
-  return ret;
+llvm::BasicBlock* CodeGen::GetBasicBlockForLabel(const LabelStmt* label) {
+  auto& bb{labels_[label]};
+  if (bb) {
+    return bb;
+  }
+
+  return bb = CreateBasicBlock(label->GetName());
 }
 
-void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
-                        llvm::BasicBlock* continue_block) {
-  break_continue_stack_.push({break_stack, continue_block});
+bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
+  return expr->Kind() == AstNodeType::kConstantExpr;
 }
 
-void CodeGen::PopBlock() { break_continue_stack_.pop(); }
+llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type) {
+  return new llvm::AllocaInst{type, 0, "", alloc_insert_point_};
+}
 
 llvm::Value* CodeGen::GetPtr(const AstNode* node) {
   if (node->Kind() == AstNodeType::kObjectExpr) {
     auto obj{dynamic_cast<const ObjectExpr*>(node)};
-    align_ = obj->GetAlign();
     if (obj->InGlobal() || obj->IsStatic()) {
       return obj->GetGlobalPtr();
     } else {
@@ -261,16 +318,12 @@ llvm::Value* CodeGen::GetPtr(const AstNode* node) {
   return nullptr;
 }
 
-llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
-                             std::int32_t align) {
-  auto type{lhs_ptr->getType()->getPointerElementType()};
-
-  if (type->isPointerTy() && rhs->getType()->isIntegerTy()) {
-    rhs = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
-  }
-
-  return Builder.CreateAlignedStore(rhs, lhs_ptr, align);
+void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
+                        llvm::BasicBlock* continue_block) {
+  break_continue_stack_.push({break_stack, continue_block});
 }
+
+void CodeGen::PopBlock() { break_continue_stack_.pop(); }
 
 void CodeGen::Visit(const UnaryOpExpr* node) {
   auto is_unsigned{node->GetExpr()->GetType()->IsUnsigned()};
@@ -289,16 +342,13 @@ void CodeGen::Visit(const UnaryOpExpr* node) {
       result_ = IncOrDec(node->GetExpr(), false, true);
       break;
     case Tag::kPlus:
-      TestAndClearIgnoreResultAssign();
       node->GetExpr()->Accept(*this);
       break;
     case Tag::kMinus:
-      TestAndClearIgnoreResultAssign();
       node->GetExpr()->Accept(*this);
       result_ = NegOp(result_, is_unsigned);
       break;
     case Tag::kTilde:
-      TestAndClearIgnoreResultAssign();
       node->GetExpr()->Accept(*this);
       result_ = Builder.CreateNot(result_);
       break;
@@ -306,34 +356,9 @@ void CodeGen::Visit(const UnaryOpExpr* node) {
       node->GetExpr()->Accept(*this);
       result_ = LogicNotOp(result_);
       break;
-    case Tag::kStar: {
-      auto binary{dynamic_cast<const BinaryOpExpr*>(node->GetExpr())};
-      if (binary && binary->GetOp() == Tag::kPlus) {
-        // e.g. a[1]
-        auto backup{load_};
-        load_ = false;
-        binary->GetLHS()->Accept(*this);
-        auto lhs{result_};
-        binary->GetRHS()->Accept(*this);
-        load_ = backup;
-        if (lhs->getType()->isPointerTy() &&
-            lhs->getType()->getPointerElementType()->isArrayTy()) {
-          result_ =
-              Builder.CreateInBoundsGEP(lhs, {result_, Builder.getInt64(0)});
-        } else {
-          result_ = Builder.CreateInBoundsGEP(lhs, {result_});
-          result_ = Builder.CreateAlignedLoad(result_, align_);
-        }
-      } else if (node->GetExpr()->GetType()->IsPointerTy() &&
-                 node->GetExpr()
-                     ->GetType()
-                     ->PointerGetElementType()
-                     ->IsFunctionTy()) {
-        node->GetExpr()->Accept(*this);
-      } else {
-        result_ = Builder.CreateAlignedLoad(GetPtr(node), align_);
-      }
-    } break;
+    case Tag::kStar:
+      result_ = Deref(node);
+      break;
     case Tag::kAmp:
       result_ = GetPtr(node->GetExpr());
       break;
@@ -348,14 +373,6 @@ void CodeGen::Visit(const TypeCastExpr* node) {
                    node->GetExpr()->GetType()->IsUnsigned());
 }
 
-/*
- * =
- * + - * / % & | ^ << >>
- * && ||
- * == != < > <= >=
- * .
- * ,
- */
 void CodeGen::Visit(const BinaryOpExpr* node) {
   switch (node->GetOp()) {
     case Tag::kPipePipe:
@@ -367,25 +384,13 @@ void CodeGen::Visit(const BinaryOpExpr* node) {
     case Tag::kEqual:
       result_ = AssignOp(node);
       return;
-    case Tag::kPeriod: {
-      auto ptr{GetPtr(node)};
-      auto type{ptr->getType()->getPointerElementType()};
-      if (type->isAggregateType()) {
-        if (type->isStructTy() && load_) {
-          result_ = Builder.CreateAlignedLoad(ptr, align_);
-        } else {
-          result_ = ptr;
-        }
-      } else {
-        result_ = Builder.CreateAlignedLoad(ptr, align_);
-      }
-    }
+    case Tag::kPeriod:
+      result_ = MemberRef(node);
       return;
     default:
       break;
   }
 
-  TestAndClearIgnoreResultAssign();
   node->GetLHS()->Accept(*this);
   auto lhs{result_};
   node->GetRHS()->Accept(*this);
@@ -450,13 +455,7 @@ void CodeGen::Visit(const BinaryOpExpr* node) {
   }
 }
 
-bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
-  return expr->Kind() == AstNodeType::kConstantExpr;
-}
-
 void CodeGen::Visit(const ConditionOpExpr* node) {
-  TestAndClearIgnoreResultAssign();
-
   if (auto cond{CalcConstantExpr{}.Calc(node->GetCond())}) {
     auto live{node->GetLHS()}, dead{node->GetRHS()};
     if (cond->isZeroValue()) {
@@ -474,8 +473,7 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
     node->GetLHS()->Accept(*this);
     auto lhs{result_};
     node->GetRHS()->Accept(*this);
-    auto rhs{result_};
-    Builder.CreateSelect(cond, lhs, rhs);
+    Builder.CreateSelect(cond, lhs, result_);
     return;
   }
 
@@ -519,15 +517,15 @@ void CodeGen::Visit(const FuncCallExpr* node) {
   node->GetCallee()->Accept(*this);
   auto callee{result_};
 
-  std::vector<llvm::Value*> values;
-  load_ = true;
-  for (auto& item : node->GetArgs()) {
+  std::vector<llvm::Value*> args;
+  LoadStructObj();
+  for (const auto& item : node->GetArgs()) {
     item->Accept(*this);
-    values.push_back(result_);
+    args.push_back(result_);
   }
-  load_ = false;
+  FinishLoad();
 
-  result_ = Builder.CreateCall(callee, values);
+  result_ = Builder.CreateCall(callee, args);
 }
 
 // 常量用 ConstantFP / ConstantInt 类表示
@@ -544,7 +542,6 @@ void CodeGen::Visit(const ConstantExpr* node) {
   }
 }
 
-// 1 / 2 / 4
 // 注意已经添加空字符了
 void CodeGen::Visit(const StringLiteralExpr* node) { result_ = node->GetPtr(); }
 
@@ -571,40 +568,25 @@ void CodeGen::Visit(const EnumeratorExpr* node) {
 }
 
 void CodeGen::Visit(const ObjectExpr* node) {
-  align_ = node->GetAlign();
-
-  if (node->InGlobal() || node->IsStatic()) {
-    if (node->GetType()->IsAggregateTy()) {
-      if (node->GetType()->IsStructOrUnionTy() && load_) {
-        result_ = Builder.CreateAlignedLoad(node->GetGlobalPtr(), align_);
-      } else {
-        result_ = node->GetGlobalPtr();
-      }
-    } else {
-      result_ = Builder.CreateAlignedLoad(node->GetGlobalPtr(), align_);
-    }
+  llvm::Value* ptr;
+  if (node->InGlobal()) {
+    ptr = node->GetGlobalPtr();
   } else {
-    if (node->GetType()->IsAggregateTy()) {
-      if (node->GetType()->IsStructOrUnionTy() && load_) {
-        result_ = Builder.CreateAlignedLoad(node->GetLocalPtr(), align_);
-      } else {
-        result_ = node->GetLocalPtr();
-      }
-    } else {
-      result_ =
-          Builder.CreateAlignedLoad(node->GetLocalPtr(), node->GetAlign());
-    }
+    ptr = node->GetLocalPtr();
+  }
+
+  auto type{node->GetType()};
+  if (type->IsArrayTy() || (type->IsStructOrUnionTy() && !load_struct_)) {
+    result_ = ptr;
+  } else {
+    result_ = Builder.CreateLoad(ptr);
   }
 }
 
 void CodeGen::Visit(const StmtExpr* node) { node->GetBlock()->Accept(*this); }
 
-void CodeGen::EmitLabel(const LabelStmt* label_stmt) {
-  EmitBlock(GetBasicBlockForLabel(label_stmt));
-}
-
 void CodeGen::Visit(const LabelStmt* node) {
-  EmitLabel(node);
+  EmitBlock(GetBasicBlockForLabel(node));
   EmitStmt(node->GetStmt());
 }
 
@@ -632,57 +614,23 @@ void CodeGen::Visit(const CaseStmt* node) {
 void CodeGen::Visit(const DefaultStmt* node) {
   auto default_block{switch_inst_->getDefaultDest()};
   assert(default_block->empty());
+
   EmitBlock(default_block);
   EmitStmt(node->GetStmt());
 }
 
 void CodeGen::Visit(const CompoundStmt* node) {
-  for (auto& item : node->GetStmts()) {
+  for (const auto& item : node->GetStmts()) {
     EmitStmt(item);
   }
 }
 
 void CodeGen::Visit(const ExprStmt* node) {
-  if (node->GetExpr()) {
-    node->GetExpr()->Accept(*this);
+  if (auto expr{node->GetExpr()}) {
+    expr->Accept(*this);
   } else {
     return;
   }
-
-  if (auto bb{Builder.GetInsertBlock()}) {
-    if (bb->empty() && bb->use_empty()) {
-      bb->eraseFromParent();
-      Builder.ClearInsertionPoint();
-    }
-  }
-}
-
-bool CodeGen::ContainsLabel(const Stmt* stmt, bool ignore_case) {
-  if (stmt == nullptr) {
-    return false;
-  }
-
-  if (stmt->Kind() == AstNodeType::kLabelStmt ||
-      stmt->Kind() == AstNodeType::kCaseStmt ||
-      stmt->Kind() == AstNodeType::kDefaultStmt) {
-    return true;
-  }
-
-  if (stmt->Kind() == AstNodeType::kSwitchStmt && !ignore_case) {
-    return true;
-  }
-
-  if (stmt->Kind() == AstNodeType::kSwitchStmt) {
-    ignore_case = true;
-  }
-
-  for (const auto& item : stmt->Children()) {
-    if (ContainsLabel(item, ignore_case)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 void CodeGen::Visit(const IfStmt* node) {
@@ -754,19 +702,6 @@ void CodeGen::Visit(const SwitchStmt* node) {
   switch_inst_ = switch_inst_backup;
 }
 
-void CodeGen::SimplifyForwardingBlocks(llvm::BasicBlock* bb) {
-  auto bi{llvm::dyn_cast<llvm::BranchInst>(bb->getTerminator())};
-
-  if (!bi || !bi->isUnconditional()) {
-    return;
-  }
-
-  // getSuccessor 获取要跳转到的 BasicBlock
-  bb->replaceAllUsesWith(bi->getSuccessor(0));
-  bi->eraseFromParent();
-  bb->eraseFromParent();
-}
-
 void CodeGen::Visit(const WhileStmt* node) {
   auto cond_block{CreateBasicBlock("while.cond")};
   EmitBlock(cond_block);
@@ -794,8 +729,16 @@ void CodeGen::Visit(const WhileStmt* node) {
   PopBlock();
 
   EmitBranch(cond_block);
+
   EmitBlock(end_block, true);
 
+  //  br label %while.cond
+  //
+  // while.cond:               ; preds = %while.body, %entry
+  //  br label %while.body
+  //
+  // while.body:               ; preds = %while.cond
+  //  br label %while.cond
   if (!emit_br) {
     SimplifyForwardingBlocks(cond_block);
   }
@@ -833,10 +776,10 @@ void CodeGen::Visit(const DoWhileStmt* node) {
 }
 
 void CodeGen::Visit(const ForStmt* node) {
-  if (node->GetInit()) {
-    node->GetInit()->Accept(*this);
-  } else if (node->GetDecl()) {
-    EmitStmt(node->GetDecl());
+  if (auto init{node->GetInit()}) {
+    init->Accept(*this);
+  } else if (auto decl{node->GetDecl()}) {
+    EmitStmt(decl);
   }
 
   auto cond_block{CreateBasicBlock("for.cond")};
@@ -861,9 +804,9 @@ void CodeGen::Visit(const ForStmt* node) {
   EmitStmt(node->GetBlock());
   PopBlock();
 
-  if (node->GetInc()) {
+  if (auto inc{node->GetInc()}) {
     EmitBlock(continue_block);
-    node->GetInc()->Accept(*this);
+    inc->Accept(*this);
   }
 
   EmitBranch(cond_block);
@@ -891,15 +834,6 @@ void CodeGen::Visit(const BreakStmt* node) {
   }
 }
 
-void CodeGen::EmitBranchThroughCleanup(llvm::BasicBlock* dest) {
-  if (!HaveInsertPoint()) {
-    return;
-  }
-
-  Builder.CreateBr(dest);
-  Builder.ClearInsertionPoint();
-}
-
 void CodeGen::Visit(const ReturnStmt* node) {
   auto expr{node->GetExpr()};
 
@@ -909,10 +843,9 @@ void CodeGen::Visit(const ReturnStmt* node) {
   }
 
   if (return_value_) {
-    auto back{load_};
-    load_ = true;
+    LoadStructObj();
     node->GetExpr()->Accept(*this);
-    load_ = back;
+    FinishLoad();
     Builder.CreateStore(result_, return_value_);
   } else {
     Error(node->GetLoc(), "void function '{}' should not return a value",
@@ -947,8 +880,7 @@ void CodeGen::Visit(const FuncDef* node) {
 llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   auto is_unsigned{expr->GetType()->IsUnsigned()};
   auto lhs_ptr{GetPtr(expr)};
-
-  auto lhs_value{Builder.CreateAlignedLoad(lhs_ptr, align_)};
+  auto lhs_value{Builder.CreateLoad(lhs_ptr)};
   llvm::Value* rhs_value{};
 
   llvm::Value* one_value{};
@@ -959,7 +891,7 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   } else if (type->isFloatingPointTy()) {
     one_value = llvm::ConstantFP::get(type, 1.0);
   } else if (type->isPointerTy()) {
-    one_value = Builder.getInt32(1);
+    one_value = Builder.getInt64(1);
   } else {
     assert(false);
   }
@@ -970,7 +902,7 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
     rhs_value = AddOp(lhs_value, NegOp(one_value, false), is_unsigned);
   }
 
-  Assign(lhs_ptr, rhs_value, align_);
+  Builder.CreateStore(rhs_value, lhs_ptr);
 
   return is_postfix ? lhs_value : rhs_value;
 }
@@ -991,10 +923,31 @@ llvm::Value* CodeGen::NegOp(llvm::Value* value, bool is_unsigned) {
 }
 
 llvm::Value* CodeGen::LogicNotOp(llvm::Value* value) {
-  value = CastToBool(value);
-  value = Builder.CreateXor(value, Builder.getTrue());
+  result_ = Builder.CreateNot(CastToBool(value));
+  return CastTo(result_, Builder.getInt32Ty(), true);
+}
 
-  return CastTo(value, Builder.getInt32Ty(), true);
+llvm::Value* CodeGen::Deref(const UnaryOpExpr* node) {
+  auto binary{dynamic_cast<const BinaryOpExpr*>(node->GetExpr())};
+  // e.g. a[1] / *(p + 1)
+  if (binary && binary->GetOp() == Tag::kPlus) {
+    binary->GetLHS()->Accept(*this);
+    auto lhs{result_};
+    binary->GetRHS()->Accept(*this);
+    if (IsArrayPointer(lhs->getType())) {
+      result_ = Builder.CreateInBoundsGEP(lhs, {result_, Builder.getInt64(0)});
+    } else {
+      result_ = Builder.CreateInBoundsGEP(lhs, {result_});
+      result_ = Builder.CreateLoad(result_);
+    }
+  } else if (IsFuncPointer(node->GetExpr()->GetType()->GetLLVMType())) {
+    node->GetExpr()->Accept(*this);
+  } else {
+    node->GetExpr()->Accept(*this);
+    result_ = Builder.CreateLoad(result_);
+  }
+
+  return result_;
 }
 
 llvm::Value* CodeGen::AddOp(llvm::Value* lhs, llvm::Value* rhs,
@@ -1238,8 +1191,8 @@ llvm::Value* CodeGen::NotEqualOp(llvm::Value* lhs, llvm::Value* rhs) {
 }
 
 llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr* node) {
-  if (auto cond{CalcConstantExpr{}.Calc(node->GetLHS())}) {
-    if (cond->isZeroValue()) {
+  if (auto lhs{CalcConstantExpr{}.Calc(node->GetLHS())}) {
+    if (lhs->isZeroValue()) {
       auto rhs{EvaluateExprAsBool(node->GetRHS())};
       return Builder.CreateZExt(rhs, Builder.getInt32Ty());
     } else {
@@ -1247,15 +1200,15 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr* node) {
     }
   }
 
-  auto end_block{CreateBasicBlock("logic.or.end")};
   auto rhs_block{CreateBasicBlock("logic.or.rhs")};
+  auto end_block{CreateBasicBlock("logic.or.end")};
 
   EmitBranchOnBoolExpr(node->GetLHS(), end_block, rhs_block);
   auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
 
-  for (auto begin{llvm::pred_begin(end_block)};
-       begin != llvm::pred_end(end_block); ++begin) {
-    phi->addIncoming(Builder.getTrue(), *begin);
+  // llvm::predecessors 获取 basic block 的所有前驱
+  for (const auto& item : llvm::predecessors(end_block)) {
+    phi->addIncoming(Builder.getTrue(), item);
   }
 
   EmitBlock(rhs_block);
@@ -1270,8 +1223,8 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr* node) {
 }
 
 llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr* node) {
-  if (auto cond{CalcConstantExpr{}.Calc(node->GetLHS())}) {
-    if (cond->isOneValue()) {
+  if (auto lhs{CalcConstantExpr{}.Calc(node->GetLHS())}) {
+    if (lhs->isOneValue()) {
       auto rhs{EvaluateExprAsBool(node->GetRHS())};
       return Builder.CreateZExt(rhs, Builder.getInt32Ty());
     } else {
@@ -1279,21 +1232,21 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr* node) {
     }
   }
 
-  auto end_block{CreateBasicBlock("logic.and.end")};
   auto rhs_block{CreateBasicBlock("logic.and.rhs")};
+  auto end_block{CreateBasicBlock("logic.and.end")};
 
   EmitBranchOnBoolExpr(node->GetLHS(), rhs_block, end_block);
   auto phi{llvm::PHINode::Create(Builder.getInt1Ty(), 2, "", end_block)};
 
-  for (auto begin{llvm::pred_begin(end_block)};
-       begin != llvm::pred_end(end_block); ++begin) {
-    phi->addIncoming(Builder.getFalse(), *begin);
+  for (const auto& item : llvm::predecessors(end_block)) {
+    phi->addIncoming(Builder.getFalse(), item);
   }
 
   EmitBlock(rhs_block);
   auto rhs_value{EvaluateExprAsBool(node->GetRHS())};
 
   rhs_block = Builder.GetInsertBlock();
+
   EmitBlock(end_block);
 
   phi->addIncoming(rhs_value, rhs_block);
@@ -1302,21 +1255,35 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr* node) {
 }
 
 llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
-  auto ignore{TestAndClearIgnoreResultAssign()};
-
-  auto backup{load_};
-  load_ = true;
+  LoadStructObj();
   node->GetRHS()->Accept(*this);
-  load_ = backup;
+  FinishLoad();
   auto rhs{result_};
-  auto ptr{GetPtr(node->GetLHS())};
-  Assign(ptr, rhs, align_);
 
-  if (!ignore) {
-    return Builder.CreateAlignedLoad(ptr, load_);
-  } else {
-    return nullptr;
+  auto lhs_ptr{GetPtr(node->GetLHS())};
+
+  auto type{lhs_ptr->getType()->getPointerElementType()};
+
+  if (type->isPointerTy() && rhs->getType()->isIntegerTy()) {
+    rhs = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
   }
+
+  Builder.CreateStore(rhs, lhs_ptr);
+
+  return Builder.CreateLoad(lhs_ptr);
+}
+
+llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
+  auto ptr{GetPtr(node)};
+  auto type{ptr->getType()->getPointerElementType()};
+
+  if (type->isArrayTy() || (type->isStructTy() && !load_struct_)) {
+    result_ = ptr;
+  } else {
+    result_ = Builder.CreateLoad(ptr);
+  }
+
+  return result_;
 }
 
 bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
@@ -1358,10 +1325,9 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
     return true;
   } else if (func_name == "__builtin_va_arg_sub") {
     assert(std::size(node->GetArgs()) == 1);
-
-    node->GetArgs().front()->Accept(*this);
     assert(node->GetVaArgType() != nullptr);
 
+    node->GetArgs().front()->Accept(*this);
     result_ = VaArg(result_, node->GetVaArgType()->GetLLVMType());
 
     return true;
@@ -1369,6 +1335,7 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
     auto func_type{llvm::FunctionType::get(
         Builder.getVoidTy(), {Builder.getInt8PtrTy(), Builder.getInt8PtrTy()},
         false)};
+
     if (!va_copy_) {
       va_copy_ =
           llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
@@ -1382,10 +1349,9 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
     node->GetArgs()[1]->Accept(*this);
     auto arg2{result_};
 
-    auto r1{Builder.CreateBitCast(arg1, Builder.getInt8PtrTy())};
-    auto r2{Builder.CreateBitCast(arg2, Builder.getInt8PtrTy())};
-
-    result_ = Builder.CreateCall(va_copy_, {r1, r2});
+    result_ = Builder.CreateCall(
+        va_copy_, {Builder.CreateBitCast(arg1, Builder.getInt8PtrTy()),
+                   Builder.CreateBitCast(arg2, Builder.getInt8PtrTy())});
 
     return true;
   } else {
@@ -1394,73 +1360,63 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
 }
 
 llvm::Value* CodeGen::VaArg(llvm::Value* ptr, llvm::Type* type) {
-  auto parent_func{Builder.GetInsertBlock()->getParent()};
-  auto lhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto rhs_block{llvm::BasicBlock::Create(Context, "", parent_func)};
-  auto after_block{llvm::BasicBlock::Create(Context, "", parent_func)};
+  auto lhs_block{CreateBasicBlock("va.arg.lhs")};
+  auto rhs_block{CreateBasicBlock("va.arg.rhs")};
+  auto end_block{CreateBasicBlock("va.arg.end")};
 
-  llvm::Value* p{};
-  llvm::Value* num{};
+  llvm::Value* offset_ptr{};
+  llvm::Value* offset{};
 
   if (type->isIntegerTy() || type->isPointerTy()) {
-    p = Builder.CreateStructGEP(ptr, 0);
-    num = Builder.CreateAlignedLoad(p, 16);
+    offset_ptr = Builder.CreateStructGEP(ptr, 0);
+    offset = Builder.CreateLoad(offset_ptr);
     result_ = Builder.CreateICmpULE(
-        num, llvm::ConstantInt::get(Builder.getInt32Ty(), 40));
+        offset, llvm::ConstantInt::get(Builder.getInt32Ty(), 40));
   } else if (type->isFloatingPointTy()) {
-    p = Builder.CreateStructGEP(ptr, 1);
-    num = Builder.CreateAlignedLoad(p, 16);
+    offset_ptr = Builder.CreateStructGEP(ptr, 1);
+    offset = Builder.CreateLoad(offset_ptr);
     result_ = Builder.CreateICmpULE(
-        num, llvm::ConstantInt::get(Builder.getInt32Ty(), 160));
+        offset, llvm::ConstantInt::get(Builder.getInt32Ty(), 160));
   } else {
     assert(false);
   }
 
   Builder.CreateCondBr(result_, lhs_block, rhs_block);
 
-  Builder.SetInsertPoint(lhs_block);
+  EmitBlock(lhs_block);
   result_ = Builder.CreateStructGEP(ptr, 3);
-  result_ = Builder.CreateAlignedLoad(result_, 16);
-  result_ = Builder.CreateGEP(result_, num);
-  auto r{Builder.CreateBitCast(result_, type->getPointerTo())};
+  result_ = Builder.CreateLoad(result_);
+  result_ = Builder.CreateGEP(result_, offset);
+  auto result_ptr{Builder.CreateBitCast(result_, type->getPointerTo())};
 
   if (type->isIntegerTy() || type->isPointerTy()) {
-    result_ =
-        Builder.CreateAdd(num, llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
+    result_ = Builder.CreateAdd(
+        offset, llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
   } else if (type->isFloatingPointTy()) {
     result_ = Builder.CreateAdd(
-        num, llvm::ConstantInt::get(Builder.getInt32Ty(), 16));
+        offset, llvm::ConstantInt::get(Builder.getInt32Ty(), 16));
   } else {
     assert(false);
   }
 
-  Builder.CreateAlignedStore(result_, p, 16);
-  Builder.CreateBr(after_block);
+  Builder.CreateStore(result_, offset_ptr);
+  EmitBranch(end_block);
 
-  Builder.SetInsertPoint(rhs_block);
+  EmitBlock(rhs_block);
   auto pp{Builder.CreateStructGEP(ptr, 2)};
-  result_ = Builder.CreateAlignedLoad(pp, 8);
-  auto rr{Builder.CreateBitCast(result_, type->getPointerTo())};
+  result_ = Builder.CreateLoad(pp);
+  auto result_ptr2{Builder.CreateBitCast(result_, type->getPointerTo())};
   result_ = Builder.CreateGEP(result_,
                               llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
-  Builder.CreateAlignedStore(result_, pp, 8);
-  Builder.CreateBr(after_block);
+  Builder.CreateStore(result_, pp);
+  EmitBranch(end_block);
 
-  Builder.SetInsertPoint(after_block);
+  EmitBlock(end_block);
   auto phi{Builder.CreatePHI(type->getPointerTo(), 2)};
-  phi->addIncoming(r, lhs_block);
-  phi->addIncoming(rr, rhs_block);
+  phi->addIncoming(result_ptr, lhs_block);
+  phi->addIncoming(result_ptr2, rhs_block);
 
   return phi;
-}
-
-llvm::BasicBlock* CodeGen::GetBasicBlockForLabel(const LabelStmt* label) {
-  auto& bb{labels_[label]};
-  if (bb) {
-    return bb;
-  }
-
-  return bb = CreateBasicBlock(label->GetName());
 }
 
 void CodeGen::DealLocaleDecl(const Declaration* node) {
@@ -1468,8 +1424,7 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
   auto type{obj->GetType()};
   auto name{obj->GetName()};
 
-  obj->SetLocalPtr(
-      CreateEntryBlockAlloca(type->GetLLVMType(), obj->GetAlign()));
+  obj->SetLocalPtr(CreateEntryBlockAlloca(type->GetLLVMType()));
 
   if (node->HasLocalInit()) {
     if (type->IsScalarTy()) {
@@ -1502,15 +1457,10 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
       Builder.CreateBitCast(obj->GetLocalPtr(), Builder.getInt8PtrTy()),
       Builder.getInt8(0), width, obj->GetAlign());
 
-  if (node->ValueInit()) {
-    return;
-  }
-
   for (const auto& item : node->GetLocalInits()) {
-    auto backup{load_};
-    load_ = true;
+    LoadStructObj();
     item.GetExpr()->Accept(*this);
-    load_ = backup;
+    FinishLoad();
     auto value{result_};
 
     llvm::Value* ptr{obj->GetLocalPtr()};
@@ -1529,8 +1479,7 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
       }
     }
 
-    result_ =
-        Builder.CreateAlignedStore(value, ptr, item.GetType()->GetAlign());
+    result_ = Builder.CreateStore(value, ptr);
   }
 }
 
@@ -1566,8 +1515,7 @@ void CodeGen::StartFunction(const FuncDef* node) {
 
   auto return_type{func_type->FuncGetReturnType()};
   if (!return_type->IsVoidTy()) {
-    return_value_ = CreateEntryBlockAlloca(return_type->GetLLVMType(),
-                                           return_type->GetAlign());
+    return_value_ = CreateEntryBlockAlloca(return_type->GetLLVMType());
   }
 
   Builder.SetInsertPoint(entry);
@@ -1578,8 +1526,7 @@ void CodeGen::StartFunction(const FuncDef* node) {
 
   auto iter{std::begin(func_type->FuncGetParams())};
   for (auto&& arg : func_->args()) {
-    auto ptr{CreateEntryBlockAlloca((*iter)->GetType()->GetLLVMType(),
-                                    (*iter)->GetType()->GetAlign())};
+    auto ptr{CreateEntryBlockAlloca((*iter)->GetType()->GetLLVMType())};
     (*iter)->SetLocalPtr(ptr);
     // 将参数的值保存到分配的内存中
     Builder.CreateStore(&arg, ptr);
@@ -1588,8 +1535,7 @@ void CodeGen::StartFunction(const FuncDef* node) {
 }
 
 void CodeGen::FinishFunction(const FuncDef* node) {
-  auto func_name{node->GetName()};
-  auto func{Module->getFunction(func_name)};
+  auto func{Module->getFunction(node->GetName())};
 
   EmitReturnBlock();
   EmitFunctionEpilog();
@@ -1607,26 +1553,13 @@ void CodeGen::EmitReturnBlock() {
 
   if (bb) {
     assert(!bb->getTerminator());
-
+    // e.g.
+    // void print(char *s) {
+    //    printf("Testing %s ... ", s);
+    //    fflush(stdout);
+    //}
     if (bb->empty() || return_block_->use_empty()) {
       return_block_->replaceAllUsesWith(bb);
-      delete return_block_;
-
-      if (return_value_ && func_->getName() != "main") {
-        Warning("function '{}' miss return", func_->getName().str());
-      }
-    } else {
-      EmitBlock(return_block_);
-    }
-
-    return;
-  }
-
-  if (return_block_->hasOneUse()) {
-    auto bi{llvm::dyn_cast<llvm::BranchInst>(*return_block_->use_begin())};
-    if (bi && bi->isUnconditional() && bi->getSuccessor(0) == return_block_) {
-      Builder.SetInsertPoint(bi->getParent());
-      bi->eraseFromParent();
       delete return_block_;
       return;
     }

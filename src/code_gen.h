@@ -38,32 +38,28 @@ class CodeGen : public Visitor {
     llvm::BasicBlock *continue_block;
   };
 
-  static llvm::BasicBlock *CreateBasicBlock(
-      const std::string &name = "", llvm::Function *parent = nullptr,
-      llvm::BasicBlock *insert_before = nullptr);
-  llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type,
-                                           std::int32_t align);
-  void EmitBranchOnBoolExpr(const Expr *expr, llvm::BasicBlock *true_block,
-                            llvm::BasicBlock *false_block);
+  static llvm::BasicBlock *CreateBasicBlock(const std::string &name = "",
+                                            llvm::Function *parent = nullptr);
   void EmitBlock(llvm::BasicBlock *bb, bool is_finished = false);
   static void EmitBranch(llvm::BasicBlock *target);
-  void EmitStmt(const Stmt *stmt);
-  bool EmitSimpleStmt(const Stmt *stmt);
   bool HaveInsertPoint() const;
   void EnsureInsertPoint();
   llvm::Value *EvaluateExprAsBool(const Expr *expr);
-  bool TestAndClearIgnoreResultAssign();
-
+  void EmitBranchOnBoolExpr(const Expr *expr, llvm::BasicBlock *true_block,
+                            llvm::BasicBlock *false_block);
+  static void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
+  void EmitStmt(const Stmt *stmt);
+  bool EmitSimpleStmt(const Stmt *stmt);
+  static bool ContainsLabel(const Stmt *stmt);
+  void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
+  llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
+  static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
+  llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type);
+  llvm::Value *GetPtr(const AstNode *node);
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
-  llvm::Value *GetPtr(const AstNode *node);
-  static llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs,
-                             std::int32_t align);
-  static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
-  void EmitLabel(const LabelStmt *label_stmt);
-  static bool ContainsLabel(const Stmt *stmt, bool ignore_case = false);
-  static void SimplifyForwardingBlocks(llvm::BasicBlock *bb);
+
   virtual void Visit(const UnaryOpExpr *node) override;
   virtual void Visit(const TypeCastExpr *node) override;
   virtual void Visit(const BinaryOpExpr *node) override;
@@ -95,15 +91,10 @@ class CodeGen : public Visitor {
   virtual void Visit(const Declaration *node) override;
   virtual void Visit(const FuncDef *node) override;
 
-  void StartFunction(const FuncDef *node);
-  void FinishFunction(const FuncDef *node);
-  void EmitFunctionEpilog();
-  void EmitReturnBlock();
-  void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
-
   llvm::Value *IncOrDec(const Expr *expr, bool is_inc, bool is_postfix);
   static llvm::Value *NegOp(llvm::Value *value, bool is_unsigned);
-  static llvm::Value *LogicNotOp(llvm::Value *value);
+  llvm::Value *LogicNotOp(llvm::Value *value);
+  llvm::Value *Deref(const UnaryOpExpr *node);
 
   static llvm::Value *AddOp(llvm::Value *lhs, llvm::Value *rhs,
                             bool is_unsigned);
@@ -134,36 +125,35 @@ class CodeGen : public Visitor {
   llvm::Value *LogicOrOp(const BinaryOpExpr *node);
   llvm::Value *LogicAndOp(const BinaryOpExpr *node);
   llvm::Value *AssignOp(const BinaryOpExpr *node);
+  llvm::Value *MemberRef(const BinaryOpExpr *node);
 
   bool MayCallBuiltinFunc(const FuncCallExpr *node);
   llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
 
-  llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
-
   void DealLocaleDecl(const Declaration *node);
   void InitLocalAggregate(const Declaration *node);
 
+  void StartFunction(const FuncDef *node);
+  void FinishFunction(const FuncDef *node);
+  void EmitFunctionEpilog();
+  void EmitReturnBlock();
+
   llvm::Value *result_{};
+
+  llvm::AssertingVH<llvm::Instruction> alloc_insert_point_;
+  bool load_struct_{false};
 
   std::stack<BreakContinue> break_continue_stack_;
   std::unordered_map<const LabelStmt *, llvm::BasicBlock *> labels_;
   llvm::SwitchInst *switch_inst_{};
 
   llvm::Function *func_{};
-  llvm::Function *va_start_{};
-  llvm::Function *va_end_{};
-  llvm::Function *va_copy_{};
-
-  // 是否加载等号左边的值
-  bool ignore_result_assign_{false};
-
-  llvm::AssertingVH<llvm::Instruction> alloc_insert_point_;
   llvm::BasicBlock *return_block_{};
   llvm::Value *return_value_{};
 
-  // temp
-  std::int32_t align_{};
-  bool load_{false};
+  llvm::Function *va_start_{};
+  llvm::Function *va_end_{};
+  llvm::Function *va_copy_{};
 };
 
 }  // namespace kcc

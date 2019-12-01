@@ -53,6 +53,10 @@ bool IsFloatingPointTy(llvm::Value *value);
 
 bool IsPointerTy(llvm::Value *value);
 
+bool IsFuncPointer(llvm::Type *type);
+
+bool IsArrayPointer(llvm::Type *type);
+
 llvm::Constant *ConstantCastToBool(llvm::Constant *value);
 
 llvm::Constant *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
