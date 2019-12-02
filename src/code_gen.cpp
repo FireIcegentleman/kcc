@@ -31,12 +31,12 @@
 
 namespace kcc {
 
-#define LoadStructObj()        \
+#define Load_Struct_Obj()      \
   {                            \
     auto backup{load_struct_}; \
     load_struct_ = true;
 
-#define FinishLoad()     \
+#define Finish_Load()    \
   load_struct_ = backup; \
   }
 
@@ -518,12 +518,12 @@ void CodeGen::Visit(const FuncCallExpr* node) {
   auto callee{result_};
 
   std::vector<llvm::Value*> args;
-  LoadStructObj();
+  Load_Struct_Obj();
   for (const auto& item : node->GetArgs()) {
     item->Accept(*this);
     args.push_back(result_);
   }
-  FinishLoad();
+  Finish_Load();
 
   result_ = Builder.CreateCall(callee, args);
 }
@@ -843,9 +843,9 @@ void CodeGen::Visit(const ReturnStmt* node) {
   }
 
   if (return_value_) {
-    LoadStructObj();
+    Load_Struct_Obj();
     node->GetExpr()->Accept(*this);
-    FinishLoad();
+    Finish_Load();
     Builder.CreateStore(result_, return_value_);
   } else {
     Error(node->GetLoc(), "void function '{}' should not return a value",
@@ -1255,9 +1255,9 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr* node) {
 }
 
 llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
-  LoadStructObj();
+  Load_Struct_Obj();
   node->GetRHS()->Accept(*this);
-  FinishLoad();
+  Finish_Load();
   auto rhs{result_};
 
   auto lhs_ptr{GetPtr(node->GetLHS())};
@@ -1458,9 +1458,9 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
       Builder.getInt8(0), width, obj->GetAlign());
 
   for (const auto& item : node->GetLocalInits()) {
-    LoadStructObj();
+    Load_Struct_Obj();
     item.GetExpr()->Accept(*this);
-    FinishLoad();
+    Finish_Load();
     auto value{result_};
 
     llvm::Value* ptr{obj->GetLocalPtr()};

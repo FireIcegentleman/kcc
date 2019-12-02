@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/11/8.
 //
 
-#ifndef KCC_SRC_MEMORY_POOL_H_
-#define KCC_SRC_MEMORY_POOL_H_
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -141,5 +140,3 @@ inline MemoryPool<FunctionType> FunctionTypePool;
 inline MemoryPool<Scope> ScopePool;
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_MEMORY_POOL_H_

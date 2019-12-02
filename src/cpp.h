@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/10/30.
 //
 
-#ifndef KCC_SRC_CPP_H_
-#define KCC_SRC_CPP_H_
+#pragma once
 
 #include <cstddef>
 #include <string>
@@ -34,5 +33,3 @@ class Preprocessor {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_CPP_H_

@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/11/2.
 //
 
-#ifndef KCC_SRC_CALC_H_
-#define KCC_SRC_CALC_H_
+#pragma once
 
 #include <cstdint>
 
@@ -94,5 +93,3 @@ class CalcConstantExpr : public Visitor {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_CALC_H_

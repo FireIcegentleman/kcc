@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/11/9.
 //
 
-#ifndef KCC_SRC_UTIL_H_
-#define KCC_SRC_UTIL_H_
+#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -113,5 +112,3 @@ void RemoveAllFiles(const std::vector<std::string> &files);
 bool CommandSuccess(std::int32_t status);
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_UTIL_H_

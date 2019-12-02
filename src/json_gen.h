@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/11/1.
 //
 
-#ifndef KCC_SRC_JSON_GEN_H_
-#define KCC_SRC_JSON_GEN_H_
+#pragma once
 
 #include <string>
 #include <string_view>
@@ -284,5 +283,3 @@ class JsonGen : public Visitor {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_JSON_GEN_H_

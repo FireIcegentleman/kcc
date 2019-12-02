@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/10/31.
 //
 
-#ifndef KCC_SRC_VISITOR_H_
-#define KCC_SRC_VISITOR_H_
+#pragma once
 
 #include "ast.h"
 
@@ -46,5 +45,3 @@ class Visitor {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_VISITOR_H_

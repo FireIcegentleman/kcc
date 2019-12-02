@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/10/30.
 //
 
-#ifndef KCC_SRC_LEX_H_
-#define KCC_SRC_LEX_H_
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -72,5 +71,3 @@ class Scanner {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_LEX_H_

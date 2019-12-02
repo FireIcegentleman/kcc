@@ -64,20 +64,8 @@ IdentifierExpr* Scope::FindUsualInCurrScope(const std::string& name) {
   return iter == std::end(usual_) ? nullptr : iter->second;
 }
 
-IdentifierExpr* Scope::FindTag(const Token& tok) {
-  return FindTag(tok.GetIdentifier());
-}
-
 IdentifierExpr* Scope::FindUsual(const Token& tok) {
   return FindUsual(tok.GetIdentifier());
-}
-
-IdentifierExpr* Scope::FindTagInCurrScope(const Token& tok) {
-  return FindTagInCurrScope(tok.GetIdentifier());
-}
-
-IdentifierExpr* Scope::FindUsualInCurrScope(const Token& tok) {
-  return FindUsualInCurrScope(tok.GetIdentifier());
 }
 
 std::unordered_map<std::string, IdentifierExpr*> Scope::AllTagInCurrScope()

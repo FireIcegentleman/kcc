@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/11/17.
 //
 
-#ifndef KCC_SRC_LLVM_COMMON_H_
-#define KCC_SRC_LLVM_COMMON_H_
+#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -84,5 +83,3 @@ llvm::GlobalVariable *CreateLocalStaticVar(QualType type,
 const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type);
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_LLVM_COMMON_H_

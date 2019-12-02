@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/10/30.
 //
 
-#ifndef KCC_SRC_ERROR_H_
-#define KCC_SRC_ERROR_H_
+#pragma once
 
 #include <cstdlib>
 #include <string>
@@ -97,5 +96,3 @@ void Warning(const Token &tok, std::string_view format_str,
 }
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_ERROR_H_

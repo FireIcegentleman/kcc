@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/11/2.
 //
 
-#ifndef KCC_SRC_OBJ_GEN_H_
-#define KCC_SRC_OBJ_GEN_H_
+#pragma once
 
 #include <string>
 
@@ -16,5 +15,3 @@ void ObjGen(const std::string &obj_file,
                 llvm::TargetMachine::CodeGenFileType::CGFT_ObjectFile);
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_OBJ_GEN_H_

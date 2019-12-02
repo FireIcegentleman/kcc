@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/11/1.
 //
 
-#ifndef KCC_SRC_SCOPE_H_
-#define KCC_SRC_SCOPE_H_
+#pragma once
 
 #include <string>
 #include <unordered_map>
@@ -49,10 +48,7 @@ class Scope {
   IdentifierExpr* FindTagInCurrScope(const std::string& name);
   IdentifierExpr* FindUsualInCurrScope(const std::string& name);
 
-  IdentifierExpr* FindTag(const Token& tok);
   IdentifierExpr* FindUsual(const Token& tok);
-  IdentifierExpr* FindTagInCurrScope(const Token& tok);
-  IdentifierExpr* FindUsualInCurrScope(const Token& tok);
 
   std::unordered_map<std::string, IdentifierExpr*> AllTagInCurrScope() const;
   Scope* GetParent();
@@ -73,5 +69,3 @@ class Scope {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_SCOPE_H_

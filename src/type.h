@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/10/31.
 //
 
-#ifndef KCC_SRC_TYPE_H_
-#define KCC_SRC_TYPE_H_
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -370,5 +369,3 @@ class FunctionType : public Type {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_TYPE_H_

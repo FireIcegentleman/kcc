@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/10/31.
 //
 
-#ifndef KCC_SRC_AST_H_
-#define KCC_SRC_AST_H_
+#pragma once
 
 #include <cstdint>
 #include <list>
@@ -369,15 +368,15 @@ class EnumeratorExpr : public IdentifierExpr {
   std::int32_t val_;
 };
 
-// C 中，一个对象是执行环境中数据存储的一个区域，其内容可以表示值
+// C 中, 一个对象是执行环境中数据存储的一个区域, 其内容可以表示值
 // 每个对象拥有
-// 大小（可由 sizeof 确定）
-// 对齐要求（可由 _Alignof 确定） (C11 起)
-// 存储期（自动、静态、分配、线程局域）
-// 生存期（等于存储期或临时）
-// 有效类型（见下）
-// 值（可以是不确定的）
-// 可选项，表示该对象的标识符
+// 大小
+// 对齐要求
+// 存储期
+// 生存期(等于存储期或临时)
+// 有效类型
+// 值
+// 可选项: 表示该对象的标识符
 class ObjectExpr : public IdentifierExpr {
  public:
   static ObjectExpr* Get(const std::string& name, QualType type,
@@ -409,8 +408,6 @@ class ObjectExpr : public IdentifierExpr {
   void SetGlobalPtr(llvm::GlobalVariable* global_ptr);
   llvm::AllocaInst* GetLocalPtr() const;
   llvm::GlobalVariable* GetGlobalPtr() const;
-
-  bool HasGlobalPtr() const;
 
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
@@ -816,5 +813,3 @@ T* MakeAstNode(const Token& token, Args&&... args) {
 }
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_AST_H_

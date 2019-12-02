@@ -2,8 +2,7 @@
 // Created by kaiser on 2019/10/31.
 //
 
-#ifndef KCC_SRC_PARSE_H_
-#define KCC_SRC_PARSE_H_
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -219,5 +218,3 @@ class Parser {
 };
 
 }  // namespace kcc
-
-#endif  // KCC_SRC_PARSE_H_
