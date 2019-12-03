@@ -9,18 +9,17 @@
 namespace kcc {
 
 bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
-          const std::string &output_file) {
+          const std::string &output_file, bool shared,
+          const std::vector<std::string> &r_path,
+          const std::vector<std::string> &so_file,
+          const std::vector<std::string> &a_file,
+          const std::vector<std::string> &libs) {
   /*
    * Platform Specific Code
    */
   std::vector<const char *> args{
-      "-pie",
       "--eh-frame-hdr",
       "-melf_x86_64",
-      "-dynamic-linker",
-      "/lib64/ld-linux-x86-64.so.2",
-      "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
-      "Scrt1.o",
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
       "crti.o",
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/crtbeginS.o",
@@ -45,11 +44,38 @@ bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/crtendS.o",
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
       "crtn.o"};
+
+  if (shared) {
+    args.push_back("-shared");
+  } else {
+    args.push_back("-pie");
+    args.push_back("-dynamic-linker");
+    args.push_back("/lib64/ld-linux-x86-64.so.2");
+    args.push_back(
+        "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
+        "Scrt1.o");
+  }
   /*
    * End of Platform Specific Code
    */
 
   for (const auto &item : obj_file) {
+    args.push_back(item.c_str());
+  }
+
+  for (const auto &item : r_path) {
+    args.push_back(item.c_str());
+  }
+
+  for (const auto &item : so_file) {
+    args.push_back(item.c_str());
+  }
+
+  for (const auto &item : a_file) {
+    args.push_back(item.c_str());
+  }
+
+  for (const auto &item : libs) {
     args.push_back(item.c_str());
   }
 

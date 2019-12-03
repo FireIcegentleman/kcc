@@ -33,7 +33,6 @@ void RunKcc(const std::string &file_name);
 #ifdef DEV
 void RunTest();
 void RunDev();
-void Run8cc();
 #endif
 
 int main(int argc, char *argv[]) try {
@@ -48,9 +47,6 @@ int main(int argc, char *argv[]) try {
     return EXIT_SUCCESS;
   } else if (DevMode) {
     RunDev();
-    return EXIT_SUCCESS;
-  } else if (Test8cc) {
-    Run8cc();
     return EXIT_SUCCESS;
   }
 #endif
@@ -90,7 +86,31 @@ int main(int argc, char *argv[]) try {
   }
 
   auto obj_files{GetObjFiles()};
-  if (!Link(obj_files, OptimizationLevel, OutputFilePath)) {
+
+  if (Static) {
+    std::string cmd{"ar qc " + OutputFilePath + ' '};
+    for (const auto &item : obj_files) {
+      cmd += item + ' ';
+    }
+    if (!CommandSuccess(std::system(cmd.c_str()))) {
+      Error("ar error");
+    }
+
+    cmd = "ranlib " + OutputFilePath;
+    if (!CommandSuccess(std::system(cmd.c_str()))) {
+      Error("ranlib error");
+    }
+
+    RemoveAllFiles(obj_files);
+    if (Timing) {
+      TimingEnd("Timing");
+    }
+
+    return EXIT_SUCCESS;
+  }
+
+  if (!Link(obj_files, OptimizationLevel, OutputFilePath, Shared, RPath, SoFile,
+            AFile, Libs)) {
     RemoveAllFiles(obj_files);
     Error("Link Failed");
   } else {
@@ -300,11 +320,5 @@ void RunDev() {
   }
 
   PrintWarnings();
-}
-
-void Run8cc() {
-  for (const auto &file : InputFilePaths) {
-    Run(file);
-  }
 }
 #endif

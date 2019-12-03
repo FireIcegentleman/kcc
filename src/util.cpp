@@ -86,10 +86,15 @@ void CommandLineCheck() {
         }
       }
     } else if (std::filesystem::exists(path)) {
-      if (path.filename().extension().string() != ".c") {
-        Error("the file extension must be '.c': {}", item);
+      if (path.filename().extension().string() == ".c") {
+        files.push_back(item);
+      } else if (path.filename().extension().string() == ".so") {
+        SoFile.push_back(item);
+      } else if (path.filename().extension().string() == ".a") {
+        AFile.push_back(item);
+      } else {
+        Error("the file extension must be '.c' or '.so': {}", item);
       }
-      files.push_back(item);
     } else {
       Error("no such file: {}", item);
     }
@@ -117,6 +122,18 @@ void CommandLineCheck() {
       (Preprocess || OutputAssembly || OutputObjectFile || EmitTokens ||
        EmitAST || EmitLLVM)) {
     Error("Cannot specify -o when generating multiple output files");
+  }
+
+  for (auto &&item : RPath) {
+    if (!std::filesystem::exists(item)) {
+      Error("no such directory: {}", item);
+    }
+
+    item = "-rpath=" + item;
+  }
+
+  for (auto &&item : Libs) {
+    item = "-l" + item;
   }
 }
 

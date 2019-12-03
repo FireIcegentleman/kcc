@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "llvm_common.h"
+#include "util.h"
 
 namespace kcc {
 

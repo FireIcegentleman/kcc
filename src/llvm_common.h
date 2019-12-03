@@ -34,8 +34,6 @@ inline clang::TargetInfo *TargetInfo;
 
 inline std::unique_ptr<llvm::TargetMachine> TargetMachine;
 
-enum class OptLevel { kO0, kO1, kO2, kO3 };
-
 std::string LLVMTypeToStr(llvm::Type *type);
 
 std::string LLVMConstantToStr(llvm::Constant *constant);
