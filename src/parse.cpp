@@ -908,6 +908,8 @@ Expr* Parser::ParsePrimaryExpr() {
     return MakeAstNode<StringLiteralExpr>(
         token, func_def_->GetFuncType()->ToString() + ": " +
                    func_def_->GetFuncType()->FuncGetName());
+  } else if (Try(Tag::kHugeVal)) {
+    return ParseHugeVal();
   } else {
     Error(token, "'{}' unexpected", token.GetStr());
   }
@@ -2916,6 +2918,15 @@ Expr* Parser::ParseOffsetof() {
   return MakeAstNode<ConstantExpr>(
       token, ArithmeticType::Get(kLong | kUnsigned),
       static_cast<std::uint64_t>(type->StructGetMember(name)->GetOffset()));
+}
+
+Expr* Parser::ParseHugeVal() {
+  auto tok{Expect(Tag::kLeftParen)};
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<ConstantExpr>(
+      tok, ArithmeticType::Get(kDouble),
+      std::to_string(std::numeric_limits<double>::infinity()));
 }
 
 void Parser::AddBuiltin() {

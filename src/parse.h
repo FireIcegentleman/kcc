@@ -197,6 +197,7 @@ class Parser {
    * built in
    */
   Expr* ParseOffsetof();
+  Expr* ParseHugeVal();
   void AddBuiltin();
 
   TranslationUnit* unit_;

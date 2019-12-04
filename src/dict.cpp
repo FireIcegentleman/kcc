@@ -54,6 +54,7 @@ KeywordsDictionary::KeywordsDictionary() {
 
   keywords_.insert({"__func__", Tag::kFuncName});
   keywords_.insert({"__builtin_offsetof", Tag::kOffsetof});
+  keywords_.insert({"__builtin_huge_val", Tag::kHugeVal});
 
   // 一个显示表达式类型名称的扩展
   keywords_.insert({"typeid", Tag::kTypeid});
