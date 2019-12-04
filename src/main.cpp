@@ -32,6 +32,7 @@ using namespace kcc;
 void RunKcc(const std::string &file_name);
 #ifdef DEV
 void RunTest();
+void RunSingle();
 void RunDev();
 #endif
 
@@ -44,6 +45,9 @@ int main(int argc, char *argv[]) try {
 #ifdef DEV
   if (TestMode) {
     RunTest();
+    return EXIT_SUCCESS;
+  } else if (SingleMode) {
+    RunSingle();
     return EXIT_SUCCESS;
   } else if (DevMode) {
     RunDev();
@@ -288,6 +292,14 @@ void RunTest() {
       std::string cmd{"./" + GetFileName(file, ".out")};
       std::system(cmd.c_str());
     }
+  }
+
+  PrintWarnings();
+}
+
+void RunSingle() {
+  for (const auto &file : InputFilePaths) {
+    Run(file);
   }
 
   PrintWarnings();

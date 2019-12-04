@@ -1528,6 +1528,8 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
   Token tok;
   QualType type;
 
+  TryParseAttributeSpec();
+
   while (true) {
     tok = Next();
 
