@@ -212,7 +212,23 @@ void CalcConstantExpr::Visit(const StringLiteralExpr* node) {
 
 void CalcConstantExpr::Visit(const FuncCallExpr*) { Throw(); }
 
-void CalcConstantExpr::Visit(const IdentifierExpr*) { Throw(); }
+void CalcConstantExpr::Visit(const IdentifierExpr* node) {
+  auto type{node->GetType()};
+  assert(type->IsFunctionTy());
+
+  auto name{node->GetName()};
+
+  auto func{Module->getFunction(name)};
+  if (!func) {
+    func = llvm::Function::Create(
+        llvm::cast<llvm::FunctionType>(type->GetLLVMType()),
+        node->GetLinkage() == kInternal ? llvm::Function::InternalLinkage
+                                        : llvm::Function::ExternalLinkage,
+        name, Module.get());
+  }
+
+  val_ = func;
+}
 
 void CalcConstantExpr::Visit(const ObjectExpr* node) {
   if (node->GetType()->IsArrayTy()) {

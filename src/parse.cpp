@@ -1992,7 +1992,8 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
 
   bool flag{false};
 
-  if (decl && decl->IsObjDecl() && !decl->GetIdent()->GetType()->IsComplete()) {
+  if (decl && decl->IsObjDecl() && !decl->GetIdent()->GetType()->IsComplete() &&
+      Test(Tag::kEqual)) {
     flag = true;
   }
 
