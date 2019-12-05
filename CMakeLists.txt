@@ -134,3 +134,15 @@ add_test(
     -DSQLITE_OMIT_DECLTYPE -DSQLITE_OMIT_DEPRECATED -DSQLITE_USE_ALLOCA)
 add_test(NAME check_sqlite_executable COMMAND ${TEST_BINARY_DIR}/sqlite
                                               -version)
+
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+  add_custom_target(
+    test_all
+    COMMAND
+      ctest -j1 -C Debug -T test --output-on-failure)
+else()
+  add_custom_target(
+    test_all
+    COMMAND
+      ctest -j1 -C Release -T test --output-on-failure)
+endif()
