@@ -38,7 +38,8 @@ build
 compile_commands.json
 
 # Dev files
-test/dev/standard.cpp
+test/8cc/8cc
+test/lua/lua
 *.html
 *.i
 *.txt

@@ -9,7 +9,7 @@ endif()
 
 project(
   kcc
-  VERSION 0.1
+  VERSION 0.2
   LANGUAGES CXX)
 
 file(GLOB cppsrc src/*.cpp)

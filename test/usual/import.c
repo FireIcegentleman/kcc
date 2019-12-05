@@ -6,13 +6,13 @@
 #import "import.h"
 #import "import.h"
 #include "import.h"
-#import "../test/import.h"
+#import "../usual/import.h"
 
 // once.h would raise an error if read twice
 #include "once.h"
 #include "once.h"
 #import "once.h"
-#include "../test/once.h"
+#include "../usual/once.h"
 
 void testmain() {
     print("import");
