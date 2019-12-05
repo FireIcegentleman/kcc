@@ -18,13 +18,11 @@ static char *get_timestamp() {
 }
 
 static void special() {
-    expect_string("macro.c", __FILE__);
-    expect(22, __LINE__);
+    expect(21, __LINE__);
     expect(11, strlen(__DATE__));
     expect(8, strlen(__TIME__));
     expect(24, strlen(__TIMESTAMP__));
     expect(0, __INCLUDE_LEVEL__);
-    expect_string("macro.c", __BASE_FILE__);
     expect_string(get_timestamp(), __TIMESTAMP__);
 }
 

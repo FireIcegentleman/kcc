@@ -80,9 +80,10 @@ void CommandLineCheck() {
 
     if (path.filename().string() == "*.c") {
       for (const auto &file : std::filesystem::directory_iterator{
-               std::filesystem::current_path()}) {
+               path.parent_path().empty() ? std::filesystem::current_path()
+                                          : path.parent_path()}) {
         if (file.path().filename().extension().string() == ".c") {
-          files.push_back(file.path().filename().string());
+          files.push_back(file.path().string());
         }
       }
     } else if (std::filesystem::exists(path)) {

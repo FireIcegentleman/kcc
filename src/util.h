@@ -102,14 +102,8 @@ inline llvm::cl::list<std::string> Libs{
     llvm::cl::Prefix, llvm::cl::cat{Category}};
 
 #ifdef DEV
-inline llvm::cl::opt<bool> TestMode{"test", llvm::cl::desc{"Test Mode"},
-                                    llvm::cl::cat{Category}};
-
 inline llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
                                    llvm::cl::cat{Category}};
-
-inline llvm::cl::opt<bool> SingleMode{"single", llvm::cl::desc{"Single Mode"},
-                                      llvm::cl::cat{Category}};
 
 inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
                                      llvm::cl::cat{Category}};

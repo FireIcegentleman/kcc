@@ -31,8 +31,6 @@ using namespace kcc;
 
 void RunKcc(const std::string &file_name);
 #ifdef DEV
-void RunTest();
-void RunSingle();
 void RunDev();
 #endif
 
@@ -43,13 +41,7 @@ int main(int argc, char *argv[]) try {
   CommandLineCheck();
 
 #ifdef DEV
-  if (TestMode) {
-    RunTest();
-    return EXIT_SUCCESS;
-  } else if (SingleMode) {
-    RunSingle();
-    return EXIT_SUCCESS;
-  } else if (DevMode) {
+  if (DevMode) {
     RunDev();
     return EXIT_SUCCESS;
   }
@@ -267,43 +259,6 @@ void Run(const std::string &file) {
 
     ObjGen(GetFileName(file, ".o"));
   }
-}
-
-void RunTest() {
-  Run("testmain.c");
-
-  InputFilePaths.erase(std::remove(std::begin(InputFilePaths),
-                                   std::end(InputFilePaths), "testmain.c"),
-                       std::end(InputFilePaths));
-
-  std::cout << "Total: " << std::size(InputFilePaths) << '\n';
-
-  for (const auto &file : InputFilePaths) {
-    Run(file);
-
-    if (!ParseOnly) {
-      EnsureFileExists(GetFileName(file, ".o"));
-
-      if (!Link({GetFileName(file, ".o"), "testmain.o"}, OptimizationLevel,
-                GetFileName(file, ".out"))) {
-        Error("link fail");
-      }
-
-      EnsureFileExists(GetFileName(file, ".out"));
-      std::string cmd{"./" + GetFileName(file, ".out")};
-      std::system(cmd.c_str());
-    }
-  }
-
-  PrintWarnings();
-}
-
-void RunSingle() {
-  for (const auto &file : InputFilePaths) {
-    Run(file);
-  }
-
-  PrintWarnings();
 }
 
 void RunDev() {
