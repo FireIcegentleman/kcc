@@ -6,7 +6,7 @@ MYLIBS= -ldl -lreadline
 
 CC= kcc
 CFLAGS= -O3 $(MYCFLAGS)
-AR= ar rcu
+AR= ar rc
 RANLIB= ranlib
 RM= rm -f
 

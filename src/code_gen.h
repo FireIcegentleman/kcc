@@ -53,7 +53,8 @@ class CodeGen : public Visitor {
   void EmitBranchThroughCleanup(llvm::BasicBlock *dest);
   llvm::BasicBlock *GetBasicBlockForLabel(const LabelStmt *label);
   static bool IsCheapEnoughToEvaluateUnconditionally(const Expr *expr);
-  llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type);
+  llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type,
+                                           const std::string &name);
   llvm::Value *GetPtr(const AstNode *node);
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);

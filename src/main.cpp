@@ -245,7 +245,8 @@ void Run(const std::string &file) {
   JsonGen{file}.GenJson(unit, GetFileName(file, ".html"));
 
   if (StandardIR) {
-    std::string cmd{"clang -o standard.ll -std=c17 -S -emit-llvm -O0 " + file};
+    std::string cmd{"clang -std=c17 -S -emit-llvm -O0 " + file + " -o " +
+                    GetFileName(file, ".std.ll")};
     std::system(cmd.c_str());
   }
 

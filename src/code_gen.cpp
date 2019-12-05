@@ -272,8 +272,14 @@ bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
   return expr->Kind() == AstNodeType::kConstantExpr;
 }
 
-llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type) {
+llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type,
+                                                  const std::string& name) {
+  (void)name;
+#ifdef NDEBUG
   return new llvm::AllocaInst{type, 0, "", alloc_insert_point_};
+#else
+  return new llvm::AllocaInst{type, 0, name, alloc_insert_point_};
+#endif
 }
 
 llvm::Value* CodeGen::GetPtr(const AstNode* node) {
@@ -473,7 +479,7 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
     node->GetLHS()->Accept(*this);
     auto lhs{result_};
     node->GetRHS()->Accept(*this);
-    Builder.CreateSelect(cond, lhs, result_);
+    result_ = Builder.CreateSelect(cond, lhs, result_);
     return;
   }
 
@@ -1426,7 +1432,7 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
   auto type{obj->GetType()};
   auto name{obj->GetName()};
 
-  obj->SetLocalPtr(CreateEntryBlockAlloca(type->GetLLVMType()));
+  obj->SetLocalPtr(CreateEntryBlockAlloca(type->GetLLVMType(), name));
 
   if (node->HasLocalInit()) {
     if (type->IsScalarTy()) {
@@ -1517,7 +1523,8 @@ void CodeGen::StartFunction(const FuncDef* node) {
 
   auto return_type{func_type->FuncGetReturnType()};
   if (!return_type->IsVoidTy()) {
-    return_value_ = CreateEntryBlockAlloca(return_type->GetLLVMType());
+    return_value_ =
+        CreateEntryBlockAlloca(return_type->GetLLVMType(), "ret.val");
   }
 
   Builder.SetInsertPoint(entry);
@@ -1528,7 +1535,8 @@ void CodeGen::StartFunction(const FuncDef* node) {
 
   auto iter{std::begin(func_type->FuncGetParams())};
   for (auto&& arg : func_->args()) {
-    auto ptr{CreateEntryBlockAlloca((*iter)->GetType()->GetLLVMType())};
+    auto ptr{CreateEntryBlockAlloca((*iter)->GetType()->GetLLVMType(),
+                                    (*iter)->GetName())};
     (*iter)->SetLocalPtr(ptr);
     // 将参数的值保存到分配的内存中
     Builder.CreateStore(&arg, ptr);
