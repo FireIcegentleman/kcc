@@ -2,8 +2,8 @@
 
 #include "test.h"
 
-#define stringify(x) % : x
-#define paste(x, y) x % : % : y
+#define stringify(x) %:x
+#define paste(x, y) x%:%:y
 
 static void digraph() {
   // These tests don't conform to the C standard.
@@ -13,14 +13,14 @@ static void digraph() {
   // spelling instead of replacing digraphs with regular tokens.
   // I intentionally leave this bug because that's really a minor
   // bug which doesn't worth the complexity to be handled correctly.
-  expect_string("<:", stringify(< :));
-  expect_string(":>", stringify( : >));
-  expect_string("<%", stringify(< %));
-  expect_string("%>", stringify(% >));
-  expect_string("%:", stringify(% :));
-  expect_string("% :", stringify(% :));
-  expect_string("%:%:", stringify(% : % :));
-  expect_string("%:%", stringify(% : %));
+  expect_string("<:", stringify(<:));
+  expect_string(":>", stringify(:>));
+  expect_string("<%", stringify(<%));
+  expect_string("%>", stringify(%>));
+  expect_string("%:", stringify(%:));
+  expect_string("%:", stringify(%:));
+  expect_string("%:%:", stringify(%:%:));
+  expect_string("%:%", stringify(%:%));
   expect(12, paste(1, 2));
 }
 

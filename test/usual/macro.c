@@ -140,7 +140,8 @@ abc    */
 
   /*
    */
-  #if 0 fail("if 0");
+  #if 0
+    fail("if 0");
   xyz "\"/*" '\'/*'
 #else
       a = 5;
@@ -339,7 +340,7 @@ static void funclike() {
   expect_string("x y", stringify(x y));
   expect_string("x + y", stringify(x + y));
   expect_string("x + y", stringify(/**/ x /**/ + /**/ /**/ /**/ y /**/));
-  expect_string("x+y", stringify(x + y));
+  expect_string("x+y", stringify(x+y));
   expect_string("'a'", stringify('a'));
   expect_string("'\\''", stringify('\''));
   expect_string("L'a'", stringify(L'a'));
@@ -432,11 +433,11 @@ static void funclike() {
 #define m15(x) x x
   expect_string("a a", identity(m15(a)));
 
-#define m16(x) (x, x)
+#define m16(x) (x,x)
   expect_string("(a,a)", identity(m16(a)));
 
 #define m17(x) stringify(.x.x)
-  expect_string(".3 . 3", m17(3));
+  expect_string(".3.3", m17(3));
 }
 
 static void empty() {
