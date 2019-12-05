@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) try {
       Error("ranlib error");
     }
 
-    RemoveAllFiles(obj_files);
+    RemoveAllFiles(RemoveFile);
     if (Timing) {
       TimingEnd("Timing");
     }
@@ -115,10 +115,10 @@ int main(int argc, char *argv[]) try {
 
   if (!Link(obj_files, OptimizationLevel, OutputFilePath, Shared, RPath, SoFile,
             AFile, Libs)) {
-    RemoveAllFiles(obj_files);
+    RemoveAllFiles(RemoveFile);
     Error("Link Failed");
   } else {
-    RemoveAllFiles(obj_files);
+    RemoveAllFiles(RemoveFile);
   }
 
   if (Timing) {

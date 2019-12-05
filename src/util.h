@@ -22,6 +22,10 @@ inline std::vector<std::string> SoFile;
 
 inline std::vector<std::string> AFile;
 
+inline std::vector<std::string> ObjFile;
+
+inline std::vector<std::string> RemoveFile;
+
 inline llvm::cl::OptionCategory Category{"Compiler Options"};
 
 inline llvm::cl::list<std::string> InputFilePaths{
@@ -128,7 +132,7 @@ void EnsureFileExists(const std::string &file_name);
 
 std::string GetObjFile(const std::string &name);
 
-std::vector<std::string> GetObjFiles();
+const std::vector<std::string> &GetObjFiles();
 
 std::string GetFileName(const std::string &name, std::string_view extension);
 

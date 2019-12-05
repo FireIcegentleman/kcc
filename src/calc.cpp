@@ -66,8 +66,11 @@ void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
     case Tag::kAmp: {
       // 运算对象只能是一个全局变量
       auto p{dynamic_cast<const ObjectExpr*>(node->GetExpr())};
-      assert(p != nullptr);
-      val_ = p->GetGlobalPtr();
+      if (p == nullptr) {
+        Throw();
+      } else {
+        val_ = p->GetGlobalPtr();
+      }
     } break;
     default:
       Throw();

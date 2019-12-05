@@ -497,9 +497,11 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
 
   EmitBlock(end_block);
 
-  if (lhs->getType()->isVoidTy()) {
+  if (lhs->getType()->isVoidTy() || rhs->getType()->isVoidTy()) {
     return;
   }
+
+  assert(lhs->getType() == rhs->getType());
 
   auto phi{Builder.CreatePHI(lhs->getType(), 2)};
   phi->addIncoming(lhs, lhs_block);

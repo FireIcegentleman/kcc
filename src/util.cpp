@@ -92,6 +92,8 @@ void CommandLineCheck() {
         SoFile.push_back(item);
       } else if (path.filename().extension().string() == ".a") {
         AFile.push_back(item);
+      } else if (path.filename().extension().string() == ".o") {
+        ObjFile.push_back(item);
       } else {
         Error("the file extension must be '.c' or '.so': {}", item);
       }
@@ -100,7 +102,7 @@ void CommandLineCheck() {
     }
   }
 
-  if (std::size(files) == 0) {
+  if (std::size(files) == 0 && std::size(ObjFile) == 0) {
     Error("no input files");
   }
 
@@ -148,14 +150,16 @@ std::string GetObjFile(const std::string &name) {
   return ("/tmp" / file_name).string();
 }
 
-std::vector<std::string> GetObjFiles() {
-  std::vector<std::string> obj_files;
-
+const std::vector<std::string> &GetObjFiles() {
   for (const auto &item : InputFilePaths) {
-    obj_files.push_back(GetObjFile(item));
+    ObjFile.push_back(GetObjFile(item));
   }
 
-  return obj_files;
+  for (const auto &item : InputFilePaths) {
+    RemoveFile.push_back(GetObjFile(item));
+  }
+
+  return ObjFile;
 }
 
 std::string GetFileName(const std::string &name, std::string_view extension) {
