@@ -1,7 +1,6 @@
 #include "test.h"
 
 static void test_inc_dec() {
-
   int a = 3, b = 4;
   expect(3, a++);
   expect(4, a);
@@ -10,7 +9,6 @@ static void test_inc_dec() {
   expect(2, a--);
   expect(1, a);
 }
-
 
 static void test_inc_dec_float() {
   float a = 3.0f, b = 4.0f;
@@ -39,7 +37,6 @@ static void test_minus_plus() {
   expect(-1, a - b);
   expect(0xffffffff, -1);
 }
-
 
 void testmain() {
   print("unaryop");

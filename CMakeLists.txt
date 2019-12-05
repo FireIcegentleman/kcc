@@ -125,15 +125,15 @@ add_test(
           args
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test/lua/testes)
 
-add_test(
-  NAME "COMPILE--SQLITE"
-  COMMAND
-    ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/sqlite/*.c -O3 -DNDEBUG
-    -lpthread -ldl -o ${TEST_BINARY_DIR}/sqlite -DSQLITE_DEFAULT_MEMSTATUS=0
-    -DSQLITE_DQS=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0
-    -DSQLITE_OMIT_DECLTYPE -DSQLITE_OMIT_DEPRECATED -DSQLITE_USE_ALLOCA)
-add_test(NAME check_sqlite_executable COMMAND ${TEST_BINARY_DIR}/sqlite
-                                              -version)
+#add_test(
+#  NAME "COMPILE--SQLITE"
+#  COMMAND
+#    ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/sqlite/*.c -O3 -DNDEBUG
+#    -lpthread -ldl -o ${TEST_BINARY_DIR}/sqlite -DSQLITE_DEFAULT_MEMSTATUS=0
+#    -DSQLITE_DQS=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0
+#    -DSQLITE_OMIT_DECLTYPE -DSQLITE_OMIT_DEPRECATED -DSQLITE_USE_ALLOCA)
+#add_test(NAME check_sqlite_executable COMMAND ${TEST_BINARY_DIR}/sqlite
+#                                              -version)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   add_custom_target(

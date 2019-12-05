@@ -1,5 +1,5 @@
-#include "test.h"
 #include <limits.h>
+#include "test.h"
 
 static void test_char() {
   char c1, c2;

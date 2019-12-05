@@ -4,8 +4,7 @@
 
 enum { g1, g2, g3 } global1;
 
-void test()
-{
+void test() {
   typedef enum {
     AA,
     BB = 3,
@@ -25,20 +24,20 @@ void test()
 }
 
 void testmain() {
-    print("enum");
-    test();
+  print("enum");
+  test();
 
-    expect(0, g1);
-    expect(2, g3);
+  expect(0, g1);
+  expect(2, g3);
 
-    enum { x } v;
-    expect(0, x);
+  enum { x } v;
+  expect(0, x);
 
-    enum { y };
-    expect(0, y);
+  enum { y };
+  expect(0, y);
 
-    enum tag { z };
-    enum tag a = z;
-    expect(0, z);
-    expect(0, a);
+  enum tag { z };
+  enum tag a = z;
+  expect(0, z);
+  expect(0, a);
 }

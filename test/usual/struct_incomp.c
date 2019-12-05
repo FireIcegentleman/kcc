@@ -1,5 +1,5 @@
-#include "test.h"
 #include <stdalign.h>
+#include "test.h"
 
 typedef struct {
   int a;
@@ -16,12 +16,12 @@ typedef struct {
   int a;
   int b;
   // TODO 大小为零的数组
-  //long long arr[0];
+  // long long arr[0];
 } bar_t;
 
 static void test_zero_size() {
   expect(8, sizeof(bar_t));
-  //expect(8, alignof(bar_t));
+  // expect(8, alignof(bar_t));
   expect(4, alignof(bar_t));
 }
 

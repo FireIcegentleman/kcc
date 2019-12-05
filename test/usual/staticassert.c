@@ -3,10 +3,10 @@
 #include "test.h"
 
 void testmain() {
-    print("static assert");
-    _Static_assert(1, "fail");
+  print("static assert");
+  _Static_assert(1, "fail");
 
-    struct {
-        _Static_assert(1, "fail");
-    } x;
+  struct {
+    _Static_assert(1, "fail");
+  } x;
 }

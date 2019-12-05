@@ -26,8 +26,8 @@ void test() {
 }
 
 void testmain() {
-    print("extern");
-    expect(98, externvar1);
-    expect(99, externvar2);
-    test();
+  print("extern");
+  expect(98, externvar1);
+  expect(99, externvar2);
+  test();
 }

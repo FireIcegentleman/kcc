@@ -2,5 +2,5 @@
 
 #define MACRO_1 "macro1"
 #if __INCLUDE_LEVEL__ != 1
-# error "include level"
+#error "include level"
 #endif
