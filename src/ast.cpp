@@ -100,6 +100,17 @@ Type* Expr::Convert(Expr*& lhs, Expr*& rhs) {
   return type.GetType();
 }
 
+bool Expr::IsZero(const Expr* expr) {
+  if (auto constant{dynamic_cast<const ConstantExpr*>(expr)}) {
+    if (constant->GetType()->IsIntegerTy() &&
+        constant->GetIntegerVal().getSExtValue() == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 Expr::Expr(QualType type) : type_{type} {}
 
 /*
@@ -354,18 +365,11 @@ void BinaryOpExpr::AssignOpCheck() {
   }
 
   if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
-    if (auto constant{dynamic_cast<ConstantExpr*>(rhs_)}) {
-      if (constant->GetType()->IsIntegerTy() &&
-          constant->GetIntegerVal().getSExtValue() == 0) {
-        type_ = lhs_type;
-        return;
-      }
+    if (!Expr::IsZero(rhs_)) {
+      Error(this, "must be pointer and zero");
     }
-    Error(this, "must be pointer and zero");
-  }
-
-  if ((!lhs_type->IsArithmeticTy() || !rhs_type->IsArithmeticTy()) &&
-      !(lhs_type->IsBoolTy() && rhs_type->IsPointerTy())) {
+  } else if ((!lhs_type->IsArithmeticTy() || !rhs_type->IsArithmeticTy()) &&
+             !(lhs_type->IsBoolTy() && rhs_type->IsPointerTy())) {
     // 注意, 目前 NULL 预处理之后为 (void*)0
     EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
   }
@@ -477,27 +481,22 @@ void BinaryOpExpr::EqualityOpCheck() {
   } else if (lhs_type->IsArithmeticTy() && rhs_type->IsArithmeticTy()) {
     Expr::Convert(lhs_, rhs_);
   } else if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
-    if (auto constant{dynamic_cast<ConstantExpr*>(rhs_)}) {
-      if (constant->GetType()->IsIntegerTy() &&
-          constant->GetIntegerVal().getSExtValue() == 0) {
-        goto ok;
-      }
+    if (!Expr::IsZero(rhs_)) {
+      Error(this, "must be pointer and zero");
+    } else {
+      rhs_ = Expr::MayCastTo(rhs_, lhs_type);
     }
-    Error(this, "must be pointer and zero");
   } else if (lhs_type->IsIntegerTy() && rhs_type->IsPointerTy()) {
-    if (auto constant{dynamic_cast<ConstantExpr*>(lhs_)}) {
-      if (constant->GetType()->IsIntegerTy() &&
-          constant->GetIntegerVal().getSExtValue() == 0) {
-        std::swap(lhs_, rhs_);
-        goto ok;
-      }
+    std::swap(lhs_, rhs_);
+    if (!Expr::IsZero(rhs_)) {
+      Error(this, "must be pointer and zero");
+    } else {
+      rhs_ = Expr::MayCastTo(rhs_, rhs_type);
     }
-    Error(this, "must be pointer and zero");
   } else {
     Error(this, "the operand should be pointer or arithmetic type");
   }
 
-ok:
   type_ = ArithmeticType::Get(kInt);
 }
 
@@ -556,6 +555,21 @@ void ConditionOpExpr::Check() {
     type_ = lhs_->GetType();
   } else if (lhs_type->IsVoidTy() && rhs_type->IsVoidTy()) {
     type_ = VoidType::Get();
+  } else if (lhs_type->IsPointerTy() && rhs_type->IsIntegerTy()) {
+    if (!Expr::IsZero(rhs_)) {
+      Error(this, "must be pointer and zero");
+    } else {
+      rhs_ = Expr::MayCastTo(rhs_, lhs_type);
+    }
+    type_ = lhs_type;
+  } else if (lhs_type->IsIntegerTy() && rhs_type->IsPointerTy()) {
+    std::swap(lhs_, rhs_);
+    if (!Expr::IsZero(rhs_)) {
+      Error(this, "must be pointer and zero");
+    } else {
+      rhs_ = Expr::MayCastTo(rhs_, rhs_type);
+    }
+    type_ = rhs_type;
   } else {
     Error(loc_, "'?:': Type not allowed (got '{}' and '{}')",
           lhs_type.ToString(), rhs_type.ToString());

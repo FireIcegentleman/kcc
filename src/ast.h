@@ -117,6 +117,8 @@ class Expr : public AstNode {
   static Expr* MayCastTo(Expr* expr, QualType to);
   // 通常算术转换
   static Type* Convert(Expr*& lhs, Expr*& rhs);
+  // 判断是否是 0
+  static bool IsZero(const Expr* expr);
 
  protected:
   explicit Expr(QualType type = {});

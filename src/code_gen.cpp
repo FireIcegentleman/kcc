@@ -1270,12 +1270,6 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
 
   auto lhs_ptr{GetPtr(node->GetLHS())};
 
-  auto type{lhs_ptr->getType()->getPointerElementType()};
-
-  if (type->isPointerTy() && rhs->getType()->isIntegerTy()) {
-    rhs = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
-  }
-
   Builder.CreateStore(rhs, lhs_ptr);
 
   return Builder.CreateLoad(lhs_ptr);
