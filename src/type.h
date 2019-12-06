@@ -310,16 +310,17 @@ class StructType : public Type {
   std::int32_t GetOffset() const;
 
   void AddMember(ObjectExpr* member);
+  void AddBitField(ObjectExpr* member, std::int32_t offset);
   void MergeAnonymous(ObjectExpr* anonymous);
   void Finish();
 
   bool HasFlexibleArray() const;
 
- private:
-  StructType(bool is_struct, const std::string& name, Scope* parent);
-
   // 计算新成员的开始位置
   static std::int32_t MakeAlign(std::int32_t offset, std::int32_t align);
+
+ private:
+  StructType(bool is_struct, const std::string& name, Scope* parent);
 
   bool is_struct_{};
   std::string name_;
@@ -328,7 +329,9 @@ class StructType : public Type {
 
   std::int32_t offset_{};
   std::int32_t width_{};
-  std::int32_t align_{};
+  std::int32_t align_{1};
+
+  std::int32_t bit_field_align_{1};
 
   bool has_flexible_array_{false};
   std::int32_t index_{};

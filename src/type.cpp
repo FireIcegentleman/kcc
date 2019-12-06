@@ -812,13 +812,7 @@ StructType* StructType::Get(bool is_struct, const std::string& name,
 
 std::int32_t StructType::GetWidth() const { return width_; }
 
-std::int32_t StructType::GetAlign() const {
-  if (std::size(members_) == 0) {
-    return 1;
-  } else {
-    return align_;
-  }
-}
+std::int32_t StructType::GetAlign() const { return align_; }
 
 // 若一者以标签声明, 则另一者必须以同一标签声明。
 // 若它们都是完整类型, 则其成员必须在数量上准确对应, 以兼容类型声明,
@@ -922,6 +916,7 @@ void StructType::AddMember(ObjectExpr* member) {
   scope_->InsertUsual(member);
 
   align_ = std::max(align_, member->GetAlign());
+  bit_field_align_ = std::max(bit_field_align_, align_);
 
   if (is_struct_) {
     offset_ = offset + member->GetType()->GetWidth();
@@ -930,6 +925,27 @@ void StructType::AddMember(ObjectExpr* member) {
     assert(offset_ == 0);
     width_ = std::max(width_, member->GetType()->GetWidth());
     width_ = MakeAlign(width_, align_);
+  }
+}
+
+// TODO ?
+void StructType::AddBitField(ObjectExpr* member, std::int32_t offset) {
+  member->SetOffset(offset);
+  member->GetIndexs().push_front({this, index_++});
+
+  members_.push_back(member);
+  if (!member->IsAnonymous()) {
+    scope_->InsertTag(member);
+  }
+
+  auto bytes = MakeAlign(member->BitFieldEnd(), 8) / 8;
+  bit_field_align_ = std::max(bit_field_align_, member->GetAlign());
+  if (is_struct_) {
+    offset_ = offset + bytes;
+    width_ = MakeAlign(offset_, std::max(bit_field_align_, member->GetAlign()));
+  } else {
+    assert(offset_ == 0);
+    width_ = std::max(width_, member->GetType()->GetWidth());
   }
 }
 
@@ -979,17 +995,19 @@ void StructType::Finish() {
 
   if (is_struct_) {
     for (const auto& item : members_) {
-      members.push_back(item->GetType()->GetLLVMType());
+      members.push_back(item->GetLLVMType());
     }
   } else {
     if (std::size(members_) > 0) {
-      Type* max_type{members_.front()->GetType()};
+      auto max_type{members_.front()->GetLLVMType()};
       for (const auto& item : members_) {
-        if (item->GetType()->GetWidth() > max_type->GetWidth()) {
-          max_type = item->GetType();
+        if (Module->getDataLayout().getTypeAllocSizeInBits(
+                item->GetLLVMType()) >
+            Module->getDataLayout().getTypeAllocSizeInBits(max_type)) {
+          max_type = item->GetLLVMType();
         }
       }
-      members.push_back(max_type->GetLLVMType());
+      members.push_back(max_type);
     }
   }
 
@@ -999,6 +1017,17 @@ void StructType::Finish() {
 }
 
 bool StructType::HasFlexibleArray() const { return has_flexible_array_; }
+
+std::int32_t StructType::MakeAlign(std::int32_t offset, std::int32_t align) {
+  assert(offset >= 0);
+  assert(align > 0);
+
+  if (offset % align == 0) {
+    return offset;
+  } else {
+    return offset + align - (offset % align);
+  }
+}
 
 StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
     : Type{false},
@@ -1011,16 +1040,6 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
     llvm_type_ = llvm::StructType::create(Context, prefix + name);
   } else {
     llvm_type_ = llvm::StructType::create(Context, prefix + "anon");
-  }
-}
-
-std::int32_t StructType::MakeAlign(std::int32_t offset, std::int32_t align) {
-  assert(align != 0);
-
-  if (offset % align == 0) {
-    return offset;
-  } else {
-    return offset + align - (offset % align);
   }
 }
 

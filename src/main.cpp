@@ -35,8 +35,6 @@ void RunDev();
 #endif
 
 int main(int argc, char *argv[]) try {
-  TimingStart();
-
   InitCommandLine(argc, argv);
   CommandLineCheck();
 
@@ -47,6 +45,7 @@ int main(int argc, char *argv[]) try {
   }
 #endif
 
+  TimingStart();
   for (const auto &item : InputFilePaths) {
     auto pid{fork()};
     if (pid < 0) {
@@ -160,7 +159,7 @@ void RunKcc(const std::string &file_name) {
     return;
   }
 
-  Parser parser{std::move(tokens), file_name};
+  Parser parser{std::move(tokens)};
   auto unit{parser.ParseTranslationUnit()};
 
   if (EmitAST) {
@@ -232,7 +231,7 @@ void Run(const std::string &file) {
   }
   tokens_file << std::flush;
 
-  Parser parser{std::move(tokens), file};
+  Parser parser{std::move(tokens)};
   auto unit{parser.ParseTranslationUnit()};
   JsonGen{file}.GenJson(unit, GetFileName(file, ".html"));
 

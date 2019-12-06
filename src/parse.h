@@ -24,7 +24,7 @@ namespace kcc {
 
 class Parser {
  public:
-  explicit Parser(std::vector<Token> tokens, const std::string& file_name);
+  explicit Parser(std::vector<Token> tokens);
   TranslationUnit* ParseTranslationUnit();
 
  private:
@@ -126,6 +126,7 @@ class Parser {
                          std::uint32_t* func_spec, std::int32_t* align);
   Type* ParseStructUnionSpec(bool is_struct);
   void ParseStructDeclList(StructType* type);
+  void ParseBitField(StructType* type, const Token& tok, QualType member_type);
   Type* ParseEnumSpec();
   void ParseEnumerator();
   std::int32_t ParseAlignas();
@@ -198,6 +199,7 @@ class Parser {
    */
   Expr* ParseOffsetof();
   Expr* ParseHugeVal();
+  Expr* ParseInff();
   void AddBuiltin();
 
   TranslationUnit* unit_;

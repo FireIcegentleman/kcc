@@ -15,10 +15,15 @@
 #include <clang/Frontend/Utils.h>
 #include <clang/Lex/DirectoryLookup.h>
 #include <fmt/format.h>
+#include <llvm/ADT/Optional.h>
 #include <llvm/ADT/Triple.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Support/CodeGen.h>
 #include <llvm/Support/Host.h>
+#include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Target/TargetMachine.h>
 
 #include "error.h"
 #include "llvm_common.h"
@@ -26,8 +31,8 @@
 namespace kcc {
 
 Preprocessor::Preprocessor() {
-  llvm::InitializeAllTargetInfos();
   llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetInfos();
   llvm::InitializeAllTargetMCs();
 
   ci_.createDiagnostics();
@@ -98,6 +103,30 @@ void Preprocessor::SetMacroDefinitions(
 }
 
 std::string Preprocessor::Cpp(const std::string &input_file) {
+  Module = std::make_unique<llvm::Module>(input_file, Context);
+
+  // 获取当前计算机的目标三元组
+  auto target_triple{llvm::sys::getDefaultTargetTriple()};
+
+  std::string error;
+  auto target{llvm::TargetRegistry::lookupTarget(target_triple, error)};
+
+  if (!target) {
+    Error(error);
+  }
+
+  // 使用通用CPU, 生成位置无关目标文件
+  std::string cpu("generic");
+  std::string features;
+  llvm::TargetOptions opt;
+  llvm::Optional<llvm::Reloc::Model> rm{llvm::Reloc::Model::PIC_};
+  TargetMachine = std::unique_ptr<llvm::TargetMachine>{
+      target->createTargetMachine(target_triple, cpu, features, opt, rm)};
+
+  // 配置模块以指定目标机器和数据布局
+  Module->setTargetTriple(target_triple);
+  Module->setDataLayout(TargetMachine->createDataLayout());
+
   auto file{ci_.getFileManager().getFile(input_file)};
 
   ci_.getSourceManager().setMainFileID(ci_.getSourceManager().createFileID(

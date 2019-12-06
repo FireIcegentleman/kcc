@@ -888,9 +888,13 @@ EnumeratorExpr::EnumeratorExpr(const std::string& name, std::int32_t val)
  */
 ObjectExpr* ObjectExpr::Get(const std::string& name, QualType type,
                             std::uint32_t storage_class_spec,
-                            enum Linkage linkage, bool anonymous) {
+                            enum Linkage linkage, bool anonymous,
+                            std::int8_t bit_field_begin,
+                            std::int8_t bit_field_width) {
   return new (ObjectExprPool.Allocate())
-      ObjectExpr{name, type, storage_class_spec, linkage, anonymous};
+      ObjectExpr{name,           type,      storage_class_spec,
+                 linkage,        anonymous, bit_field_begin,
+                 bit_field_width};
 }
 
 AstNodeType ObjectExpr::Kind() const { return AstNodeType::kObjectExpr; }
@@ -957,13 +961,32 @@ const std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() const {
   return indexs_;
 }
 
+std::int8_t ObjectExpr::BitFieldBegin() const { return bit_field_begin_; }
+
+std::int8_t ObjectExpr::BitFieldEnd() const {
+  return bit_field_begin_ + bit_field_width_;
+}
+
+std::int8_t ObjectExpr::BitFieldWidth() const { return bit_field_width_; }
+
+llvm::Type* ObjectExpr::GetLLVMType() const {
+  if (bit_field_width_ == 0) {
+    return GetType()->GetLLVMType();
+  } else {
+    return Builder.getIntNTy(bit_field_width_);
+  }
+}
+
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
                        std::uint32_t storage_class_spec, enum Linkage linkage,
-                       bool anonymous)
+                       bool anonymous, std::int8_t bit_field_begin,
+                       std::int8_t bit_field_width)
     : IdentifierExpr{name, type, linkage, false},
       anonymous_{anonymous},
       storage_class_spec_{storage_class_spec},
-      align_{type->GetAlign()} {}
+      align_{type->GetAlign()},
+      bit_field_begin_{bit_field_begin},
+      bit_field_width_{bit_field_width} {}
 
 /*
  * StmtExpr

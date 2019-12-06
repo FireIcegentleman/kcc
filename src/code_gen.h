@@ -24,7 +24,6 @@ namespace kcc {
 
 class CodeGen : public Visitor {
  public:
-  CodeGen();
   void GenCode(const TranslationUnit *root);
 
  private:

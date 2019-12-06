@@ -18,11 +18,7 @@
 
 namespace kcc {
 
-Parser::Parser(std::vector<Token> tokens, const std::string& file_name)
-    : tokens_{std::move(tokens)} {
-  Module = std::make_unique<llvm::Module>(file_name, Context);
-  StringMap.clear();
-
+Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {
   unit_ = MakeAstNode<TranslationUnit>(Peek());
   AddBuiltin();
 }
@@ -910,6 +906,8 @@ Expr* Parser::ParsePrimaryExpr() {
                    func_def_->GetFuncType()->FuncGetName());
   } else if (Try(Tag::kHugeVal)) {
     return ParseHugeVal();
+  } else if (Try(Tag::kInff)) {
+    return ParseInff();
   } else {
     Error(token, "'{}' unexpected", token.GetStr());
   }
@@ -1530,9 +1528,9 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
   Token tok;
   QualType type;
 
-  TryParseAttributeSpec();
-
   while (true) {
+    TryParseAttributeSpec();
+
     tok = Next();
 
     switch (tok.GetTag()) {
@@ -1800,7 +1798,8 @@ void Parser::ParseStructDeclList(StructType* type) {
 
         // 位域
         if (Try(Tag::kColon)) {
-          Error(Peek(), "Bit field not supported");
+          ParseBitField(type, tok, copy);
+          continue;
         }
 
         // struct A {
@@ -1865,6 +1864,69 @@ finalize:
   }
 
   scope_ = scope_backup;
+}
+
+void Parser::ParseBitField(StructType* type, const Token& tok,
+                           QualType member_type) {
+  if (!member_type->IsIntegerTy() && !member_type->IsBoolTy()) {
+    Error(tok, "expect integer or bool type for bitfield but got ('{}')",
+          member_type.ToString());
+  }
+
+  auto expr{ParseConstantExpr()};
+  auto width{CalcConstantExpr{}.CalcInteger(expr)};
+
+  if (width < 0) {
+    Error(expr, "expect non negative value");
+  } else if (width == 0 && !std::empty(tok.GetStr())) {
+    Error(tok, "no declarator expected for a bitfield with width 0");
+  } else if (width > member_type->GetWidth() * 8) {
+    Error(expr, "width exceeds its type");
+  }
+
+  auto offset{type->GetOffset() - member_type->GetWidth()};
+  offset = StructType::MakeAlign(std::max(offset, 0), type->GetAlign());
+
+  std::int32_t bit_field_offset;
+  std::int8_t begin;
+
+  if (!type->IsStruct()) {
+    begin = 0;
+    bit_field_offset = 0;
+  } else if (type->GetNumMembers() == 0) {
+    begin = 0;
+    bit_field_offset = 0;
+  } else {
+    auto last = type->GetMembers().back();
+    auto total_bits = last->GetOffset() * 8;
+    if (last->BitFieldWidth()) {
+      total_bits += last->BitFieldEnd();
+    } else {
+      total_bits += last->GetType()->GetWidth() * 8;
+    }
+
+    if (width == 0) width = type->GetWidth() * 8 - total_bits;
+    if (width == 0) return;
+    if (width + total_bits <= type->GetWidth() * 8) {
+      begin = total_bits % 8;
+      bit_field_offset = total_bits / 8;
+    } else {
+      begin = 0;
+      bit_field_offset =
+          StructType::MakeAlign(type->GetOffset(), type->GetWidth());
+    }
+  }
+
+  ObjectExpr* bit_field;
+  if (std::empty(tok.GetStr())) {
+    bit_field = MakeAstNode<ObjectExpr>(tok, "", member_type, 0, Linkage::kNone,
+                                        true, begin, width);
+  } else {
+    bit_field = MakeAstNode<ObjectExpr>(tok, tok.GetIdentifier(), member_type,
+                                        0, Linkage::kNone, false, begin, width);
+  }
+
+  type->AddBitField(bit_field, bit_field_offset);
 }
 
 Type* Parser::ParseEnumSpec() {
@@ -2929,6 +2991,15 @@ Expr* Parser::ParseHugeVal() {
       std::to_string(std::numeric_limits<double>::infinity()));
 }
 
+Expr* Parser::ParseInff() {
+  auto tok{Expect(Tag::kLeftParen)};
+  Expect(Tag::kRightParen);
+
+  return MakeAstNode<ConstantExpr>(
+      tok, ArithmeticType::Get(kFloat),
+      std::to_string(std::numeric_limits<float>::infinity()));
+}
+
 void Parser::AddBuiltin() {
   auto loc{unit_->GetLoc()};
 
@@ -2943,10 +3014,8 @@ void Parser::AddBuiltin() {
       loc, "reg_save_area", PointerType::Get(VoidType::Get())));
   va_list->SetComplete(true);
 
-  scope_->InsertUsual(
-      "__builtin_va_list",
-      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_list",
-                                  ArrayType::Get(va_list, 1), kNone, true));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_va_list", ArrayType::Get(va_list, 1), kNone, true));
 
   auto param1{MakeAstNode<ObjectExpr>(loc, "", va_list->GetPointerTo())};
   auto param2{MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kInt))};
@@ -2960,18 +3029,19 @@ void Parser::AddBuiltin() {
   auto copy{FunctionType::Get(VoidType::Get(), {param1, param1})};
   copy->SetName("__builtin_va_copy");
 
-  scope_->InsertUsual("__builtin_va_start",
-                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_start",
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_start",
                                                   start, kExternal, false));
-  scope_->InsertUsual("__builtin_va_end",
-                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_end", end,
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_end", end,
                                                   kExternal, false));
-  scope_->InsertUsual("__builtin_va_arg_sub",
-                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_arg_sub",
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_arg_sub",
                                                   arg, kExternal, false));
-  scope_->InsertUsual("__builtin_va_copy",
-                      MakeAstNode<IdentifierExpr>(loc, "__builtin_va_copy",
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_copy",
                                                   copy, kExternal, false));
+
+  auto sync_synchronize{FunctionType::Get(VoidType::Get(), {})};
+  sync_synchronize->FuncSetName("__sync_synchronize");
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__sync_synchronize", sync_synchronize, kExternal, false));
 }
 
 }  // namespace kcc

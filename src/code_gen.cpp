@@ -5,10 +5,8 @@
 #include "code_gen.h"
 
 #include <cassert>
-#include <memory>
 #include <vector>
 
-#include <llvm/ADT/Optional.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
@@ -17,11 +15,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Casting.h>
-#include <llvm/Support/CodeGen.h>
-#include <llvm/Support/Host.h>
-#include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
 #include "calc.h"
@@ -50,30 +44,6 @@ CodeGen::BreakContinue::BreakContinue(llvm::BasicBlock* break_block,
 /*
  * CodeGen
  */
-CodeGen::CodeGen() {
-  // 获取当前计算机的目标三元组
-  auto target_triple{llvm::sys::getDefaultTargetTriple()};
-
-  std::string error;
-  auto target{llvm::TargetRegistry::lookupTarget(target_triple, error)};
-
-  if (!target) {
-    Error(error);
-  }
-
-  // 使用通用CPU, 生成位置无关目标文件
-  std::string cpu("generic");
-  std::string features;
-  llvm::TargetOptions opt;
-  llvm::Optional<llvm::Reloc::Model> rm{llvm::Reloc::Model::PIC_};
-  TargetMachine = std::unique_ptr<llvm::TargetMachine>{
-      target->createTargetMachine(target_triple, cpu, features, opt, rm)};
-
-  // 配置模块以指定目标机器和数据布局
-  Module->setTargetTriple(target_triple);
-  Module->setDataLayout(TargetMachine->createDataLayout());
-}
-
 void CodeGen::GenCode(const TranslationUnit* root) {
   root->Accept(*this);
 
@@ -1355,6 +1325,10 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
         va_copy_, {Builder.CreateBitCast(arg1, Builder.getInt8PtrTy()),
                    Builder.CreateBitCast(arg2, Builder.getInt8PtrTy())});
 
+    return true;
+  } else if (func_name == "__sync_synchronize") {
+    result_ = Builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
+                                  llvm::SyncScope::System);
     return true;
   } else {
     return false;

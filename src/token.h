@@ -129,6 +129,7 @@ class TokenTag : public QObject {
 
     kOffsetof,  // __builtin_offsetof
     kHugeVal,   // __builtin_huge_val
+    kInff,      // __builtin_inff
 
     kFuncName,       // __func__ / __FUNCTION__
     kTypeid,         // typeid
