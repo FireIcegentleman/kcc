@@ -913,6 +913,10 @@ void StructType::AddMember(ObjectExpr* member) {
     member->SetType(ArrayType::Get(type->ArrayGetElementType(), 0));
   }
 
+  if (member->GetType()->IsBoolTy()) {
+    member->SetType(ArithmeticType::Get(kChar | kUnsigned));
+  }
+
   auto member_align{member->GetAlign()};
   auto offset{MakeAlign(offset_, member_align)};
   member->SetOffset(offset);
@@ -923,7 +927,8 @@ void StructType::AddMember(ObjectExpr* member) {
   scope_->InsertUsual(member);
 
   align_ = std::max(align_, member_align);
-  bit_field_align_ = std::max(bit_field_align_, align_);
+
+  bit_field_used_width_ = 0;
 
   if (is_struct_) {
     offset_ = offset + member->GetType()->GetWidth();
@@ -935,23 +940,85 @@ void StructType::AddMember(ObjectExpr* member) {
   }
 }
 
-void StructType::AddBitField(ObjectExpr* member, std::int32_t offset) {
-  member->SetOffset(offset);
-  member->GetIndexs().push_front({this, index_++});
+void StructType::AddBitField(ObjectExpr* member) {
+  // 注意这种情况也会打包
+  // char a;
+  // char b;
+  // int c : 5;
+  // int d : 5;
+  // 打包为 4 个 i8
 
-  members_.push_back(member);
-  if (!member->IsAnonymous()) {
-    scope_->InsertTag(member);
-  }
+  // 该成员是第一个字段或上一个字段不是位域或已经没有位置可以打包了
+  if (bit_field_used_width_ == 0) {
+    auto width{member->BitFieldWidth()};
+    // 这时使用 :0 没有效果
+    if (width == 0) {
+      return;
+    }
 
-  auto bytes = MakeAlign(member->BitFieldEnd(), 8) / 8;
-  bit_field_align_ = std::max(bit_field_align_, member->GetAlign());
-  if (is_struct_) {
-    offset_ = offset + bytes;
-    width_ = MakeAlign(offset_, std::max(bit_field_align_, member->GetAlign()));
+    auto base_type_width{member->GetType()->GetWidth() * 8};
+    // 如果可以, 将之前的非位域字段打包在一起
+    for (auto iter{std::rbegin(members_)}; iter != std::rend(members_);
+         ++iter) {
+      if ((*iter)->BitFieldWidth() != 0) {
+        break;
+      }
+
+      if (bit_field_used_width_ + width + (*iter)->GetType()->GetWidth() * 8 >=
+          base_type_width) {
+        break;
+      } else {
+        bit_field_used_width_ += (*iter)->GetType()->GetWidth() * 8;
+      }
+    }
+
+    if (bit_field_used_width_ == 0) {
+      auto member_align{member->GetAlign()};
+      auto offset{MakeAlign(offset_, member_align)};
+      member->SetOffset(offset);
+
+      member->GetIndexs().push_front({this, index_++});
+
+      members_.push_back(member);
+      scope_->InsertUsual(member);
+
+      align_ = std::max(align_, member_align);
+
+      if (is_struct_) {
+        offset_ = offset + member->GetType()->GetWidth();
+        width_ = MakeAlign(offset_, align_);
+      } else {
+        assert(offset_ == 0);
+        width_ = std::max(width_, member->GetType()->GetWidth());
+        width_ = MakeAlign(width_, align_);
+      }
+    } else {
+      member->SetOffset(offset_);
+
+      member->GetIndexs().push_front({this, index_++});
+
+      members_.push_back(member);
+      scope_->InsertUsual(member);
+
+      align_ = std::max(align_, member->GetAlign());
+
+      if (is_struct_) {
+        offset_ = offset_ + member->GetType()->GetWidth();
+        width_ = MakeAlign(offset_, align_);
+      } else {
+        assert(offset_ == 0);
+        width_ = std::max(width_, member->GetType()->GetWidth());
+        width_ = MakeAlign(width_, align_);
+      }
+    }
+
+    bit_field_used_width_ += width;
+    assert(bit_field_used_width_ <= base_type_width);
+    if (bit_field_used_width_ == base_type_width) {
+      bit_field_used_width_ = 0;
+    }
   } else {
-    assert(offset_ == 0);
-    width_ = std::max(width_, member->GetType()->GetWidth());
+    assert(false);
   }
 }
 

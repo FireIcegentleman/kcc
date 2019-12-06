@@ -239,6 +239,10 @@ void Run(const std::string &file) {
     std::string cmd{"clang -std=c17 -S -emit-llvm -O0 " + file + " -o " +
                     GetFileName(file, ".std.ll")};
     std::system(cmd.c_str());
+
+    cmd = "./clang -std=c99 -S -emit-llvm -O0 " + file + " -o " +
+          GetFileName(file, ".old.ll");
+    std::system(cmd.c_str());
   }
 
   if (!ParseOnly) {

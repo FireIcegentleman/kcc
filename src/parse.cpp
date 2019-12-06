@@ -1868,8 +1868,11 @@ finalize:
 
 void Parser::ParseBitField(StructType* type, const Token& tok,
                            QualType member_type) {
-  if (!member_type->IsIntegerTy() && !member_type->IsBoolTy()) {
-    Error(tok, "expect integer or bool type for bitfield but got ('{}')",
+  // 标准中定义位域可以下列拥有四种类型之一
+  // int / signed int / unsigned int / _Bool
+  // 其他类型是实现定义的, 这里不支持其他类型
+  if (!member_type->IsIntTy() && !member_type->IsBoolTy()) {
+    Error(tok, "expect int or bool type for bitfield but got ('{}')",
           member_type.ToString());
   }
 
@@ -1884,49 +1887,16 @@ void Parser::ParseBitField(StructType* type, const Token& tok,
     Error(expr, "width exceeds its type");
   }
 
-  auto offset{type->GetOffset() - member_type->GetWidth()};
-  offset = StructType::MakeAlign(std::max(offset, 0), type->GetAlign());
-
-  std::int32_t bit_field_offset;
-  std::int8_t begin;
-
-  if (!type->IsStruct()) {
-    begin = 0;
-    bit_field_offset = 0;
-  } else if (type->GetNumMembers() == 0) {
-    begin = 0;
-    bit_field_offset = 0;
-  } else {
-    auto last = type->GetMembers().back();
-    auto total_bits = last->GetOffset() * 8;
-    if (last->BitFieldWidth()) {
-      total_bits += last->BitFieldEnd();
-    } else {
-      total_bits += last->GetType()->GetWidth() * 8;
-    }
-
-    if (width == 0) width = type->GetWidth() * 8 - total_bits;
-    if (width == 0) return;
-    if (width + total_bits <= type->GetWidth() * 8) {
-      begin = total_bits % 8;
-      bit_field_offset = total_bits / 8;
-    } else {
-      begin = 0;
-      bit_field_offset =
-          StructType::MakeAlign(type->GetOffset(), type->GetWidth());
-    }
-  }
-
   ObjectExpr* bit_field;
   if (std::empty(tok.GetStr())) {
     bit_field = MakeAstNode<ObjectExpr>(tok, "", member_type, 0, Linkage::kNone,
-                                        true, begin, width);
+                                        true, width);
   } else {
     bit_field = MakeAstNode<ObjectExpr>(tok, tok.GetIdentifier(), member_type,
-                                        0, Linkage::kNone, false, begin, width);
+                                        0, Linkage::kNone, false, width);
   }
 
-  type->AddBitField(bit_field, bit_field_offset);
+  type->AddBitField(bit_field);
 }
 
 Type* Parser::ParseEnumSpec() {

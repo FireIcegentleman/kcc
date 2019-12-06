@@ -311,7 +311,7 @@ class StructType : public Type {
   std::int32_t GetOffset() const;
 
   void AddMember(ObjectExpr* member);
-  void AddBitField(ObjectExpr* member, std::int32_t offset);
+  void AddBitField(ObjectExpr* member);
   void MergeAnonymous(ObjectExpr* anonymous);
   void Finish();
 
@@ -332,7 +332,7 @@ class StructType : public Type {
   std::int32_t width_{};
   std::int32_t align_{1};
 
-  std::int32_t bit_field_align_{1};
+  std::int8_t bit_field_used_width_{};
 
   bool has_flexible_array_{false};
   std::int32_t index_{};

@@ -385,7 +385,6 @@ class ObjectExpr : public IdentifierExpr {
   static ObjectExpr* Get(const std::string& name, QualType type,
                          std::uint32_t storage_class_spec = 0,
                          enum Linkage linkage = kNone, bool anonymous = false,
-                         std::int8_t bit_field_begin = 0,
                          std::int8_t bit_field_width = 0);
 
   virtual AstNodeType Kind() const override;
@@ -417,8 +416,6 @@ class ObjectExpr : public IdentifierExpr {
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
 
-  std::int8_t BitFieldBegin() const;
-  std::int8_t BitFieldEnd() const;
   std::int8_t BitFieldWidth() const;
 
   void SetType(Type* type);
@@ -427,15 +424,13 @@ class ObjectExpr : public IdentifierExpr {
  private:
   ObjectExpr(const std::string& name, QualType type,
              std::uint32_t storage_class_spec = 0, enum Linkage linkage = kNone,
-             bool anonymous = false, std::int8_t bit_field_begin = 0,
-             std::int8_t bit_field_width = 0);
+             bool anonymous = false, std::int8_t bit_field_width = 0);
 
   bool anonymous_{};
   std::uint32_t storage_class_spec_{};
   std::int32_t align_{};
   std::int32_t offset_{};
 
-  std::int8_t bit_field_begin_{};
   std::int8_t bit_field_width_{};
 
   // 当遇到重复声明时使用
