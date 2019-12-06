@@ -147,7 +147,7 @@ class Parser {
   std::uint32_t ParseTypeQualList();
   void ParseDirectDeclarator(Token& tok, QualType& base_type);
   void ParseDirectDeclaratorTail(QualType& base_type);
-  std::size_t ParseArrayLength();
+  std::int64_t ParseArrayLength();
   std::pair<std::vector<ObjectExpr*>, bool> ParseParamTypeList();
   ObjectExpr* ParseParamDecl();
 

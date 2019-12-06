@@ -2065,7 +2065,6 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
     if (Try(Tag::kEqual)) {
       if (!scope_->IsFileScope() &&
           !(scope_->IsBlockScope() && storage_class_spec & kStatic)) {
-        // TODO 尝试使用 ParseConstantInitializer
         ParseInitDeclaratorSub(decl);
       } else {
         decl->SetConstant(
@@ -2219,9 +2218,9 @@ void Parser::ParseDirectDeclaratorTail(QualType& base_type) {
   }
 }
 
-std::size_t Parser::ParseArrayLength() {
+std::int64_t Parser::ParseArrayLength() {
   if (Test(Tag::kRightSquare)) {
-    return 0;
+    return -1;
   }
 
   auto expr{ParseAssignExpr()};
@@ -2234,7 +2233,6 @@ std::size_t Parser::ParseArrayLength() {
   // 不支持变长数组
   auto len{CalcConstantExpr{}.CalcInteger(expr)};
 
-  // TODO 允许分配大小为 0 的数组
   if (len < 0) {
     Error(expr, "Array size must be greater than zero: '{}'", len);
   }
@@ -2388,7 +2386,7 @@ llvm::Constant* Parser::ParseInitializer(std::vector<Initializer>& inits,
 
 void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
                                    std::int32_t designated) {
-  std::size_t index{};
+  std::int64_t index{};
   auto has_brace{Try(Tag::kLeftBrace)};
 
   while (true) {
@@ -2430,7 +2428,7 @@ void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
 
     // int a[] = {1, 2, [5] = 3}; 这种也是合法的
     if (!type->IsComplete()) {
-      type->ArraySetNumElements(std::max(static_cast<std::size_t>(index),
+      type->ArraySetNumElements(std::max(static_cast<std::int64_t>(index),
                                          type->ArrayGetNumElements()));
     }
 
@@ -2609,10 +2607,11 @@ llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
 
 llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
                                                       std::int32_t designated) {
-  std::size_t index{};
+  std::int64_t index{};
   auto has_brace{Try(Tag::kLeftBrace)};
-  // 可能为零
+  // 可能为零或 -1
   auto size{type->ArrayGetNumElements()};
+  size = (size == -1 ? size + 1 : size);
   auto zero{GetConstantZero(type->ArrayGetElementType()->GetLLVMType())};
   std::vector<llvm::Constant*> val(size, zero);
 
@@ -2651,7 +2650,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
       val[index] = ParseConstantInitializer(type->ArrayGetElementType(),
                                             designated, false);
     } else {
-      if (index >= std::size(val)) {
+      if (index >= static_cast<std::int64_t>(std::size(val))) {
         val.insert(std::end(val), index - std::size(val), zero);
         val.push_back(ParseConstantInitializer(type->ArrayGetElementType(),
                                                designated, false));
@@ -2664,14 +2663,12 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
     designated = false;
     ++index;
 
-    if (type->IsComplete() &&
-        static_cast<std::size_t>(index) >= type->ArrayGetNumElements()) {
+    if (type->IsComplete() && index >= type->ArrayGetNumElements()) {
       break;
     }
 
     if (!type->IsComplete()) {
-      type->ArraySetNumElements(std::max(static_cast<std::size_t>(index),
-                                         type->ArrayGetNumElements()));
+      type->ArraySetNumElements(std::max(index, type->ArrayGetNumElements()));
     }
 
     if (!Try(Tag::kComma)) {

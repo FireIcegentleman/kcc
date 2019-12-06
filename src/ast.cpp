@@ -757,7 +757,7 @@ void StringLiteralExpr::Check() {
   switch (width) {
     case 1: {
       std::vector<std::uint8_t> values;
-      for (std::size_t i{}; i < size; ++i) {
+      for (std::int64_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
         values.push_back(*ptr);
         str += 1;
@@ -768,7 +768,7 @@ void StringLiteralExpr::Check() {
     } break;
     case 2: {
       std::vector<std::uint16_t> values;
-      for (std::size_t i{}; i < size; ++i) {
+      for (std::int64_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
         values.push_back(*ptr);
         str += 2;
@@ -778,7 +778,7 @@ void StringLiteralExpr::Check() {
     } break;
     case 4: {
       std::vector<std::uint32_t> values;
-      for (std::size_t i{}; i < size; ++i) {
+      for (std::int64_t i{}; i < size; ++i) {
         auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
         values.push_back(*ptr);
         str += 4;
@@ -968,6 +968,8 @@ std::int8_t ObjectExpr::BitFieldEnd() const {
 }
 
 std::int8_t ObjectExpr::BitFieldWidth() const { return bit_field_width_; }
+
+void ObjectExpr::SetType(Type* type) { type_ = type; }
 
 llvm::Type* ObjectExpr::GetLLVMType() const {
   if (bit_field_width_ == 0) {

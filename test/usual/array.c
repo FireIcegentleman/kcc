@@ -57,9 +57,8 @@ static void t7() {
 }
 
 static void array_of_zero_size() {
-  // TODO 大小为零的数组
-  // int arr[7][0];
-  // expect(0, sizeof(arr));
+   int arr[7][0];
+   expect(0, sizeof(arr));
 }
 
 // Array type compatible

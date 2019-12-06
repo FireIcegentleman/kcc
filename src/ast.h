@@ -421,6 +421,7 @@ class ObjectExpr : public IdentifierExpr {
   std::int8_t BitFieldEnd() const;
   std::int8_t BitFieldWidth() const;
 
+  void SetType(Type* type);
   llvm::Type* GetLLVMType() const;
 
  private:

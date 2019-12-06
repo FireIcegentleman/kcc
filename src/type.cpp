@@ -284,12 +284,12 @@ QualType Type::PointerGetElementType() const {
   return ToPointerType()->GetElementType();
 }
 
-void Type::ArraySetNumElements(std::size_t num_elements) {
+void Type::ArraySetNumElements(std::int64_t num_elements) {
   assert(IsArrayTy());
   ToArrayType()->SetNumElements(num_elements);
 }
 
-std::size_t Type::ArrayGetNumElements() const {
+std::int64_t Type::ArrayGetNumElements() const {
   assert(IsArrayTy());
   return ToArrayType()->GetNumElements();
 }
@@ -733,7 +733,7 @@ PointerType::PointerType(QualType element_type)
 /*
  * ArrayType
  */
-ArrayType* ArrayType::Get(QualType contained_type, std::size_t num_elements) {
+ArrayType* ArrayType::Get(QualType contained_type, std::int64_t num_elements) {
   return new (ArrayTypePool.Allocate()) ArrayType{contained_type, num_elements};
 }
 
@@ -782,7 +782,8 @@ bool ArrayType::Equal(const Type* other) const {
   }
 }
 
-void ArrayType::SetNumElements(std::size_t num_elements) {
+void ArrayType::SetNumElements(std::int64_t num_elements) {
+  assert(num_elements > 0);
   num_elements_ = num_elements;
   // 在对元素数量未知的全局或静态数组初始化时, 如果不及时更新 LLVM 类型,
   // 将会导致用于初始化的 llvm::Constant 类型不正确
@@ -790,16 +791,18 @@ void ArrayType::SetNumElements(std::size_t num_elements) {
       llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
 }
 
-std::size_t ArrayType::GetNumElements() const { return num_elements_; }
+std::int64_t ArrayType::GetNumElements() const { return num_elements_; }
 
 QualType ArrayType::GetElementType() const { return contained_type_; }
 
-ArrayType::ArrayType(QualType contained_type, std::size_t num_elements)
-    : Type{num_elements > 0},
+ArrayType::ArrayType(QualType contained_type, std::int64_t num_elements)
+    : Type{num_elements >= 0},
       contained_type_{contained_type},
       num_elements_{num_elements} {
-  llvm_type_ =
-      llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
+  if (IsComplete()) {
+    llvm_type_ =
+        llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
+  }
 }
 
 /*
@@ -903,11 +906,15 @@ Scope* StructType::GetScope() { return scope_; }
 std::int32_t StructType::GetOffset() const { return offset_; }
 
 void StructType::AddMember(ObjectExpr* member) {
+  // 柔性数组
   if (member->GetType()->IsArrayTy() && !member->GetType()->IsComplete()) {
     has_flexible_array_ = true;
+    auto type{member->GetType()};
+    member->SetType(ArrayType::Get(type->ArrayGetElementType(), 0));
   }
 
-  auto offset{MakeAlign(offset_, member->GetAlign())};
+  auto member_align{member->GetAlign()};
+  auto offset{MakeAlign(offset_, member_align)};
   member->SetOffset(offset);
 
   member->GetIndexs().push_front({this, index_++});
@@ -915,7 +922,7 @@ void StructType::AddMember(ObjectExpr* member) {
   members_.push_back(member);
   scope_->InsertUsual(member);
 
-  align_ = std::max(align_, member->GetAlign());
+  align_ = std::max(align_, member_align);
   bit_field_align_ = std::max(bit_field_align_, align_);
 
   if (is_struct_) {
@@ -928,7 +935,6 @@ void StructType::AddMember(ObjectExpr* member) {
   }
 }
 
-// TODO ?
 void StructType::AddBitField(ObjectExpr* member, std::int32_t offset) {
   member->SetOffset(offset);
   member->GetIndexs().push_front({this, index_++});

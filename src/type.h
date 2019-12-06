@@ -176,8 +176,8 @@ class Type {
 
   QualType PointerGetElementType() const;
 
-  void ArraySetNumElements(std::size_t num_elements);
-  std::size_t ArrayGetNumElements() const;
+  void ArraySetNumElements(std::int64_t num_elements);
+  std::int64_t ArrayGetNumElements() const;
   QualType ArrayGetElementType() const;
 
   bool StructHasName() const;
@@ -267,22 +267,23 @@ class PointerType : public Type {
 
 class ArrayType : public Type {
  public:
-  static ArrayType* Get(QualType contained_type, std::size_t num_elements = 0);
+  static ArrayType* Get(QualType contained_type,
+                        std::int64_t num_elements = -1);
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
   virtual bool Compatible(const Type* other) const override;
   virtual bool Equal(const Type* other) const override;
 
-  void SetNumElements(std::size_t num_elements);
-  std::size_t GetNumElements() const;
+  void SetNumElements(std::int64_t num_elements);
+  std::int64_t GetNumElements() const;
   QualType GetElementType() const;
 
  private:
-  ArrayType(QualType contained_type, std::size_t num_elements);
+  ArrayType(QualType contained_type, std::int64_t num_elements);
 
   QualType contained_type_;
-  std::size_t num_elements_{};
+  std::int64_t num_elements_{};
 };
 
 class StructType : public Type {
