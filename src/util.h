@@ -18,6 +18,8 @@ namespace kcc {
 
 enum class OptLevel { kO0, kO1, kO2, kO3 };
 
+enum class LangStds { kC99, kC11, kC17, kGnu99, kGnu11, kGnu17 };
+
 inline std::vector<std::string> SoFile;
 
 inline std::vector<std::string> AFile;
@@ -100,6 +102,30 @@ inline llvm::cl::list<std::string> RPath{
 inline llvm::cl::list<std::string> Libs{
     "l", llvm::cl::desc{"Add library"}, llvm::cl::value_desc{"file"},
     llvm::cl::Prefix, llvm::cl::cat{Category}};
+
+// 忽略
+inline llvm::cl::opt<LangStds> LangStd{
+    "std",
+    llvm::cl::desc{"Language standard to compile for"},
+    llvm::cl::init(LangStds::kGnu17),
+    llvm::cl::Prefix,
+    llvm::cl::values(
+        clEnumValN(LangStds::kC99, "c99", "ISO C 1999"),
+        clEnumValN(LangStds::kC11, "c11", "ISO C 2011"),
+        clEnumValN(LangStds::kC17, "c17", "ISO C 2017"),
+        clEnumValN(LangStds::kGnu99, "gnu99", "ISO C 1999 with GNU extensions"),
+        clEnumValN(LangStds::kGnu11, "gnu11", "ISO C 2011 with GNU extensions"),
+        clEnumValN(LangStds::kGnu17, "gnu17",
+                   "ISO C 2017 with GNU extensions (default)")),
+    llvm::cl::cat{Category}};
+
+inline llvm::cl::opt<bool> Debug{
+    "g", llvm::cl::desc{"Generate source-level debug information"},
+    llvm::cl::cat{Category}};
+
+inline llvm::cl::opt<bool> FPic{
+    "fPIC", llvm::cl::desc{"Emit position-independent code"},
+    llvm::cl::cat{Category}};
 
 #ifdef DEV
 inline llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},

@@ -75,6 +75,7 @@ Preprocessor::Preprocessor() {
    */
 
   pp_->setPredefines(pp_->getPredefines() +
+                     "#define __KCC__ 1\n"
                      "#define __STDC_NO_ATOMICS__ 1\n"
                      "#define __STDC_NO_COMPLEX__ 1\n"
                      "#define __STDC_NO_THREADS__ 1\n"

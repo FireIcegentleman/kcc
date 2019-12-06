@@ -45,10 +45,12 @@ static void include() {
 }
 
 static void predefined() {
+#ifdef __KCC__
   expect(1, __STDC_NO_ATOMICS__);
   expect(1, __STDC_NO_COMPLEX__);
   expect(1, __STDC_NO_THREADS__);
   expect(1, __STDC_NO_VLA__);
+#endif
 
   expect(1, __amd64);
   expect(1, __amd64__);
