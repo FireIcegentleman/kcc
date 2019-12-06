@@ -243,12 +243,13 @@ bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
 }
 
 llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type,
-                                                  const std::string& name) {
+                                                  const std::string& name,
+                                                  llvm::Value* arr_size) {
   (void)name;
 #ifdef NDEBUG
-  return new llvm::AllocaInst{type, 0, "", alloc_insert_point_};
+  return new llvm::AllocaInst{type, 0, arr_size, "", alloc_insert_point_};
 #else
-  return new llvm::AllocaInst{type, 0, name, alloc_insert_point_};
+  return new llvm::AllocaInst{type, 0, arr_size, name, alloc_insert_point_};
 #endif
 }
 
@@ -1330,6 +1331,11 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
     result_ = Builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
                                   llvm::SyncScope::System);
     return true;
+  } else if (func_name == "__builtin_alloca") {
+    assert(std::size(node->GetArgs()) == 1);
+    node->GetArgs().front()->Accept(*this);
+    result_ = CreateEntryBlockAlloca(Builder.getInt8Ty(), "", result_);
+    return true;
   } else {
     return false;
   }
@@ -1408,7 +1414,7 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
       assert(std::size(init) == 1);
 
       init.front().GetExpr()->Accept(*this);
-      Builder.CreateAlignedStore(result_, obj->GetLocalPtr(), obj->GetAlign());
+      Builder.CreateStore(result_, obj->GetLocalPtr());
     } else if (type->IsAggregateTy()) {
       InitLocalAggregate(node);
     } else {

@@ -3039,6 +3039,14 @@ void Parser::AddBuiltin() {
   sync_synchronize->FuncSetName("__sync_synchronize");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
       loc, "__sync_synchronize", sync_synchronize, kExternal, false));
+
+  auto param3{
+      MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kLong | kUnsigned))};
+  auto alloca{
+      FunctionType::Get(ArithmeticType::Get(kChar)->GetPointerTo(), {param3})};
+  alloca->FuncSetName("__builtin_alloca");
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_alloca",
+                                                  alloca, kExternal, false));
 }
 
 }  // namespace kcc
