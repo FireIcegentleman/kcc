@@ -1451,7 +1451,6 @@ void Declaration::AddInits(std::vector<Initializer> inits) {
   } else if (ident_->GetType()->IsAggregateTy()) {
     auto last{*(std::end(inits_) - 1)};
 
-    // TODO 柔性数组怎么实现
     for (auto&& init : inits_) {
       auto type{init.GetType()};
       auto& expr{init.GetExpr()};
