@@ -420,6 +420,7 @@ class ObjectExpr : public IdentifierExpr {
 
   void SetType(Type* type);
   llvm::Type* GetLLVMType() const;
+  std::int32_t GetLLVMTypeSize() const;
 
  private:
   ObjectExpr(const std::string& name, QualType type,

@@ -333,6 +333,7 @@ class StructType : public Type {
   std::int32_t align_{1};
 
   std::int8_t bit_field_used_width_{};
+  std::int8_t bit_field_base_type_width_{};
 
   bool has_flexible_array_{false};
   std::int32_t index_{};

@@ -966,9 +966,13 @@ llvm::Type* ObjectExpr::GetLLVMType() const {
       return Builder.getInt8Ty();
     } else {
       return llvm::ArrayType::get(Builder.getInt8Ty(),
-                                  (bit_field_width_ / 8 + 1) * 8);
+                                  (bit_field_width_ + 7) / 8);
     }
   }
+}
+
+std::int32_t ObjectExpr::GetLLVMTypeSize() const {
+  return Module->getDataLayout().getTypeAllocSizeInBits(GetLLVMType());
 }
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
