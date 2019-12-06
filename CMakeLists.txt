@@ -85,7 +85,7 @@ foreach(USUAL_FILE ${USUAL_FILES})
   add_test(
     NAME "COMPILE--${USUAL_FILE_NAME}"
     COMMAND ${KCC_EXECUTABLE} ${USUAL_FILE}
-            ${CMAKE_SOURCE_DIR}/test/usual/testmain.c -std=gnu17 -o
+            ${CMAKE_SOURCE_DIR}/test/usual/testmain.c -O0 -std=gnu17 -o
             ${TEST_BINARY_DIR}/${USUAL_FILE_NAME})
   add_test(NAME "RUN--${USUAL_FILE_NAME}"
            COMMAND ${TEST_BINARY_DIR}/${USUAL_FILE_NAME})
@@ -101,7 +101,7 @@ endforeach()
 
 add_test(
   NAME "COMPILE--8CC"
-  COMMAND ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/8cc/*.c -std=gnu17
+  COMMAND ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/8cc/*.c -O0 -std=gnu17
           -DBUILD_DIR=\"${CMAKE_SOURCE_DIR}/test/8cc\" -o
           ${TEST_BINARY_DIR}/8cc)
 add_test(NAME check_8cc_executable COMMAND ${TEST_BINARY_DIR}/8cc -h)
@@ -136,7 +136,7 @@ endforeach()
 add_test(
   NAME "COMPILE--LUA"
   COMMAND
-    ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/lua/*.c -std=gnu17
+    ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/lua/*.c -O0 -std=gnu17
     -DLUA_USER_H=\"ltests.h\" -DLUA_USE_LINUX -DLUA_COMPAT_5_2 -ldl -lreadline
     -lm -o ${TEST_BINARY_DIR}/lua)
 add_test(NAME check_lua_executable COMMAND ${TEST_BINARY_DIR}/lua -v)
@@ -162,7 +162,7 @@ add_test(
 add_test(
   NAME "COMPILE--SQLITE"
   COMMAND
-    ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/sqlite/*.c -std=gnu17 -DNDEBUG
+    ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/sqlite/*.c -O0 -std=gnu17 -DNDEBUG
     -lpthread -ldl -o ${TEST_BINARY_DIR}/sqlite -DSQLITE_DEFAULT_MEMSTATUS=0
     -DSQLITE_DQS=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0
     -DSQLITE_OMIT_DECLTYPE -DSQLITE_OMIT_DEPRECATED -DSQLITE_USE_ALLOCA)
