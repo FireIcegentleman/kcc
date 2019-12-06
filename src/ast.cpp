@@ -368,10 +368,6 @@ void BinaryOpExpr::AssignOpCheck() {
     if (!Expr::IsZero(rhs_)) {
       Error(this, "must be pointer and zero");
     }
-  } else if ((!lhs_type->IsArithmeticTy() || !rhs_type->IsArithmeticTy()) &&
-             !(lhs_type->IsBoolTy() && rhs_type->IsPointerTy())) {
-    // 注意, 目前 NULL 预处理之后为 (void*)0
-    EnsureCompatibleOrVoidPtr(lhs_type, rhs_type);
   }
 
   rhs_ = Expr::MayCastTo(rhs_, lhs_type);
