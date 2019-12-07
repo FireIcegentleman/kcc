@@ -322,4 +322,16 @@ const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type) {
   }
 }
 
+llvm::Type *GetBitFieldSpace(std::int8_t width) {
+  if (width <= 8) {
+    return Builder.getInt8Ty();
+  } else {
+    return llvm::ArrayType::get(Builder.getInt8Ty(), (width + 7) / 8);
+  }
+}
+
+std::int32_t GetLLVMTypeSize(llvm::Type *type) {
+  return Module->getDataLayout().getTypeAllocSize(type);
+}
+
 }  // namespace kcc

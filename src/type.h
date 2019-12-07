@@ -314,6 +314,7 @@ class StructType : public Type {
   void AddBitField(ObjectExpr* member);
   void MergeAnonymous(ObjectExpr* anonymous);
   void Finish();
+  void Print() const;
 
   bool HasFlexibleArray() const;
 
@@ -322,6 +323,8 @@ class StructType : public Type {
 
  private:
   StructType(bool is_struct, const std::string& name, Scope* parent);
+
+  std::vector<llvm::Type*> llvm_types_;
 
   bool is_struct_{};
   std::string name_;

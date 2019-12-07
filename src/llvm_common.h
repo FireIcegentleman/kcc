@@ -80,4 +80,8 @@ llvm::GlobalVariable *CreateLocalStaticVar(QualType type,
 
 const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type);
 
+llvm::Type *GetBitFieldSpace(std::int8_t width);
+
+std::int32_t GetLLVMTypeSize(llvm::Type *type);
+
 }  // namespace kcc

@@ -966,18 +966,9 @@ void ObjectExpr::SetType(Type* type) { type_ = type; }
 
 llvm::Type* ObjectExpr::GetLLVMType() {
   if (bit_field_width_ == 0) {
-    if (type_->IsBoolTy()) {
-      type_ = ArithmeticType::Get(kChar | kUnsigned);
-    }
     return GetType()->GetLLVMType();
   } else {
-    if (bit_field_width_ <= 8) {
-      return Builder.getInt8Ty();
-    } else {
-      type_ = ArrayType::Get(ArithmeticType::Get(kChar | kUnsigned),
-                             (bit_field_width_ + 7) / 8);
-      return type_->GetLLVMType();
-    }
+    return GetBitFieldSpace(bit_field_width_);
   }
 }
 

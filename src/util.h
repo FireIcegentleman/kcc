@@ -18,7 +18,7 @@ namespace kcc {
 
 enum class OptLevel { kO0, kO1, kO2, kO3 };
 
-enum class LangStds { kC99, kC11, kC17, kGnu99, kGnu11, kGnu17 };
+enum class LangStds { kC89, kC99, kC11, kC17, kGnu89, kGnu99, kGnu11, kGnu17 };
 
 inline std::vector<std::string> SoFile;
 
@@ -110,9 +110,11 @@ inline llvm::cl::opt<LangStds> LangStd{
     llvm::cl::init(LangStds::kGnu17),
     llvm::cl::Prefix,
     llvm::cl::values(
+        clEnumValN(LangStds::kC89, "c89", "ISO C 1989"),
         clEnumValN(LangStds::kC99, "c99", "ISO C 1999"),
         clEnumValN(LangStds::kC11, "c11", "ISO C 2011"),
         clEnumValN(LangStds::kC17, "c17", "ISO C 2017"),
+        clEnumValN(LangStds::kGnu89, "gnu89", "ISO C 1989 with GNU extensions"),
         clEnumValN(LangStds::kGnu99, "gnu99", "ISO C 1999 with GNU extensions"),
         clEnumValN(LangStds::kGnu11, "gnu11", "ISO C 2011 with GNU extensions"),
         clEnumValN(LangStds::kGnu17, "gnu17",
