@@ -910,7 +910,10 @@ void StructType::AddMember(ObjectExpr* member) {
   if (bit_field_used_width_ != 0) {
     assert(bit_field_base_type_width_ != 0);
 
+    llvm_types_.push_back(
+        GetBitFieldSpace(MakeAlign(bit_field_used_width_, 8)));
     ++index_;
+
     offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
     width_ = MakeAlign(width_, offset_);
 
@@ -940,18 +943,18 @@ void StructType::AddMember(ObjectExpr* member) {
     offset_ = offset + member->GetType()->GetWidth();
     width_ = MakeAlign(offset_, align_);
 
-    //    if (member->GetType()->IsBoolTy()) {
-    //      member->SetType(ArithmeticType::Get(kChar | kUnsigned));
-    //    }
+    if (member->GetType()->IsBoolTy()) {
+      member->SetType(ArithmeticType::Get(kChar | kUnsigned));
+    }
     llvm_types_.push_back(member->GetType()->GetLLVMType());
   } else {
     assert(offset_ == 0);
     width_ = std::max(width_, member->GetType()->GetWidth());
     width_ = MakeAlign(width_, align_);
 
-    //    if (member->GetType()->IsBoolTy()) {
-    //      member->SetType(ArithmeticType::Get(kChar | kUnsigned));
-    //    }
+    if (member->GetType()->IsBoolTy()) {
+      member->SetType(ArithmeticType::Get(kChar | kUnsigned));
+    }
     assert(std::size(llvm_types_) == 0 || std::size(llvm_types_) == 1);
 
     if (std::empty(llvm_types_)) {
@@ -1004,7 +1007,6 @@ void StructType::AddBitField(ObjectExpr* member) {
 
     members_.push_back(member);
     scope_->InsertUsual(member);
-    llvm_types_.push_back(GetBitFieldSpace(bit_width));
 
     align_ = std::max(align_, member->GetAlign());
 
@@ -1021,7 +1023,9 @@ void StructType::AddBitField(ObjectExpr* member) {
     assert(bit_field_used_width_ <= bit_field_base_type_width_);
     // 满了
     if (bit_field_used_width_ == bit_field_base_type_width_) {
+      llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
       ++index_;
+
       offset_ += bit_field_base_type_width_ / 8;
       width_ = MakeAlign(width_, offset_);
 
@@ -1037,6 +1041,8 @@ void StructType::AddBitField(ObjectExpr* member) {
 
       assert(bit_field_base_type_width_ != 0);
 
+      llvm_types_.push_back(
+          GetBitFieldSpace(MakeAlign(bit_field_used_width_, 8)));
       ++index_;
       offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
       width_ = MakeAlign(width_, offset_);
@@ -1047,8 +1053,8 @@ void StructType::AddBitField(ObjectExpr* member) {
       bit_field_used_width_ = 0;
       bit_field_base_type_width_ = 0;
 
-      ++index_;
       llvm_types_.push_back(space);
+      ++index_;
 
       offset_ = offset_ + GetLLVMTypeSize(space);
       width_ = MakeAlign(offset_, align_);
@@ -1062,7 +1068,10 @@ void StructType::AddBitField(ObjectExpr* member) {
           IsStruct()) {
         assert(bit_field_base_type_width_ != 0);
 
+        llvm_types_.push_back(
+            GetBitFieldSpace(MakeAlign(bit_field_used_width_, 8)));
         ++index_;
+
         offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
         width_ = MakeAlign(width_, offset_);
 
@@ -1072,8 +1081,8 @@ void StructType::AddBitField(ObjectExpr* member) {
         bit_field_used_width_ = 0;
         bit_field_base_type_width_ = new_bit_field_base_type_width;
 
-        ++index_;
         llvm_types_.push_back(space);
+        ++index_;
 
         offset_ = offset_ + GetLLVMTypeSize(space);
         width_ = MakeAlign(offset_, align_);
@@ -1107,14 +1116,6 @@ void StructType::AddBitField(ObjectExpr* member) {
         members_.push_back(member);
         scope_->InsertUsual(member);
 
-        auto width{bit_width - (GetLLVMTypeSize(llvm_types_.back()) -
-                                bit_field_used_width_)};
-        if (width > 0) {
-          llvm_types_.push_back(GetBitFieldSpace(width));
-        } else {
-          assert(width == 0);
-        }
-
         align_ = std::max(align_, member->GetAlign());
 
         if (is_struct_) {
@@ -1129,7 +1130,9 @@ void StructType::AddBitField(ObjectExpr* member) {
 
       assert(bit_field_used_width_ <= bit_field_base_type_width_);
       if (bit_field_used_width_ == bit_field_base_type_width_) {
+        llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
         ++index_;
+
         offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
         width_ = MakeAlign(width_, offset_);
 
@@ -1196,6 +1199,7 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 void StructType::Finish() {
   if (bit_field_used_width_ != 0) {
     bit_field_used_width_ = MakeAlign(bit_field_used_width_, 8);
+    llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
   }
 
   // 最后一个字段是位域时, 需要补齐
@@ -1212,16 +1216,16 @@ void StructType::Finish() {
   assert(struct_type->getStructNumElements() == 0);
   struct_type->setBody(llvm_types_);
 
-  // Print();
+  Print();
 }
 
 void StructType::Print() const {
   fmt::print("struct name: {}, sizeof: {}\n", name_, width_);
   for (const auto& item : members_) {
     if (!item->IsAnonymous()) {
-      fmt::print("name: {}, offset: {}, begin: {}, index: {}\n",
+      fmt::print("name: {}, offset: {}, begin: {}, index: {},type: {}\n",
                  item->GetName(), item->GetOffset(), item->GetBitFieldBegin(),
-                 item->GetIndexs().front().second);
+                 item->GetIndexs().front().second, item->GetType()->ToString());
     }
   }
   fmt::print("llvm type: {}\n", LLVMTypeToStr(llvm_type_));
