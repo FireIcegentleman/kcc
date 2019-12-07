@@ -417,10 +417,12 @@ class ObjectExpr : public IdentifierExpr {
   const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
 
   std::int8_t BitFieldWidth() const;
+  std::int8_t GetBitFieldBegin() const;
+  void SetBitFieldBegin(std::int8_t bit_field_begin);
 
   void SetType(Type* type);
-  llvm::Type* GetLLVMType() const;
-  std::int32_t GetLLVMTypeSize() const;
+  llvm::Type* GetLLVMType();
+  std::int32_t GetLLVMTypeSizeInBits();
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -433,6 +435,7 @@ class ObjectExpr : public IdentifierExpr {
   std::int32_t offset_{};
 
   std::int8_t bit_field_width_{};
+  std::int8_t bit_field_begin_{};
 
   // 当遇到重复声明时使用
   Declaration* decl_{};

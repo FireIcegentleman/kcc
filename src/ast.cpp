@@ -956,22 +956,32 @@ const std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() const {
 
 std::int8_t ObjectExpr::BitFieldWidth() const { return bit_field_width_; }
 
+std::int8_t ObjectExpr::GetBitFieldBegin() const { return bit_field_begin_; }
+
+void ObjectExpr::SetBitFieldBegin(std::int8_t bit_field_begin) {
+  bit_field_begin_ = bit_field_begin;
+}
+
 void ObjectExpr::SetType(Type* type) { type_ = type; }
 
-llvm::Type* ObjectExpr::GetLLVMType() const {
+llvm::Type* ObjectExpr::GetLLVMType() {
   if (bit_field_width_ == 0) {
+    if (type_->IsBoolTy()) {
+      type_ = ArithmeticType::Get(kChar | kUnsigned);
+    }
     return GetType()->GetLLVMType();
   } else {
     if (bit_field_width_ <= 8) {
       return Builder.getInt8Ty();
     } else {
-      return llvm::ArrayType::get(Builder.getInt8Ty(),
-                                  (bit_field_width_ + 7) / 8);
+      type_ = ArrayType::Get(ArithmeticType::Get(kChar | kUnsigned),
+                             (bit_field_width_ + 7) / 8);
+      return type_->GetLLVMType();
     }
   }
 }
 
-std::int32_t ObjectExpr::GetLLVMTypeSize() const {
+std::int32_t ObjectExpr::GetLLVMTypeSizeInBits() {
   return Module->getDataLayout().getTypeAllocSizeInBits(GetLLVMType());
 }
 
