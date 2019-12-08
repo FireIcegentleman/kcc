@@ -813,18 +813,18 @@ StructType* StructType::Get(bool is_struct, const std::string& name,
   return new (StructTypePool.Allocate()) StructType{is_struct, name, parent};
 }
 
-std::int32_t StructType::GetWidth() const { return width_; }
+std::int32_t StructType::GetWidth() const {
+  assert(IsComplete());
+
+  auto struct_type{llvm::cast<llvm::StructType>(llvm_type_)};
+  return Module->getDataLayout().getStructLayout(struct_type)->getSizeInBytes();
+}
 
 std::int32_t StructType::GetAlign() const {
-  std::int32_t align{1};
-  // _Alignof(struct { int : 32; }) == 1
-  for (const auto& item : members_) {
-    if (!item->BitFieldWidth()) {
-      align = std::max(align, item->GetAlign());
-    }
-  }
+  assert(IsComplete());
 
-  return align;
+  auto struct_type{llvm::cast<llvm::StructType>(llvm_type_)};
+  return Module->getDataLayout().getStructLayout(struct_type)->getAlignment();
 }
 
 // 若一者以标签声明, 则另一者必须以同一标签声明。
@@ -1249,28 +1249,10 @@ void StructType::AddBitField(ObjectExpr* member) {
 }
 
 void StructType::Finish() {
-  if (bit_field_used_width_ != 0 && is_struct_) {
-    bit_field_used_width_ = MakeAlign(bit_field_used_width_, 8);
-
-    auto type{GetBitFieldSpace(bit_field_used_width_)};
-    llvm_types_.push_back(type);
-  }
-
-  // 最后一个字段是位域时, 可能需要补齐
-  if (auto width{bit_field_base_type_width_ - bit_field_used_width_};
-      width && is_struct_) {
-    auto last{members_.back()};
-    if (MakeAlign(
-            last->GetOffset() +
-                MakeAlign(last->GetBitFieldBegin() + last->BitFieldWidth(), 8) /
-                    8,
-            align_) != width_) {
-      auto space{GetBitFieldSpace(width)};
-      llvm_types_.push_back(space);
-
-      offset_ = offset_ + GetLLVMTypeSize(space);
-      width_ = MakeAlign(offset_, align_);
-    }
+  if (bit_field_used_width_ != 0) {
+    align_ = std::max(align_, members_.back()->GetType()->GetAlign());
+    assert(bit_field_base_type_width_ != 0);
+    DoAddBitField();
   }
 
   if (!is_struct_) {
@@ -1281,12 +1263,17 @@ void StructType::Finish() {
   assert(struct_type->getStructNumElements() == 0);
   struct_type->setBody(llvm_types_);
 
-  // Print();
+  Print();
 }
 
 void StructType::Print() const {
-  fmt::print("struct name: {}, sizeof: {}, align: {}\n", name_, width_, align_);
+  fmt::print("struct name: {}, sizeof: {}, align: {}\n", name_, GetWidth(),
+             GetAlign());
   for (const auto& item : members_) {
+    if (item->BitFieldWidth() && item->IsAnonymous()) {
+      continue;
+    }
+
     fmt::print(
         "name: {}, offset: {}, begin: {}, width: {}, index: {}, type: {}\n",
         item->GetName(), item->GetOffset(), item->GetBitFieldBegin(),
