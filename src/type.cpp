@@ -1263,7 +1263,7 @@ void StructType::Finish() {
   assert(struct_type->getStructNumElements() == 0);
   struct_type->setBody(llvm_types_);
 
-  Print();
+  // Print();
 }
 
 void StructType::Print() const {

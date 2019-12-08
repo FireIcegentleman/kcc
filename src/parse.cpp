@@ -1822,7 +1822,7 @@ void Parser::ParseStructDeclList(StructType* type) {
           auto name{tok.GetIdentifier()};
 
           if (type->GetMember(name)) {
-            Error(Peek(), "duplicate member:{}", name);
+            Error(Peek(), "duplicate member: '{}'", name);
           } else if (copy->IsArrayTy() && !copy->IsComplete()) {
             // 可能是柔性数组
             // 若结构体定义了至少一个具名成员,
@@ -1883,7 +1883,8 @@ void Parser::ParseBitField(StructType* type, const Token& tok,
     Error(expr, "expect non negative value");
   } else if (width == 0 && !std::empty(tok.GetStr())) {
     Error(tok, "no declarator expected for a bitfield with width 0");
-  } else if (width > member_type->GetWidth() * 8) {
+  } else if ((width > member_type->GetWidth() * 8) ||
+             (member_type->IsBoolTy() && width > 1)) {
     Error(expr, "width exceeds its type");
   }
 
@@ -1892,8 +1893,14 @@ void Parser::ParseBitField(StructType* type, const Token& tok,
     bit_field = MakeAstNode<ObjectExpr>(tok, "", member_type, 0, Linkage::kNone,
                                         true, width);
   } else {
-    bit_field = MakeAstNode<ObjectExpr>(tok, tok.GetIdentifier(), member_type,
-                                        0, Linkage::kNone, false, width);
+    auto name{tok.GetIdentifier()};
+
+    if (type->GetMember(name)) {
+      Error(tok, "duplicate member: '{}'", name);
+    }
+
+    bit_field = MakeAstNode<ObjectExpr>(tok, name, member_type, 0,
+                                        Linkage::kNone, false, width);
   }
 
   type->AddBitField(bit_field);

@@ -277,6 +277,11 @@ llvm::Value* CodeGen::GetPtr(const AstNode* node) {
       auto obj{dynamic_cast<const ObjectExpr*>(binary->GetRHS())};
       assert(obj != nullptr);
 
+      if (obj->BitFieldWidth()) {
+        is_bit_field_ = true;
+        bit_field_ = const_cast<ObjectExpr*>(obj);
+      }
+
       auto indexs{obj->GetIndexs()};
       for (const auto& [type, index] : indexs) {
         if (type->IsStructTy()) {
@@ -287,6 +292,17 @@ llvm::Value* CodeGen::GetPtr(const AstNode* node) {
               type->StructGetMemberType(index)->GetLLVMType()->getPointerTo());
         }
       }
+
+      if (is_bit_field_) {
+        if (obj->GetType()->IsBoolTy()) {
+          lhs_ptr = Builder.CreateBitCast(lhs_ptr,
+                                          Builder.getInt8Ty()->getPointerTo());
+        } else {
+          lhs_ptr = Builder.CreateBitCast(lhs_ptr,
+                                          Builder.getInt32Ty()->getPointerTo());
+        }
+      }
+
       return lhs_ptr;
     }
   }
@@ -859,7 +875,34 @@ void CodeGen::Visit(const FuncDef* node) {
 llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   auto is_unsigned{expr->GetType()->IsUnsigned()};
   auto lhs_ptr{GetPtr(expr)};
-  auto lhs_value{Builder.CreateLoad(lhs_ptr)};
+  llvm::Value* lhs_value{Builder.CreateLoad(lhs_ptr)};
+
+  if (is_bit_field_) {
+    auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
+
+    if (bit_field_->GetType()->IsBoolTy()) {
+      std::uint8_t zero{};
+
+      // ....11111
+      std::uint8_t low_one = ~zero >> (size - bit_field_->GetBitFieldBegin());
+
+      // 111.....
+      std::uint8_t high_one = ~zero << (bit_field_->BitFieldWidth() +
+                                        bit_field_->GetBitFieldBegin());
+
+      lhs_value = Builder.CreateAnd(lhs_value, low_one | high_one);
+    } else {
+      // ....11111
+      std::uint32_t low_one{~0U >> (32 - bit_field_->GetBitFieldBegin())};
+
+      // 111.....
+      std::uint32_t high_one{~0U << (bit_field_->BitFieldWidth() +
+                                     bit_field_->GetBitFieldBegin())};
+
+      lhs_value = Builder.CreateAnd(lhs_value, low_one | high_one);
+    }
+  }
+
   llvm::Value* rhs_value{};
 
   llvm::Value* one_value{};
@@ -879,6 +922,11 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
     rhs_value = AddOp(lhs_value, one_value, is_unsigned);
   } else {
     rhs_value = AddOp(lhs_value, NegOp(one_value, false), is_unsigned);
+  }
+
+  if (is_bit_field_) {
+    rhs_value = Builder.CreateShl(rhs_value, bit_field_->GetBitFieldBegin());
+    rhs_value = Builder.CreateOr(lhs_value, rhs_value);
   }
 
   Builder.CreateStore(rhs_value, lhs_ptr);
@@ -1241,19 +1289,86 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
 
   auto lhs_ptr{GetPtr(node->GetLHS())};
 
-  Builder.CreateStore(rhs, lhs_ptr);
+  if (is_bit_field_) {
+    is_bit_field_ = false;
+    auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
 
-  return Builder.CreateLoad(lhs_ptr);
+    result_ = Builder.CreateLoad(lhs_ptr);
+
+    if (bit_field_->GetType()->IsBoolTy()) {
+      std::uint8_t zero{};
+
+      // ....11111
+      std::uint8_t low_one = ~zero >> (size - bit_field_->GetBitFieldBegin());
+
+      // 111.....
+      std::uint8_t high_one = ~zero << (bit_field_->BitFieldWidth() +
+                                        bit_field_->GetBitFieldBegin());
+
+      result_ = Builder.CreateAnd(result_, low_one | high_one);
+    } else {
+      // ....11111
+      std::uint32_t low_one{~0U >> (32 - bit_field_->GetBitFieldBegin())};
+
+      // 111.....
+      std::uint32_t high_one{~0U << (bit_field_->BitFieldWidth() +
+                                     bit_field_->GetBitFieldBegin())};
+
+      result_ = Builder.CreateAnd(result_, low_one | high_one);
+    }
+
+    rhs = Builder.CreateShl(rhs, bit_field_->GetBitFieldBegin());
+    result_ = Builder.CreateOr(result_, rhs);
+
+    Builder.CreateStore(result_, lhs_ptr);
+
+    result_ = Builder.CreateLoad(lhs_ptr);
+
+    result_ = Builder.CreateShl(
+        result_,
+        size - (bit_field_->GetBitFieldBegin() + bit_field_->BitFieldWidth()));
+    if (bit_field_->GetType()->IsUnsigned()) {
+      result_ = Builder.CreateLShr(result_, size - bit_field_->BitFieldWidth());
+    } else {
+      result_ = Builder.CreateAShr(result_, size - bit_field_->BitFieldWidth());
+    }
+
+    bit_field_ = nullptr;
+
+    return result_;
+  } else {
+    Builder.CreateStore(rhs, lhs_ptr);
+    return Builder.CreateLoad(lhs_ptr);
+  }
 }
 
 llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
   auto ptr{GetPtr(node)};
   auto type{ptr->getType()->getPointerElementType()};
 
-  if (type->isArrayTy() || (type->isStructTy() && !load_struct_)) {
-    result_ = ptr;
-  } else {
+  // 是位域
+  if (is_bit_field_) {
+    is_bit_field_ = false;
+    auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
+
     result_ = Builder.CreateLoad(ptr);
+
+    result_ = Builder.CreateShl(
+        result_,
+        size - (bit_field_->GetBitFieldBegin() + bit_field_->BitFieldWidth()));
+    if (bit_field_->GetType()->IsUnsigned()) {
+      result_ = Builder.CreateLShr(result_, size - bit_field_->BitFieldWidth());
+    } else {
+      result_ = Builder.CreateAShr(result_, size - bit_field_->BitFieldWidth());
+    }
+
+    bit_field_ = nullptr;
+  } else {
+    if (type->isArrayTy() || (type->isStructTy() && !load_struct_)) {
+      result_ = ptr;
+    } else {
+      result_ = Builder.CreateLoad(ptr);
+    }
   }
 
   return result_;

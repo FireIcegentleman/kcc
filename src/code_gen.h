@@ -154,6 +154,9 @@ class CodeGen : public Visitor {
   llvm::Function *va_start_{};
   llvm::Function *va_end_{};
   llvm::Function *va_copy_{};
+
+  bool is_bit_field_{false};
+  ObjectExpr *bit_field_{nullptr};
 };
 
 }  // namespace kcc
