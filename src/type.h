@@ -311,8 +311,8 @@ class StructType : public Type {
   std::int32_t GetOffset() const;
 
   void AddMember(ObjectExpr* member);
-  void AddBitField(ObjectExpr* member);
   void MergeAnonymous(ObjectExpr* anonymous);
+  void AddBitField(ObjectExpr* member);
   void Finish();
   void Print() const;
 
@@ -323,6 +323,8 @@ class StructType : public Type {
 
  private:
   StructType(bool is_struct, const std::string& name, Scope* parent);
+
+  void DoAddBitField();
 
   std::vector<llvm::Type*> llvm_types_;
 
@@ -340,6 +342,8 @@ class StructType : public Type {
 
   bool has_flexible_array_{false};
   std::int32_t index_{};
+
+  std::int32_t count_{};
 };
 
 class FunctionType : public Type {

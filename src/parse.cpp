@@ -1872,7 +1872,7 @@ void Parser::ParseBitField(StructType* type, const Token& tok,
   // int / signed int / unsigned int / _Bool
   // 其他类型是实现定义的, 这里不支持其他类型
   if (!member_type->IsIntTy() && !member_type->IsBoolTy()) {
-    Error(tok, "expect int or bool type for bitfield but got ('{}')",
+    Error(Peek(), "expect int or bool type for bitfield but got ('{}')",
           member_type.ToString());
   }
 
@@ -2940,13 +2940,23 @@ Expr* Parser::ParseOffsetof() {
   }
   auto type{ParseTypeName()};
 
+  if (!type->IsStructOrUnionTy()) {
+    Error(token, "expect struct or union type");
+  }
+
   Expect(Tag::kComma);
-  auto name{Expect(Tag::kIdentifier).GetIdentifier()};
+  token = Expect(Tag::kIdentifier);
+  auto name{token.GetIdentifier()};
   Expect(Tag::kRightParen);
+
+  auto obj{type->StructGetMember(name)};
+  if (obj->BitFieldWidth()) {
+    Error(token, "cannot compute offset of bit-field '{}'", obj->GetName());
+  }
 
   return MakeAstNode<ConstantExpr>(
       token, ArithmeticType::Get(kLong | kUnsigned),
-      static_cast<std::uint64_t>(type->StructGetMember(name)->GetOffset()));
+      static_cast<std::uint64_t>(obj->GetOffset()));
 }
 
 Expr* Parser::ParseHugeVal() {

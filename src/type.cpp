@@ -815,7 +815,17 @@ StructType* StructType::Get(bool is_struct, const std::string& name,
 
 std::int32_t StructType::GetWidth() const { return width_; }
 
-std::int32_t StructType::GetAlign() const { return align_; }
+std::int32_t StructType::GetAlign() const {
+  std::int32_t align{1};
+  // _Alignof(struct { int : 32; }) == 1
+  for (const auto& item : members_) {
+    if (!item->BitFieldWidth()) {
+      align = std::max(align, item->GetAlign());
+    }
+  }
+
+  return align;
+}
 
 // 若一者以标签声明, 则另一者必须以同一标签声明。
 // 若它们都是完整类型, 则其成员必须在数量上准确对应, 以兼容类型声明,
@@ -906,21 +916,15 @@ Scope* StructType::GetScope() { return scope_; }
 std::int32_t StructType::GetOffset() const { return offset_; }
 
 void StructType::AddMember(ObjectExpr* member) {
-  // 上一个字段是位域
+  align_ = std::max(align_, member->GetAlign());
+
+  // 上一个字段是位域并且尚未将类型添加
   if (bit_field_used_width_ != 0) {
     assert(bit_field_base_type_width_ != 0);
-
-    llvm_types_.push_back(
-        GetBitFieldSpace(MakeAlign(bit_field_used_width_, 8)));
-    ++index_;
-
-    offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
-    width_ = MakeAlign(width_, offset_);
-
-    bit_field_used_width_ = 0;
-    bit_field_base_type_width_ = 0;
+    DoAddBitField();
   }
-  assert(bit_field_base_type_width_ == 0);
+  bit_field_used_width_ = 0;
+  bit_field_base_type_width_ = 0;
 
   // 柔性数组
   if (member->GetType()->IsArrayTy() && !member->GetType()->IsComplete()) {
@@ -930,14 +934,12 @@ void StructType::AddMember(ObjectExpr* member) {
   }
 
   auto offset{MakeAlign(offset_, member->GetAlign())};
-  member->SetOffset(offset);
+  member->SetOffset(offset - count_);
 
   member->GetIndexs().push_front({this, index_++});
 
   members_.push_back(member);
   scope_->InsertUsual(member);
-
-  align_ = std::max(align_, member->GetAlign());
 
   if (is_struct_) {
     offset_ = offset + member->GetType()->GetWidth();
@@ -960,184 +962,9 @@ void StructType::AddMember(ObjectExpr* member) {
     if (std::empty(llvm_types_)) {
       llvm_types_.push_back(member->GetType()->GetLLVMType());
     } else {
-      auto last{llvm_types_.back()};
-      if (GetLLVMTypeSize(last) < GetLLVMTypeSize(member->GetLLVMType())) {
+      if (GetLLVMTypeSize(llvm_types_.back()) <
+          GetLLVMTypeSize(member->GetType()->GetLLVMType())) {
         llvm_types_.back() = member->GetType()->GetLLVMType();
-      }
-    }
-  }
-}
-
-// 1) 如果存在相邻位域, 且位宽之和小于类型的 sizeof 大小
-// 则后一个字段将紧邻前一个字段存储, 直到不能容纳为止
-// 2) 如果存在相邻位域, 但位宽之和大于类型的sizeof大小,
-// 则后一个字段将从新的存储单元开始, 其偏移量为其类型大小的整数倍
-// 3) 如果位域字段之间穿插着非位域字段, 则不进行打包
-// 4) 拥有零 width 的特殊无名位域打破填充:
-// 它指定下个位域在始于下个分配单元的起点
-void StructType::AddBitField(ObjectExpr* member) {
-  // 注意这种情况也会打包
-  // char a;
-  // char b;
-  // int c : 5;
-  // int d : 5;
-
-  // int a : 9;
-  // int b : 5;
-  // int c : 5;
-  // int d : 11;
-
-  // 该成员是第一个字段或上一个字段不是位域或已经没有位置可以打包了
-  if (bit_field_used_width_ == 0) {
-    assert(bit_field_base_type_width_ == 0);
-    bit_field_base_type_width_ = member->GetType()->GetWidth() * 8;
-
-    auto bit_width{member->BitFieldWidth()};
-    // 这时使用 :0 没有效果
-    if (bit_width == 0) {
-      return;
-    }
-
-    auto offset{MakeAlign(offset_, member->GetAlign())};
-    member->SetOffset(offset);
-    member->SetBitFieldBegin(0);
-
-    // 这里不递增 index_
-    member->GetIndexs().push_front({this, index_});
-
-    members_.push_back(member);
-    scope_->InsertUsual(member);
-
-    align_ = std::max(align_, member->GetAlign());
-
-    if (is_struct_) {
-      // 当打包满了或者下一个不是位域字段时再改变 offset_
-    } else {
-      assert(offset_ == 0);
-      width_ = std::max(width_, bit_field_base_type_width_ / 8);
-      width_ = MakeAlign(width_, align_);
-    }
-
-    bit_field_used_width_ += bit_width;
-
-    assert(bit_field_used_width_ <= bit_field_base_type_width_);
-    // 满了
-    if (bit_field_used_width_ == bit_field_base_type_width_) {
-      llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
-      ++index_;
-
-      offset_ += bit_field_base_type_width_ / 8;
-      width_ = MakeAlign(width_, offset_);
-
-      bit_field_used_width_ = 0;
-      bit_field_base_type_width_ = 0;
-    }
-  } else {
-    auto bit_width{member->BitFieldWidth()};
-    if (bit_width == 0) {
-      if (IsUnionTy() || member->GetType()->IsBoolTy()) {
-        return;
-      }
-
-      assert(bit_field_base_type_width_ != 0);
-
-      llvm_types_.push_back(
-          GetBitFieldSpace(MakeAlign(bit_field_used_width_, 8)));
-      ++index_;
-      offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
-      width_ = MakeAlign(width_, offset_);
-
-      auto space{
-          GetBitFieldSpace(bit_field_base_type_width_ - bit_field_used_width_)};
-
-      bit_field_used_width_ = 0;
-      bit_field_base_type_width_ = 0;
-
-      llvm_types_.push_back(space);
-      ++index_;
-
-      offset_ = offset_ + GetLLVMTypeSize(space);
-      width_ = MakeAlign(offset_, align_);
-    } else {
-      auto new_bit_field_base_type_width{member->GetType()->GetWidth() * 8};
-      if (new_bit_field_base_type_width > bit_field_base_type_width_) {
-        bit_field_base_type_width_ = new_bit_field_base_type_width;
-      }
-
-      if (bit_field_used_width_ + bit_width > bit_field_base_type_width_ &&
-          IsStruct()) {
-        assert(bit_field_base_type_width_ != 0);
-
-        llvm_types_.push_back(
-            GetBitFieldSpace(MakeAlign(bit_field_used_width_, 8)));
-        ++index_;
-
-        offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
-        width_ = MakeAlign(width_, offset_);
-
-        auto space{GetBitFieldSpace(bit_field_base_type_width_ -
-                                    bit_field_used_width_)};
-
-        bit_field_used_width_ = 0;
-        bit_field_base_type_width_ = new_bit_field_base_type_width;
-
-        llvm_types_.push_back(space);
-        ++index_;
-
-        offset_ = offset_ + GetLLVMTypeSize(space);
-        width_ = MakeAlign(offset_, align_);
-      }
-
-      if (bit_field_used_width_ == 0) {
-        auto offset{MakeAlign(offset_, member->GetAlign())};
-        member->SetOffset(offset);
-        member->SetBitFieldBegin(0);
-
-        member->GetIndexs().push_front({this, index_});
-
-        members_.push_back(member);
-        scope_->InsertUsual(member);
-        llvm_types_.push_back(GetBitFieldSpace(bit_width));
-
-        align_ = std::max(align_, member->GetAlign());
-
-        if (is_struct_) {
-        } else {
-          assert(offset_ == 0);
-          width_ = std::max(width_, bit_field_base_type_width_ / 8);
-          width_ = MakeAlign(width_, align_);
-        }
-      } else {
-        member->SetOffset(offset_);
-        member->SetBitFieldBegin(bit_field_used_width_);
-
-        member->GetIndexs().push_front({this, index_});
-
-        members_.push_back(member);
-        scope_->InsertUsual(member);
-
-        align_ = std::max(align_, member->GetAlign());
-
-        if (is_struct_) {
-        } else {
-          assert(offset_ == 0);
-          width_ = std::max(width_, bit_field_base_type_width_ / 8);
-          width_ = MakeAlign(width_, align_);
-        }
-      }
-
-      bit_field_used_width_ += member->BitFieldWidth();
-
-      assert(bit_field_used_width_ <= bit_field_base_type_width_);
-      if (bit_field_used_width_ == bit_field_base_type_width_) {
-        llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
-        ++index_;
-
-        offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
-        width_ = MakeAlign(width_, offset_);
-
-        bit_field_used_width_ = 0;
-        bit_field_base_type_width_ = 0;
       }
     }
   }
@@ -1145,7 +972,18 @@ void StructType::AddBitField(ObjectExpr* member) {
 
 // 匿名 struct / union
 void StructType::MergeAnonymous(ObjectExpr* anonymous) {
+  align_ = std::max(align_, anonymous->GetAlign());
+
+  // 上一个字段是位域并且尚未将类型添加
+  if (bit_field_used_width_ != 0) {
+    assert(bit_field_base_type_width_ != 0);
+    DoAddBitField();
+  }
+  bit_field_used_width_ = 0;
+  bit_field_base_type_width_ = 0;
+
   assert(anonymous->GetType()->IsStructOrUnionTy());
+
   auto anonymous_type{anonymous->GetType()->ToStructType()};
 
   auto offset{MakeAlign(offset_, anonymous->GetAlign())};
@@ -1172,8 +1010,6 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 
   ++index_;
 
-  align_ = std::max(align_, anonymous->GetAlign());
-
   if (is_struct_) {
     offset_ = offset + anonymous->GetType()->GetWidth();
     width_ = MakeAlign(offset_, align_);
@@ -1189,44 +1025,273 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
       llvm_types_.push_back(anonymous->GetType()->GetLLVMType());
     } else {
       auto last{llvm_types_.back()};
-      if (GetLLVMTypeSize(last) < GetLLVMTypeSize(anonymous->GetLLVMType())) {
+      if (GetLLVMTypeSize(last) <
+          GetLLVMTypeSize(anonymous->GetType()->GetLLVMType())) {
         llvm_types_.back() = anonymous->GetType()->GetLLVMType();
       }
     }
   }
 }
 
-void StructType::Finish() {
-  if (bit_field_used_width_ != 0) {
-    bit_field_used_width_ = MakeAlign(bit_field_used_width_, 8);
-    llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
+// 1) 如果存在相邻位域, 且位宽之和小于类型的 sizeof 大小
+// 则后一个字段将紧邻前一个字段存储, 直到不能容纳为止
+// 2) 如果存在相邻位域, 但位宽之和大于类型的sizeof大小,
+// 则后一个字段将从新的存储单元开始, 其偏移量为其类型大小的整数倍
+// 3) 如果位域字段之间穿插着非位域字段, 则不进行打包
+// 4) 拥有零 width 的特殊无名位域打破填充:
+// 它指定下个位域在始于下个分配单元的起点
+void StructType::AddBitField(ObjectExpr* member) {
+  if (member->BitFieldWidth() == 0 || member->BitFieldWidth() > 8) {
+    align_ = std::max(member->GetAlign(), align_);
   }
 
-  // 最后一个字段是位域时, 需要补齐
+  auto bit_width{member->BitFieldWidth()};
+
+  // 该成员是第一个字段或上一个字段不是位域或已经没有位置可以打包了
+  if (bit_field_used_width_ == 0) {
+    // char a[3];
+    // int : 9;
+    // int c;
+    // [3 x i8], i8, [2 x i8], [2 x i8], i32
+
+    // char a[3];
+    // int : 5;
+    // int c;
+    // [3 x i8], i8, i32
+    if (is_struct_ && !std::empty(members_)) {
+      auto last{members_.back()};
+      if (!last->BitFieldWidth()) {
+        width_ = MakeAlign(offset_, align_);
+        if (auto space_width{(width_ - offset_) * 8}) {
+          auto space{GetBitFieldSpace(space_width)};
+          llvm_types_.push_back(space);
+          ++index_;
+
+          offset_ = offset_ + GetLLVMTypeSize(space);
+          width_ = MakeAlign(offset_, align_);
+        }
+      }
+    }
+
+    assert(bit_field_base_type_width_ == 0);
+    bit_field_base_type_width_ = member->GetType()->GetWidth() * 8;
+
+    // 这时使用 :0 没有效果
+    if (bit_width == 0) {
+      return;
+    }
+
+    member->SetOffset(offset_);
+    member->SetBitFieldBegin(0);
+
+    // 这里不递增 index_
+    member->GetIndexs().push_front({this, index_});
+
+    members_.push_back(member);
+    scope_->InsertUsual(member);
+
+    if (is_struct_) {
+      // 当打包满了或者下一个不是位域字段时再改变 offset_
+    } else {
+      if (std::empty(llvm_types_)) {
+        llvm_types_.push_back(member->GetType()->GetLLVMType());
+      } else {
+        if (GetLLVMTypeSize(member->GetType()->GetLLVMType()) >
+            GetLLVMTypeSize(llvm_types_.back())) {
+          llvm_types_.back() = member->GetType()->GetLLVMType();
+        }
+      }
+
+      assert(offset_ == 0);
+      width_ = std::max(width_, bit_field_base_type_width_ / 8);
+      width_ = MakeAlign(width_, align_);
+    }
+
+    bit_field_used_width_ += bit_width;
+
+    assert(bit_field_used_width_ <= bit_field_base_type_width_);
+    // 满了
+    if (bit_field_used_width_ == bit_field_base_type_width_) {
+      if (is_struct_) {
+        llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
+
+        offset_ += bit_field_base_type_width_ / 8;
+        width_ = MakeAlign(offset_, align_);
+      }
+
+      ++index_;
+
+      bit_field_used_width_ = 0;
+      bit_field_base_type_width_ = 0;
+    }
+  } else {
+    if (bit_width == 0) {
+      if (IsUnionTy() || member->GetType()->IsBoolTy()) {
+        return;
+      }
+
+      assert(bit_field_base_type_width_ != 0);
+
+      llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
+      ++index_;
+
+      offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
+      width_ = MakeAlign(offset_, align_);
+
+      auto space{GetBitFieldSpace(bit_field_base_type_width_ -
+                                  MakeAlign(bit_field_used_width_, 8))};
+
+      bit_field_used_width_ = 0;
+      bit_field_base_type_width_ = 0;
+
+      llvm_types_.push_back(space);
+      ++index_;
+
+      offset_ += GetLLVMTypeSize(space);
+      width_ = MakeAlign(offset_, align_);
+    } else {
+      auto new_bit_field_base_type_width{member->GetType()->GetWidth() * 8};
+      if (new_bit_field_base_type_width > bit_field_base_type_width_) {
+        bit_field_base_type_width_ = new_bit_field_base_type_width;
+      }
+
+      if (bit_field_used_width_ + bit_width > bit_field_base_type_width_ &&
+          IsStruct()) {
+        assert(bit_field_base_type_width_ != 0);
+
+        llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
+        ++index_;
+
+        offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
+        width_ = MakeAlign(offset_, align_);
+
+        auto space{GetBitFieldSpace(bit_field_base_type_width_ -
+                                    MakeAlign(bit_field_used_width_, 8))};
+
+        bit_field_used_width_ = 0;
+        bit_field_base_type_width_ = new_bit_field_base_type_width;
+
+        llvm_types_.push_back(space);
+        ++index_;
+
+        offset_ += +GetLLVMTypeSize(space);
+        width_ = MakeAlign(offset_, align_);
+      }
+
+      if (bit_field_used_width_ == 0) {
+        member->SetOffset(offset_);
+        member->SetBitFieldBegin(0);
+
+        member->GetIndexs().push_front({this, index_});
+
+        members_.push_back(member);
+        scope_->InsertUsual(member);
+
+        if (is_struct_) {
+        } else {
+          if (std::empty(llvm_types_)) {
+            llvm_types_.push_back(member->GetType()->GetLLVMType());
+          } else {
+            if (GetLLVMTypeSize(member->GetType()->GetLLVMType()) >
+                GetLLVMTypeSize(llvm_types_.back())) {
+              llvm_types_.back() = member->GetType()->GetLLVMType();
+            }
+          }
+
+          assert(offset_ == 0);
+          width_ = std::max(width_, bit_field_base_type_width_ / 8);
+          width_ = MakeAlign(width_, align_);
+        }
+      } else {
+        member->SetOffset(offset_);
+        member->SetBitFieldBegin(bit_field_used_width_);
+
+        member->GetIndexs().push_front({this, index_});
+
+        members_.push_back(member);
+        scope_->InsertUsual(member);
+
+        if (is_struct_) {
+        } else {
+          if (std::empty(llvm_types_)) {
+            llvm_types_.push_back(member->GetType()->GetLLVMType());
+          } else {
+            if (GetLLVMTypeSize(member->GetType()->GetLLVMType()) >
+                GetLLVMTypeSize(llvm_types_.back())) {
+              llvm_types_.back() = member->GetType()->GetLLVMType();
+            }
+          }
+
+          assert(offset_ == 0);
+          width_ = std::max(width_, bit_field_base_type_width_ / 8);
+          width_ = MakeAlign(width_, align_);
+        }
+      }
+
+      bit_field_used_width_ += member->BitFieldWidth();
+
+      assert(bit_field_used_width_ <= bit_field_base_type_width_);
+      if (bit_field_used_width_ == bit_field_base_type_width_) {
+        if (is_struct_) {
+          llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
+
+          offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
+          width_ = MakeAlign(offset_, align_);
+        }
+
+        ++index_;
+
+        bit_field_used_width_ = 0;
+        bit_field_base_type_width_ = 0;
+      }
+    }
+  }
+}
+
+void StructType::Finish() {
+  if (bit_field_used_width_ != 0 && is_struct_) {
+    bit_field_used_width_ = MakeAlign(bit_field_used_width_, 8);
+
+    auto type{GetBitFieldSpace(bit_field_used_width_)};
+    llvm_types_.push_back(type);
+  }
+
+  // 最后一个字段是位域时, 可能需要补齐
   if (auto width{bit_field_base_type_width_ - bit_field_used_width_};
       width && is_struct_) {
-    auto space{GetBitFieldSpace(width)};
-    llvm_types_.push_back(space);
+    auto last{members_.back()};
+    if (MakeAlign(
+            last->GetOffset() +
+                MakeAlign(last->GetBitFieldBegin() + last->BitFieldWidth(), 8) /
+                    8,
+            align_) != width_) {
+      auto space{GetBitFieldSpace(width)};
+      llvm_types_.push_back(space);
 
-    offset_ = offset_ + GetLLVMTypeSize(space);
-    width_ = MakeAlign(offset_, align_);
+      offset_ = offset_ + GetLLVMTypeSize(space);
+      width_ = MakeAlign(offset_, align_);
+    }
+  }
+
+  if (!is_struct_) {
+    assert(std::size(llvm_types_) == 0 || std::size(llvm_types_) == 1);
   }
 
   auto struct_type{llvm::cast<llvm::StructType>(llvm_type_)};
   assert(struct_type->getStructNumElements() == 0);
   struct_type->setBody(llvm_types_);
 
-  Print();
+  // Print();
 }
 
 void StructType::Print() const {
-  fmt::print("struct name: {}, sizeof: {}\n", name_, width_);
+  fmt::print("struct name: {}, sizeof: {}, align: {}\n", name_, width_, align_);
   for (const auto& item : members_) {
-    if (!item->IsAnonymous()) {
-      fmt::print("name: {}, offset: {}, begin: {}, index: {},type: {}\n",
-                 item->GetName(), item->GetOffset(), item->GetBitFieldBegin(),
-                 item->GetIndexs().front().second, item->GetType()->ToString());
-    }
+    fmt::print(
+        "name: {}, offset: {}, begin: {}, width: {}, index: {}, type: {}\n",
+        item->GetName(), item->GetOffset(), item->GetBitFieldBegin(),
+        item->BitFieldWidth(), item->GetIndexs().front().second,
+        item->GetType()->ToString());
   }
   fmt::print("llvm type: {}\n", LLVMTypeToStr(llvm_type_));
   fmt::print("-----------\n");
@@ -1256,6 +1321,40 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
     llvm_type_ = llvm::StructType::create(Context, prefix + name);
   } else {
     llvm_type_ = llvm::StructType::create(Context, prefix + "anon");
+  }
+}
+
+void StructType::DoAddBitField() {
+  if (is_struct_) {
+    llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
+    ++index_;
+
+    offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
+    width_ = MakeAlign(offset_, align_);
+
+    if (auto space_width{(width_ - offset_) * 8}) {
+      auto space{GetBitFieldSpace(space_width)};
+      llvm_types_.push_back(space);
+      ++index_;
+      count_ += width_ - offset_;
+
+      offset_ += GetLLVMTypeSize(space);
+      width_ = MakeAlign(offset_, align_);
+    }
+  } else {
+    auto type{GetBitFieldSpace(bit_field_used_width_)};
+    if (std::empty(llvm_types_)) {
+      llvm_types_.push_back(type);
+    } else {
+      if (GetLLVMTypeSize(llvm_types_.back()) < GetLLVMTypeSize(type)) {
+        llvm_types_.back() = type;
+      }
+    }
+
+    ++index_;
+
+    width_ = std::max(width_, MakeAlign(bit_field_used_width_, 8) / 8);
+    width_ = MakeAlign(width_, align_);
   }
 }
 
