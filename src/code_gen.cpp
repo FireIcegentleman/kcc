@@ -243,13 +243,12 @@ bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
 }
 
 llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type,
-                                                  const std::string& name,
-                                                  llvm::Value* arr_size) {
+                                                  const std::string& name) {
   (void)name;
 #ifdef NDEBUG
-  return new llvm::AllocaInst{type, 0, arr_size, "", alloc_insert_point_};
+  return new llvm::AllocaInst{type, 0, "", alloc_insert_point_};
 #else
-  return new llvm::AllocaInst{type, 0, arr_size, name, alloc_insert_point_};
+  return new llvm::AllocaInst{type, 0, name, alloc_insert_point_};
 #endif
 }
 
@@ -1449,7 +1448,7 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
   } else if (func_name == "__builtin_alloca") {
     assert(std::size(node->GetArgs()) == 1);
     node->GetArgs().front()->Accept(*this);
-    result_ = CreateEntryBlockAlloca(Builder.getInt8Ty(), "", result_);
+    result_ = Builder.CreateAlloca(Builder.getInt8Ty(), result_);
     return true;
   } else {
     return false;
