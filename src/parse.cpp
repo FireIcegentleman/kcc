@@ -2397,7 +2397,7 @@ void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
       }
     }
 
-    indexs_.push_back({type, index});
+    indexs_.push_back({type, index, 0, 0});
     ParseInitializer(inits, type->ArrayGetElementType(), designated, false);
     indexs_.pop_back();
     designated = false;
@@ -2501,13 +2501,15 @@ void Parser::ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
         PutBack();
       }
 
-      indexs_.push_back(
-          {type, member_iter - std::begin(type->StructGetMembers())});
+      indexs_.push_back({type, (*member_iter)->GetIndexs().back().second,
+                         (*member_iter)->GetBitFieldBegin(),
+                         (*member_iter)->BitFieldWidth()});
       ParseInitializer(inits, (*member_iter)->GetType(), designated, false);
       indexs_.pop_back();
     } else {
-      indexs_.push_back(
-          {type, member_iter - std::begin(type->StructGetMembers())});
+      indexs_.push_back({type, (*member_iter)->GetIndexs().back().second,
+                         (*member_iter)->GetBitFieldBegin(),
+                         (*member_iter)->BitFieldWidth()});
       ParseInitializer(inits, (*member_iter)->GetType(), designated, false);
       indexs_.pop_back();
     }

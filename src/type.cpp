@@ -1267,17 +1267,20 @@ void StructType::Finish() {
   assert(struct_type->getStructNumElements() == 0);
   struct_type->setBody(llvm_types_);
 
-  // Print();
+  members_.erase(std::remove_if(std::begin(members_), std::end(members_),
+                                [](ObjectExpr* obj) {
+                                  return obj->IsAnonymous() &&
+                                         obj->BitFieldWidth();
+                                }),
+                 std::end(members_));
+
+  Print();
 }
 
 void StructType::Print() const {
   fmt::print("struct name: {}, sizeof: {}, align: {}\n", name_, GetWidth(),
              GetAlign());
   for (const auto& item : members_) {
-    if (item->BitFieldWidth() && item->IsAnonymous()) {
-      continue;
-    }
-
     fmt::print(
         "name: {}, offset: {}, begin: {}, width: {}, index: {}, type: {}\n",
         item->GetName(), item->GetOffset(), item->GetBitFieldBegin(),

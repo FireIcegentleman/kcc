@@ -1572,19 +1572,82 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
     auto value{result_};
 
     llvm::Value* ptr{obj->GetLocalPtr()};
-    for (const auto& [type, index] : item.GetIndexs()) {
-      if (type->IsArrayTy()) {
+    Type* member_type{};
+    std::int8_t bit_field_begin{}, bit_field_width{};
+    for (const auto& [type, index, begin, width] : item.GetIndexs()) {
+      bit_field_begin = begin;
+      bit_field_width = width;
+
+      if (type->IsArrayTy() && !width) {
+        member_type = type->ArrayGetElementType().GetType();
         ptr = Builder.CreateInBoundsGEP(
             ptr, {Builder.getInt64(0), Builder.getInt64(index)});
       } else if (type->IsStructTy()) {
+        member_type = type->StructGetMemberType(index).GetType();
         ptr = Builder.CreateStructGEP(ptr, index);
       } else if (type->IsUnionTy()) {
-        ptr = Builder.CreateBitCast(
-            ptr,
-            type->StructGetMemberType(index)->GetLLVMType()->getPointerTo());
+        member_type = type->StructGetMemberType(index).GetType();
+        ptr = Builder.CreateBitCast(ptr,
+                                    member_type->GetLLVMType()->getPointerTo());
       } else {
+        member_type = type;
         break;
       }
+    }
+
+    if (member_type && bit_field_width) {
+      auto size{member_type->IsBoolTy() ? 8 : 32};
+
+      if (member_type->IsBoolTy()) {
+        ptr = Builder.CreateBitCast(ptr, Builder.getInt8PtrTy());
+      } else {
+        ptr = Builder.CreateBitCast(ptr, Builder.getInt32Ty()->getPointerTo());
+      }
+
+      result_ = Builder.CreateLoad(ptr);
+
+      if (member_type->IsBoolTy()) {
+        std::uint8_t zero{};
+
+        // ....11111
+        std::uint8_t low_one;
+        if (bit_field_begin) {
+          low_one = ~zero >> (size - bit_field_begin);
+        } else {
+          low_one = 0;
+        }
+
+        // 111.....
+        std::uint8_t high_one;
+        if (auto bit{bit_field_width + bit_field_begin}; bit == size) {
+          high_one = 0;
+        } else {
+          high_one = ~zero << bit;
+        }
+
+        result_ = Builder.CreateAnd(result_, low_one | high_one);
+      } else {
+        // ....11111
+        std::uint32_t low_one;
+        if (bit_field_begin) {
+          low_one = ~0U >> (size - bit_field_begin);
+        } else {
+          low_one = 0;
+        }
+
+        // 111.....
+        std::uint32_t high_one;
+        if (auto bit{bit_field_width + bit_field_begin}; bit == size) {
+          high_one = 0;
+        } else {
+          high_one = ~0U << bit;
+        }
+
+        result_ = Builder.CreateAnd(result_, low_one | high_one);
+      }
+
+      value = Builder.CreateShl(value, bit_field_begin);
+      value = Builder.CreateOr(result_, value);
     }
 
     result_ = Builder.CreateStore(value, ptr);

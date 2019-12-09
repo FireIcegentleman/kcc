@@ -8,6 +8,7 @@
 #include <list>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -744,18 +745,22 @@ class TranslationUnit : public AstNode {
 
 class Initializer {
  public:
-  Initializer(Type* type, Expr* expr,
-              std::vector<std::pair<Type*, std::int32_t>> indexs);
+  Initializer(
+      Type* type, Expr* expr,
+      std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>
+          indexs);
 
   Type* GetType() const;
   Expr*& GetExpr();
   const Expr* GetExpr() const;
-  const std::vector<std::pair<Type*, std::int32_t>>& GetIndexs() const;
+  const std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>&
+  GetIndexs() const;
 
  private:
   Type* type_;
   Expr* expr_;
-  std::vector<std::pair<Type*, std::int32_t>> indexs_;
+  std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>
+      indexs_;
 };
 
 class Declaration : public Stmt {

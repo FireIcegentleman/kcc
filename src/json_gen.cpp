@@ -500,7 +500,7 @@ void JsonGen::Visit(const Declaration* node) {
 
       QString str;
       for (const auto& index : item.GetIndexs()) {
-        str.append(QString::number(index.second)).append(' ');
+        str.append(QString::number(std::get<1>(index))).append(' ');
       }
 
       obj["name"] = str;
