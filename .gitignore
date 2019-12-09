@@ -47,3 +47,7 @@ test/lua/lua
 *.s
 *.ll
 *.profraw
+vgcore.*
+cachegrind.out.*
+*.db
+*.db-*
