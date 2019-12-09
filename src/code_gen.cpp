@@ -255,6 +255,10 @@ llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type,
 llvm::Value* CodeGen::GetPtr(const AstNode* node) {
   if (node->Kind() == AstNodeType::kObjectExpr) {
     auto obj{dynamic_cast<const ObjectExpr*>(node)};
+    if (obj->GetQualType().IsVolatile()) {
+      is_volatile_ = true;
+    }
+
     if (obj->InGlobal() || obj->IsStatic()) {
       return obj->GetGlobalPtr();
     } else {
@@ -275,6 +279,12 @@ llvm::Value* CodeGen::GetPtr(const AstNode* node) {
       auto lhs_ptr{GetPtr(binary->GetLHS())};
       auto obj{dynamic_cast<const ObjectExpr*>(binary->GetRHS())};
       assert(obj != nullptr);
+
+      // 注意, volatile 限定的结构体或联合体类型, 其成员
+      // 会获取其所属类型的限定(当通过 . 或 -> 运算符时)
+      if (obj->GetQualType().IsVolatile()) {
+        is_volatile_ = true;
+      }
 
       if (obj->BitFieldWidth()) {
         is_bit_field_ = true;
@@ -569,11 +579,15 @@ void CodeGen::Visit(const ObjectExpr* node) {
     ptr = node->GetLocalPtr();
   }
 
+  if (node->GetQualType().IsVolatile()) {
+    is_volatile_ = true;
+  }
+
   auto type{node->GetType()};
   if (type->IsArrayTy() || (type->IsStructOrUnionTy() && !load_struct_)) {
     result_ = ptr;
   } else {
-    result_ = Builder.CreateLoad(ptr);
+    result_ = Builder.CreateLoad(ptr, is_volatile_);
   }
 }
 
@@ -874,7 +888,7 @@ void CodeGen::Visit(const FuncDef* node) {
 llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   auto is_unsigned{expr->GetType()->IsUnsigned()};
   auto lhs_ptr{GetPtr(expr)};
-  llvm::Value* lhs_value{Builder.CreateLoad(lhs_ptr)};
+  llvm::Value* lhs_value{Builder.CreateLoad(lhs_ptr, is_volatile_)};
 
   if (is_bit_field_) {
     auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
@@ -913,6 +927,7 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   }
 
   Assign(lhs_ptr, rhs_value);
+  is_volatile_ = false;
 
   return is_postfix ? lhs_value : rhs_value;
 }
@@ -948,13 +963,15 @@ llvm::Value* CodeGen::Deref(const UnaryOpExpr* node) {
       result_ = Builder.CreateInBoundsGEP(lhs, {result_, Builder.getInt64(0)});
     } else {
       result_ = Builder.CreateInBoundsGEP(lhs, {result_});
-      result_ = Builder.CreateLoad(result_);
+      result_ = Builder.CreateLoad(result_, is_volatile_);
+      is_volatile_ = false;
     }
   } else if (IsFuncPointer(node->GetExpr()->GetType()->GetLLVMType())) {
     node->GetExpr()->Accept(*this);
   } else {
     node->GetExpr()->Accept(*this);
-    result_ = Builder.CreateLoad(result_);
+    result_ = Builder.CreateLoad(result_, is_volatile_);
+    is_volatile_ = false;
   }
 
   return result_;
@@ -1283,7 +1300,7 @@ llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
   if (is_bit_field_) {
     auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
 
-    result_ = Builder.CreateLoad(ptr);
+    result_ = Builder.CreateLoad(ptr, is_volatile_);
 
     result_ = Builder.CreateShl(
         result_,
@@ -1300,7 +1317,7 @@ llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
     if (type->isArrayTy() || (type->isStructTy() && !load_struct_)) {
       result_ = ptr;
     } else {
-      result_ = Builder.CreateLoad(ptr);
+      result_ = Builder.CreateLoad(ptr, is_volatile_);
     }
   }
 
@@ -1311,7 +1328,7 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs) {
   if (is_bit_field_) {
     auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
 
-    result_ = Builder.CreateLoad(lhs_ptr);
+    result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
 
     if (bit_field_->GetType()->IsBoolTy()) {
       std::uint8_t zero{};
@@ -1362,9 +1379,9 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs) {
     rhs = Builder.CreateShl(rhs, bit_field_->GetBitFieldBegin());
     result_ = Builder.CreateOr(result_, rhs);
 
-    Builder.CreateStore(result_, lhs_ptr);
+    Builder.CreateStore(result_, lhs_ptr, is_volatile_);
 
-    result_ = Builder.CreateLoad(lhs_ptr);
+    result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
 
     result_ = Builder.CreateShl(
         result_,
@@ -1380,8 +1397,8 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs) {
 
     return result_;
   } else {
-    Builder.CreateStore(rhs, lhs_ptr);
-    return Builder.CreateLoad(lhs_ptr);
+    Builder.CreateStore(rhs, lhs_ptr, is_volatile_);
+    return Builder.CreateLoad(lhs_ptr, is_volatile_);
   }
 }
 
@@ -1540,7 +1557,7 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
       assert(std::size(init) == 1);
 
       init.front().GetExpr()->Accept(*this);
-      Builder.CreateStore(result_, obj->GetLocalPtr());
+      Builder.CreateStore(result_, obj->GetLocalPtr(), is_volatile_);
     } else if (type->IsAggregateTy()) {
       InitLocalAggregate(node);
     } else {
@@ -1650,7 +1667,7 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
       value = Builder.CreateOr(result_, value);
     }
 
-    result_ = Builder.CreateStore(value, ptr);
+    result_ = Builder.CreateStore(value, ptr, is_volatile_);
   }
 }
 
@@ -1702,7 +1719,7 @@ void CodeGen::StartFunction(const FuncDef* node) {
                                     (*iter)->GetName())};
     (*iter)->SetLocalPtr(ptr);
     // 将参数的值保存到分配的内存中
-    Builder.CreateStore(&arg, ptr);
+    Builder.CreateStore(&arg, ptr, is_volatile_);
     ++iter;
   }
 }

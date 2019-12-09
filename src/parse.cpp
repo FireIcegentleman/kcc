@@ -2720,13 +2720,9 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
   std::vector<llvm::Constant*> val;
   bool is_struct{type->IsStructTy()};
 
-  if (is_struct) {
-    for (const auto& member : type->StructGetMembers()) {
-      val.push_back(GetConstantZero(member->GetType()->GetLLVMType()));
-    }
-  } else {
+  for (std::size_t i{}; i < type->GetLLVMType()->getStructNumElements(); ++i) {
     val.push_back(
-        GetConstantZero(type->GetLLVMType()->getStructElementType(0)));
+        GetConstantZero(type->GetLLVMType()->getStructElementType(i)));
   }
 
   while (true) {
@@ -2767,13 +2763,106 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
       }
     }
 
-    if (is_struct) {
-      val[member_iter - std::begin(type->StructGetMembers())] =
-          ParseConstantInitializer((*member_iter)->GetType(), designated,
-                                   false);
+    auto begin{(*member_iter)->GetBitFieldBegin()};
+    auto width{(*member_iter)->BitFieldWidth()};
+    auto index{is_struct ? (*member_iter)->GetIndexs().back().second : 0};
+    auto member_type{(*member_iter)->GetType()};
+
+    if (width) {
+      llvm::Constant* old_value{
+          llvm::ConstantInt::get(Builder.getInt32Ty(), 0)};
+
+      if (member_type->IsArrayTy()) {
+        auto arr{val[index]};
+        for (auto i{member_type->ArrayGetNumElements()}; i-- > 0;) {
+          old_value = llvm::ConstantExpr::getOr(
+              old_value,
+              llvm::ConstantExpr::getShl(
+                  arr->getAggregateElement(i),
+                  llvm::ConstantInt::get(Builder.getInt32Ty(), i * 8)));
+        }
+      } else {
+        if (member_type->IsUnsigned()) {
+          old_value =
+              llvm::ConstantExpr::getZExt(val[index], Builder.getInt32Ty());
+        } else {
+          old_value =
+              llvm::ConstantExpr::getSExt(val[index], Builder.getInt32Ty());
+        }
+      }
+
+      auto new_value{ParseConstantInitializer((*member_iter)->GetType(),
+                                              designated, false)};
+
+      auto size{(*member_iter)->GetType()->IsBoolTy() ? 8 : 32};
+
+      if ((*member_iter)->GetType()->IsBoolTy()) {
+        std::uint8_t zero{};
+
+        // ....11111
+        std::uint8_t low_one;
+        if (begin) {
+          low_one = ~zero >> (size - begin);
+        } else {
+          low_one = 0;
+        }
+
+        // 111.....
+        std::uint8_t high_one;
+        if (auto bit{begin + width}; bit == size) {
+          high_one = 0;
+        } else {
+          high_one = ~zero << bit;
+        }
+
+        old_value = llvm::ConstantExpr::getAnd(
+            old_value,
+            llvm::ConstantInt::get(Builder.getInt32Ty(), low_one | high_one));
+      } else {
+        // ....11111
+        std::uint32_t low_one;
+        if (begin) {
+          low_one = ~0U >> (size - begin);
+        } else {
+          low_one = 0;
+        }
+
+        // 111.....
+        std::uint32_t high_one;
+        if (auto bit{begin + width}; bit == size) {
+          high_one = 0;
+        } else {
+          high_one = ~0U << bit;
+        }
+
+        old_value = llvm::ConstantExpr::getAnd(
+            old_value,
+            llvm::ConstantInt::get(Builder.getInt32Ty(), low_one | high_one));
+      }
+
+      new_value = llvm::ConstantExpr::getShl(
+          new_value, llvm::ConstantInt::get(Builder.getInt32Ty(), begin));
+      new_value = llvm::ConstantExpr::getOr(old_value, new_value);
+
+      if (member_type->IsArrayTy()) {
+        std::vector<llvm::Constant*> v;
+        auto arr_size{member_type->ArrayGetNumElements()};
+        for (std::int32_t i{0}; i < arr_size; ++i) {
+          auto temp{
+              llvm::ConstantExpr::getTrunc(new_value, Builder.getInt8Ty())};
+          v.push_back(temp);
+          new_value = llvm::ConstantExpr::getLShr(
+              new_value, llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
+        }
+        val[index] = llvm::ConstantArray::get(
+            llvm::cast<llvm::ArrayType>(member_type->GetLLVMType()), v);
+      } else {
+        val[index] =
+            llvm::ConstantExpr::getTrunc(new_value, Builder.getInt8Ty());
+      }
     } else {
-      val.front() = ParseConstantInitializer((*member_iter)->GetType(),
-                                             designated, false);
+      val[index] = ParseConstantInitializer((*member_iter)->GetType(),
+                                            designated, false);
     }
 
     designated = false;

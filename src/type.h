@@ -96,6 +96,7 @@ class QualType {
   std::uint32_t GetTypeQual() const;
 
   bool IsConst() const;
+  bool IsVolatile() const;
 
  private:
   Type* type_{};

@@ -157,6 +157,8 @@ class CodeGen : public Visitor {
 
   bool is_bit_field_{false};
   ObjectExpr *bit_field_{nullptr};
+
+  bool is_volatile_{false};
 };
 
 }  // namespace kcc

@@ -68,6 +68,8 @@ std::uint32_t QualType::GetTypeQual() const { return type_qual_; }
 
 bool QualType::IsConst() const { return type_qual_ & kConst; }
 
+bool QualType::IsVolatile() const { return type_qual_ & kVolatile; }
+
 bool operator==(QualType lhs, QualType rhs) { return lhs.type_ == rhs.type_; }
 
 bool operator!=(QualType lhs, QualType rhs) { return !(lhs == rhs); }
@@ -965,6 +967,12 @@ void StructType::AddMember(ObjectExpr* member) {
       if (GetLLVMTypeSize(llvm_types_.back()) <
           GetLLVMTypeSize(member->GetType()->GetLLVMType())) {
         llvm_types_.back() = member->GetType()->GetLLVMType();
+      } else if (GetLLVMTypeSize(llvm_types_.back()) ==
+                 GetLLVMTypeSize(member->GetType()->GetLLVMType())) {
+        if (llvm_types_.back()->isStructTy() &&
+            !member->GetType()->IsStructOrUnionTy()) {
+          llvm_types_.back() = member->GetType()->GetLLVMType();
+        }
       }
     }
   }
@@ -1274,7 +1282,7 @@ void StructType::Finish() {
                                 }),
                  std::end(members_));
 
-  Print();
+  // Print();
 }
 
 void StructType::Print() const {

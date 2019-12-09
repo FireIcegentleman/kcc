@@ -581,14 +581,14 @@ static void bitfield_unnamed() {
   expect(2, y.i);
 }
 
-// struct {
-//  int a : 4;
-//  int b : 4;
-//} inittest = {2, 4};
+struct {
+  int a : 4;
+  int b : 4;
+} inittest = {2, 4};
 
 static void bitfield_initializer() {
-  // expect(2, inittest.a);
-  // expect(4, inittest.b);
+  expect(2, inittest.a);
+  expect(4, inittest.b);
 
   struct {
     int a : 4;
@@ -605,9 +605,9 @@ typedef struct {
   unsigned int d : 2;
 } foo1_t;
 
-// foo1_t foo1 = {3, 3, 3, 3};
-// foo1_t foo1_1 = {67, 67, 67, 67};
-// foo1_t foo1_2 = {0, 1, 2, 3};
+foo1_t foo1 = {3, 3, 3, 3};
+foo1_t foo1_1 = {67, 67, 67, 67};
+foo1_t foo1_2 = {0, 1, 2, 3};
 
 typedef struct {
   char x0;
@@ -624,19 +624,19 @@ typedef struct {
   };
 } foo2_t;
 
-// foo2_t foo2 = {.a = 23, .b = 47, .c = 12, .d = 5};
-//
-// static void test_bitfield_static_initializer() {
-//  expect(4, sizeof(foo1_t));
-//  expect(0xff, *(unsigned char *)&foo1);
-//  expect(0xff, *(unsigned char *)&foo1_1);
-//  expect(0xe4, *(unsigned char *)&foo1_2);
-//
-//  expect(8, sizeof(foo2_t));
-//  expect(167976471, *(unsigned int *)&foo2.x);
-//  expect(0, *(unsigned int *)&foo2.x0);
-//}
-//
+foo2_t foo2 = {.a = 23, .b = 47, .c = 12, .d = 5};
+
+static void test_bitfield_static_initializer() {
+  expect(4, sizeof(foo1_t));
+  expect(0xff, *(unsigned char *)&foo1);
+  expect(0xff, *(unsigned char *)&foo1_1);
+  expect(0xe4, *(unsigned char *)&foo1_2);
+
+  expect(8, sizeof(foo2_t));
+  expect(167976471, *(unsigned int *)&foo2.x);
+  expect(0, *(unsigned int *)&foo2.x0);
+}
+
 static void test_bitfield_mix() {
   typedef union {
     int b : 4;
@@ -684,7 +684,7 @@ void testmain() {
   bitfield_unnamed();
   bitfield_initializer();
   test_offsetof();
-  //  test_bitfield_static_initializer();
+  test_bitfield_static_initializer();
   test_bitfield_mix();
   test_unnamed_bitfield();
   flexible_member();
