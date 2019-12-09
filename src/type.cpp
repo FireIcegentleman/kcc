@@ -1204,7 +1204,11 @@ void StructType::AddBitField(ObjectExpr* member) {
         }
       } else {
         member->SetOffset(offset_);
-        member->SetBitFieldBegin(bit_field_used_width_);
+        if (is_struct_) {
+          member->SetBitFieldBegin(bit_field_used_width_);
+        } else {
+          member->SetBitFieldBegin(0);
+        }
 
         member->GetIndexs().push_front({this, index_});
 
