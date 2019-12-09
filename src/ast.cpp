@@ -559,11 +559,10 @@ void ConditionOpExpr::Check() {
     }
     type_ = lhs_type;
   } else if (lhs_type->IsIntegerTy() && rhs_type->IsPointerTy()) {
-    std::swap(lhs_, rhs_);
-    if (!Expr::IsZero(rhs_)) {
+    if (!Expr::IsZero(lhs_)) {
       Error(this, "must be pointer and zero");
     } else {
-      rhs_ = Expr::MayCastTo(rhs_, rhs_type);
+      lhs_ = Expr::MayCastTo(lhs_, rhs_type);
     }
     type_ = rhs_type;
   } else {
