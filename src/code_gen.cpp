@@ -54,6 +54,11 @@ void CodeGen::GenCode(const TranslationUnit* root) {
     Error("module is broken");
 #endif
   }
+
+  assert(std::empty(break_continue_stack_));
+  assert(!is_bit_field_);
+  assert(!bit_field_);
+  assert(!is_volatile_);
 }
 
 llvm::BasicBlock* CodeGen::CreateBasicBlock(const std::string& name,
@@ -255,11 +260,9 @@ llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type,
 llvm::Value* CodeGen::GetPtr(const AstNode* node) {
   if (node->Kind() == AstNodeType::kObjectExpr) {
     auto obj{dynamic_cast<const ObjectExpr*>(node)};
-    if (obj->GetQualType().IsVolatile()) {
-      is_volatile_ = true;
-    }
+    is_volatile_ = obj->GetQualType().IsVolatile();
 
-    if (obj->InGlobal() || obj->IsStatic()) {
+    if (obj->InGlobal()) {
       return obj->GetGlobalPtr();
     } else {
       return obj->GetLocalPtr();
@@ -579,15 +582,14 @@ void CodeGen::Visit(const ObjectExpr* node) {
     ptr = node->GetLocalPtr();
   }
 
-  if (node->GetQualType().IsVolatile()) {
-    is_volatile_ = true;
-  }
+  is_volatile_ = node->GetQualType().IsVolatile();
 
   auto type{node->GetType()};
   if (type->IsArrayTy() || (type->IsStructOrUnionTy() && !load_struct_)) {
     result_ = ptr;
   } else {
     result_ = Builder.CreateLoad(ptr, is_volatile_);
+    is_volatile_ = false;
   }
 }
 
@@ -927,7 +929,6 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   }
 
   Assign(lhs_ptr, rhs_value);
-  is_volatile_ = false;
 
   return is_postfix ? lhs_value : rhs_value;
 }
@@ -1395,10 +1396,15 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs) {
     is_bit_field_ = false;
     bit_field_ = nullptr;
 
+    is_volatile_ = false;
+
     return result_;
   } else {
     Builder.CreateStore(rhs, lhs_ptr, is_volatile_);
-    return Builder.CreateLoad(lhs_ptr, is_volatile_);
+    result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
+    is_volatile_ = false;
+
+    return result_;
   }
 }
 
@@ -1549,7 +1555,11 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
   auto type{obj->GetType()};
   auto name{obj->GetName()};
 
-  obj->SetLocalPtr(CreateEntryBlockAlloca(type->GetLLVMType(), name));
+  auto ptr{CreateEntryBlockAlloca(type->GetLLVMType(), name)};
+  ptr->setAlignment(obj->GetAlign());
+  obj->SetLocalPtr(ptr);
+
+  is_volatile_ = obj->GetQualType().IsVolatile();
 
   if (node->HasLocalInit()) {
     if (type->IsScalarTy()) {
@@ -1558,19 +1568,21 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
 
       init.front().GetExpr()->Accept(*this);
       Builder.CreateStore(result_, obj->GetLocalPtr(), is_volatile_);
+      is_volatile_ = false;
     } else if (type->IsAggregateTy()) {
       InitLocalAggregate(node);
     } else {
       assert(false);
     }
   } else if (node->HasConstantInit()) {
-    auto ptr{obj->GetLocalPtr()};
     if (ptr->getType() != Builder.getInt8PtrTy()) {
       result_ = Builder.CreateBitCast(ptr, Builder.getInt8PtrTy());
     }
 
     Builder.CreateMemCpy(result_, obj->GetAlign(), node->GetConstant(),
-                         obj->GetAlign(), obj->GetType()->GetWidth());
+                         obj->GetAlign(), obj->GetType()->GetWidth(),
+                         is_volatile_);
+    is_volatile_ = false;
   }
 }
 
@@ -1580,7 +1592,7 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
 
   Builder.CreateMemSet(
       Builder.CreateBitCast(obj->GetLocalPtr(), Builder.getInt8PtrTy()),
-      Builder.getInt8(0), width, obj->GetAlign());
+      Builder.getInt8(0), width, obj->GetAlign(), is_volatile_);
 
   for (const auto& item : node->GetLocalInits()) {
     Load_Struct_Obj();
@@ -1621,7 +1633,7 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
         ptr = Builder.CreateBitCast(ptr, Builder.getInt32Ty()->getPointerTo());
       }
 
-      result_ = Builder.CreateLoad(ptr);
+      result_ = Builder.CreateLoad(ptr, is_volatile_);
 
       if (member_type->IsBoolTy()) {
         std::uint8_t zero{};
@@ -1669,6 +1681,8 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
 
     result_ = Builder.CreateStore(value, ptr, is_volatile_);
   }
+
+  is_volatile_ = false;
 }
 
 void CodeGen::StartFunction(const FuncDef* node) {

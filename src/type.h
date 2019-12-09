@@ -39,7 +39,6 @@ enum TypeQualifier {
   kConst = 0x1,
   // 不支持
   kRestrict = 0x2,
-  // 不支持
   kVolatile = 0x4,
   // 不支持
   kAtomic = 0x8
