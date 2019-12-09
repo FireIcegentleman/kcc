@@ -56,6 +56,7 @@ void CodeGen::GenCode(const TranslationUnit* root) {
   }
 
   assert(std::empty(break_continue_stack_));
+  assert(std::empty(labels_));
   assert(!is_bit_field_);
   assert(!bit_field_);
   assert(!is_volatile_);
@@ -1747,6 +1748,8 @@ void CodeGen::FinishFunction(const FuncDef* node) {
   auto ptr{alloc_insert_point_};
   alloc_insert_point_ = nullptr;
   ptr->eraseFromParent();
+
+  labels_.clear();
 
   // 验证生成的代码, 检查一致性
   llvm::verifyFunction(*func);

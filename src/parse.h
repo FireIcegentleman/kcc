@@ -173,12 +173,12 @@ class Parser {
   /*
    * ConstantInit
    */
-  llvm::Constant* ParseConstantInitializer(Type* &type, bool designated,
+  llvm::Constant* ParseConstantInitializer(Type*& type, bool designated,
                                            bool force_brace);
-  llvm::Constant* ParseConstantArrayInitializer(Type* &type,
+  llvm::Constant* ParseConstantArrayInitializer(Type*& type,
                                                 std::int32_t designated);
-  llvm::Constant* ParseConstantLiteralInitializer(Type* &type);
-  llvm::Constant* ParseConstantStructInitializer(Type* &type, bool designated);
+  llvm::Constant* ParseConstantLiteralInitializer(Type*& type);
+  llvm::Constant* ParseConstantStructInitializer(Type*& type, bool designated);
 
   /*
    * GNU 扩展

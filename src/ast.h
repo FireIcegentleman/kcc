@@ -106,7 +106,7 @@ class Expr : public AstNode {
   virtual bool IsLValue() const = 0;
 
   QualType GetQualType() const;
-  Type* &GetType();
+  Type*& GetType();
   const Type* GetType() const;
 
   bool IsConst() const;
@@ -478,6 +478,7 @@ class LabelStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   Stmt* GetStmt() const;
   const std::string& GetName() const;
@@ -497,6 +498,7 @@ class CaseStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   std::int64_t GetLHS() const;
   std::optional<std::int64_t> GetRHS() const;
@@ -519,6 +521,7 @@ class DefaultStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   const Stmt* GetStmt() const;
 
@@ -536,6 +539,7 @@ class CompoundStmt : public Stmt {
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
   virtual void Check() override;
+  virtual std::vector<Stmt*> Children() const override;
 
   const std::vector<Stmt*>& GetStmts() const;
   void AddStmt(Stmt* stmt);

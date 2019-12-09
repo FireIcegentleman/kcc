@@ -86,6 +86,14 @@ void CommandLineCheck() {
           files.push_back(file.path().string());
         }
       }
+    } else if (path.filename().string() == "*.o") {
+      for (const auto &file : std::filesystem::directory_iterator{
+               path.parent_path().empty() ? std::filesystem::current_path()
+                                          : path.parent_path()}) {
+        if (file.path().filename().extension().string() == ".o") {
+          ObjFile.push_back(file.path().string());
+        }
+      }
     } else if (std::filesystem::exists(path)) {
       if (path.filename().extension().string() == ".c") {
         files.push_back(item);
@@ -137,6 +145,10 @@ void CommandLineCheck() {
 
   for (auto &&item : Libs) {
     item = "-l" + item;
+  }
+
+  if (OptimizationLevel != OptLevel::kO0) {
+    MacroDefines.push_back("NDEBUG");
   }
 }
 

@@ -1037,6 +1037,8 @@ void LabelStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void LabelStmt::Check() {}
 
+std::vector<Stmt*> LabelStmt::Children() const { return {stmt_}; }
+
 Stmt* LabelStmt::GetStmt() const { return stmt_; }
 
 const std::string& LabelStmt::GetName() const { return name_; }
@@ -1063,6 +1065,8 @@ void CaseStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void CaseStmt::Check() {}
 
+std::vector<Stmt*> CaseStmt::Children() const { return {stmt_}; }
+
 std::int64_t CaseStmt::GetLHS() const { return lhs_; }
 
 std::optional<std::int64_t> CaseStmt::GetRHS() const { return rhs_; }
@@ -1088,6 +1092,8 @@ void DefaultStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void DefaultStmt::Check() {}
 
+std::vector<Stmt*> DefaultStmt::Children() const { return {stmt_}; }
+
 const Stmt* DefaultStmt::GetStmt() const { return stmt_; }
 
 DefaultStmt::DefaultStmt(Stmt* block) : stmt_{block} {}
@@ -1108,6 +1114,8 @@ AstNodeType CompoundStmt::Kind() const { return AstNodeType::kCompoundStmt; }
 void CompoundStmt::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
 void CompoundStmt::Check() {}
+
+std::vector<Stmt*> CompoundStmt::Children() const { return stmts_; }
 
 const std::vector<Stmt*>& CompoundStmt::GetStmts() const { return stmts_; }
 

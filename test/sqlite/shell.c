@@ -1172,6 +1172,7 @@ LPDIR opendir(
   if( dirp==NULL ) return NULL;
   memset(dirp, 0, sizeof(DIR));
 
+  /* TODO: Remove this if Unix-style root paths are not used. */
   if( sqlite3_stricmp(dirname, "/")==0 ){
     dirname = windirent_getenv("SystemDrive");
   }
@@ -1185,6 +1186,7 @@ LPDIR opendir(
     return NULL;
   }
 
+  /* TODO: Remove this block to allow hidden and/or system files. */
   if( is_filtered(data) ){
 next:
 
@@ -1194,6 +1196,7 @@ next:
       return NULL;
     }
 
+    /* TODO: Remove this block to allow hidden and/or system files. */
     if( is_filtered(data) ) goto next;
   }
 
@@ -1226,6 +1229,7 @@ next:
   memset(&data, 0, sizeof(struct _finddata_t));
   if( _findnext(dirp->d_handle, &data)==-1 ) return NULL;
 
+  /* TODO: Remove this block to allow hidden and/or system files. */
   if( is_filtered(data) ) goto next;
 
   dirp->d_next.d_ino++;
@@ -1269,6 +1273,7 @@ next:
     return ENOENT;
   }
 
+  /* TODO: Remove this block to allow hidden and/or system files. */
   if( is_filtered(data) ) goto next;
 
   entry->d_ino = (ino_t)-1; /* not available */
@@ -5236,6 +5241,8 @@ static int zipfileColumn(
       sqlite3_result_text(ctx, pCDS->zFile, -1, SQLITE_TRANSIENT);
       break;
     case 1:   /* mode */
+      /* TODO: Whether or not the following is correct surely depends on
+      ** the platform on which the archive was created.  */
       sqlite3_result_int(ctx, pCDS->iExternalAttr >> 16);
       break;
     case 2: { /* mtime */
