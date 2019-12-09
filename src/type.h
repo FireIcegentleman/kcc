@@ -89,7 +89,7 @@ class QualType {
   Type* operator->();
   const Type* operator->() const;
 
-  Type* GetType();
+  Type*& GetType();
   const Type* GetType() const;
 
   std::uint32_t GetTypeQual() const;
@@ -122,6 +122,7 @@ class Type {
 
   std::string ToString() const;
   llvm::Type* GetLLVMType() const;
+  void SetLLVMType(llvm::Type* type);
 
   VoidType* ToVoidType();
   ArithmeticType* ToArithmeticType();
@@ -184,6 +185,7 @@ class Type {
   void StructSetName(const std::string& name);
   const std::string& StructGetName() const;
   std::vector<ObjectExpr*>& StructGetMembers();
+  void StructSetMembers(std::vector<ObjectExpr*>& members);
   ObjectExpr* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
   Scope* StructGetScope();
@@ -305,6 +307,7 @@ class StructType : public Type {
 
   std::int32_t GetNumMembers() const;
   std::vector<ObjectExpr*>& GetMembers();
+  void SetMembers(std::vector<ObjectExpr*>& members);
   ObjectExpr* GetMember(const std::string& name) const;
   QualType GetMemberType(std::int32_t i) const;
   Scope* GetScope();

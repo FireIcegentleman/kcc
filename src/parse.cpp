@@ -2544,7 +2544,7 @@ void Parser::ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
 /*
  * ConstantInit
  */
-llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
+llvm::Constant* Parser::ParseConstantInitializer(Type*& type, bool designated,
                                                  bool force_brace) {
   if (designated && !Test(Tag::kPeriod) && !Test(Tag::kLeftSquare)) {
     Expect(Tag::kEqual);
@@ -2553,15 +2553,15 @@ llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
   if (type->IsArrayTy()) {
     if (force_brace && !Test(Tag::kLeftBrace) && !Test(Tag::kStringLiteral)) {
       Expect(Tag::kLeftBrace);
-    } else if (auto p{ParseConstantLiteralInitializer(type.GetType())}; !p) {
-      auto arr{ParseConstantArrayInitializer(type.GetType(), designated)};
+    } else if (auto p{ParseConstantLiteralInitializer(type)}; !p) {
+      auto arr{ParseConstantArrayInitializer(type, designated)};
       type->SetComplete(true);
       return arr;
     } else {
       return p;
     }
   } else if (type->IsStructOrUnionTy()) {
-    return ParseConstantStructInitializer(type.GetType(), designated);
+    return ParseConstantStructInitializer(type, designated);
   } else {
     auto has_brace{Try(Tag::kLeftBrace)};
     auto expr{ParseAssignExpr()};
@@ -2584,7 +2584,7 @@ llvm::Constant* Parser::ParseConstantInitializer(QualType type, bool designated,
   return nullptr;
 }
 
-llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
+llvm::Constant* Parser::ParseConstantArrayInitializer(Type*& type,
                                                       std::int32_t designated) {
   std::int64_t index{};
   auto has_brace{Try(Tag::kLeftBrace)};
@@ -2626,16 +2626,16 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
     }
 
     if (size) {
-      val[index] = ParseConstantInitializer(type->ArrayGetElementType(),
-                                            designated, false);
+      val[index] = ParseConstantInitializer(
+          type->ArrayGetElementType().GetType(), designated, false);
     } else {
       if (index >= static_cast<std::int64_t>(std::size(val))) {
         val.insert(std::end(val), index - std::size(val), zero);
-        val.push_back(ParseConstantInitializer(type->ArrayGetElementType(),
-                                               designated, false));
+        val.push_back(ParseConstantInitializer(
+            type->ArrayGetElementType().GetType(), designated, false));
       } else {
-        val[index] = ParseConstantInitializer(type->ArrayGetElementType(),
-                                              designated, false);
+        val[index] = ParseConstantInitializer(
+            type->ArrayGetElementType().GetType(), designated, false);
       }
     }
 
@@ -2670,7 +2670,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
       llvm::cast<llvm::ArrayType>(type->GetLLVMType()), val);
 }
 
-llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
+llvm::Constant* Parser::ParseConstantLiteralInitializer(Type*& type) {
   if (!type->ArrayGetElementType()->IsIntegerTy()) {
     return nullptr;
   }
@@ -2713,7 +2713,7 @@ llvm::Constant* Parser::ParseConstantLiteralInitializer(Type* type) {
   return str_node->GetArr();
 }
 
-llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
+llvm::Constant* Parser::ParseConstantStructInitializer(Type*& type,
                                                        bool designated) {
   auto has_brace{Try(Tag::kLeftBrace)};
   auto member_iter{std::begin(type->StructGetMembers())};
@@ -2766,23 +2766,24 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
     auto begin{(*member_iter)->GetBitFieldBegin()};
     auto width{(*member_iter)->BitFieldWidth()};
     auto index{is_struct ? (*member_iter)->GetIndexs().back().second : 0};
-    auto member_type{(*member_iter)->GetType()};
+    auto member_type{type->GetLLVMType()->getStructElementType(index)};
 
     if (width) {
       llvm::Constant* old_value{
           llvm::ConstantInt::get(Builder.getInt32Ty(), 0)};
 
-      if (member_type->IsArrayTy()) {
+      if (member_type->isArrayTy()) {
         auto arr{val[index]};
-        for (auto i{member_type->ArrayGetNumElements()}; i-- > 0;) {
+        for (auto i{member_type->getArrayNumElements()}; i-- > 0;) {
           old_value = llvm::ConstantExpr::getOr(
               old_value,
               llvm::ConstantExpr::getShl(
-                  arr->getAggregateElement(i),
+                  llvm::ConstantExpr::getZExt(arr->getAggregateElement(i),
+                                              Builder.getInt32Ty()),
                   llvm::ConstantInt::get(Builder.getInt32Ty(), i * 8)));
         }
       } else {
-        if (member_type->IsUnsigned()) {
+        if ((*member_iter)->GetType()->IsUnsigned()) {
           old_value =
               llvm::ConstantExpr::getZExt(val[index], Builder.getInt32Ty());
         } else {
@@ -2844,10 +2845,10 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
           new_value, llvm::ConstantInt::get(Builder.getInt32Ty(), begin));
       new_value = llvm::ConstantExpr::getOr(old_value, new_value);
 
-      if (member_type->IsArrayTy()) {
+      if (member_type->isArrayTy()) {
         std::vector<llvm::Constant*> v;
-        auto arr_size{member_type->ArrayGetNumElements()};
-        for (std::int32_t i{0}; i < arr_size; ++i) {
+        auto arr_size{member_type->getArrayNumElements()};
+        for (std::size_t i{0}; i < arr_size; ++i) {
           auto temp{
               llvm::ConstantExpr::getTrunc(new_value, Builder.getInt8Ty())};
           v.push_back(temp);
@@ -2855,14 +2856,21 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
               new_value, llvm::ConstantInt::get(Builder.getInt32Ty(), 8));
         }
         val[index] = llvm::ConstantArray::get(
-            llvm::cast<llvm::ArrayType>(member_type->GetLLVMType()), v);
+            llvm::cast<llvm::ArrayType>(member_type), v);
       } else {
         val[index] =
             llvm::ConstantExpr::getTrunc(new_value, Builder.getInt8Ty());
       }
     } else {
-      val[index] = ParseConstantInitializer((*member_iter)->GetType(),
-                                            designated, false);
+      auto value{ParseConstantInitializer((*member_iter)->GetType(), designated,
+                                          false)};
+      // 当 union 类型不对时新创建一个类型
+      if (!is_struct && value->getType() != member_type) {
+        auto new_type{llvm::StructType::create({value->getType()})};
+        type->SetLLVMType(new_type);
+      }
+
+      val[index] = value;
     }
 
     designated = false;

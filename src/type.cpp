@@ -54,7 +54,7 @@ const Type* QualType::operator->() const {
   return type_;
 }
 
-Type* QualType::GetType() {
+Type*& QualType::GetType() {
   assert(type_ != nullptr);
   return type_;
 }
@@ -108,6 +108,11 @@ std::string Type::ToString() const {
 llvm::Type* Type::GetLLVMType() const {
   assert(llvm_type_ != nullptr);
   return llvm_type_;
+}
+
+void Type::SetLLVMType(llvm::Type* type) {
+  assert(type != nullptr);
+  llvm_type_ = type;
 }
 
 VoidType* Type::ToVoidType() { return dynamic_cast<VoidType*>(this); }
@@ -319,6 +324,11 @@ const std::string& Type::StructGetName() const {
 std::vector<ObjectExpr*>& Type::StructGetMembers() {
   assert(IsStructOrUnionTy());
   return ToStructType()->GetMembers();
+}
+
+void Type::StructSetMembers(std::vector<ObjectExpr*>& members) {
+  assert(IsStructOrUnionTy());
+  ToStructType()->SetMembers(members);
 }
 
 ObjectExpr* Type::StructGetMember(const std::string& name) const {
@@ -898,6 +908,10 @@ const std::string& StructType::GetName() const { return name_; }
 std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 
 std::vector<ObjectExpr*>& StructType::GetMembers() { return members_; }
+
+void StructType::SetMembers(std::vector<ObjectExpr*>& members) {
+  members_ = members;
+}
 
 ObjectExpr* StructType::GetMember(const std::string& name) const {
   auto ident{scope_->FindUsualInCurrScope(name)};
