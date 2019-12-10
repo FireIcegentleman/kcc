@@ -102,6 +102,10 @@ void DebugInfo::EmitParamVar(const std::string& name, Type* type,
 void DebugInfo::EmitLocalVar(const Declaration* decl) {
   assert(decl && decl->IsObjDecl());
 
+  if (Builder.GetInsertBlock() == nullptr) {
+    return;
+  }
+
   llvm::DIScope* scope{lexical_blocks_.back()};
   auto ident{decl->GetIdent()};
   auto loc{decl->GetLoc()};
@@ -233,8 +237,8 @@ llvm::DIType* DebugInfo::CreateStructType(Type* type, const Location& loc) {
   std::string name{type->StructGetName()};
   auto scope{GetScope()};
 
-  auto fwd_type{builder_->createReplaceableCompositeType(tag, name, scope,
-                                                         file_, loc.GetRow())};
+  auto fwd_type{
+      builder_->createForwardDecl(tag, name, scope, file_, loc.GetRow())};
   if (!type->IsComplete()) {
     return fwd_type;
   }
@@ -271,8 +275,6 @@ llvm::DIType* DebugInfo::CreateStructType(Type* type, const Location& loc) {
       scope, name, file_, loc.GetRow(), type->GetWidth() * 8,
       type->GetAlign() * 8, llvm::DINode::DIFlags::FlagZero, nullptr,
       builder_->getOrCreateArray(ele_types))};
-
-  fwd_type->replaceAllUsesWith(real_type);
 
   type_cache_[type] = real_type;
 

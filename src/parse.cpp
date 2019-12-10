@@ -258,6 +258,10 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
     }
   }
 
+  if (type->IsStructOrUnionTy() && !type->IsComplete()) {
+    Error(token, "variable has incomplete type '{}'", type.ToString());
+  }
+
   if (type->IsFunctionTy()) {
     if (align > 0) {
       Error(token, "'_Alignas' attribute applies to func");
