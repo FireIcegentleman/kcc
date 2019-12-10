@@ -24,7 +24,6 @@ DebugInfo::DebugInfo(const std::string& file_name) {
   builder_ = new llvm::DIBuilder{*Module};
 
   std::filesystem::path path{file_name};
-  path /= std::filesystem::current_path();
   file_ = builder_->createFile(path.filename().string(),
                                path.parent_path().string());
 
