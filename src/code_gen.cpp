@@ -47,19 +47,35 @@ CodeGen::BreakContinue::BreakContinue(llvm::BasicBlock* break_block,
  * CodeGen
  */
 void CodeGen::GenCode(const TranslationUnit* root) {
-  DBuilder = new llvm::DIBuilder{*Module};
+  if (Debug) {
+    DBuilder = new llvm::DIBuilder{*Module};
 
-  std::filesystem::path path{root->GetLoc().GetFileName()};
+    std::filesystem::path path{root->GetLoc().GetFileName()};
+    path = std::filesystem::current_path() / path;
 
-  debug_info_.SetCu(DBuilder->createCompileUnit(
-      llvm::dwarf::DW_LANG_C11,
-      DBuilder->createFile(path.filename().string(),
-                           path.parent_path().string()),
-      "kcc", OptimizationLevel != OptLevel::kO0, "", 0));
+    debug_info_.SetCu(DBuilder->createCompileUnit(
+        llvm::dwarf::DW_LANG_C99,
+        DBuilder->createFile(path.filename().string(),
+                             path.parent_path().string()),
+        "kcc " KCC_VERSION, OptimizationLevel != OptLevel::kO0, "", 0, "",
+        llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false,
+        llvm::DICompileUnit::DebugNameTableKind::None));
+
+    Module->addModuleFlag(llvm::Module::Warning, "Dwarf Version",
+                          llvm::dwarf::DWARF_VERSION);
+    Module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                          llvm::DEBUG_METADATA_VERSION);
+  }
+
+  Module->addModuleFlag(llvm::Module::Error, "wchar_size", 4);
+  Module->addModuleFlag(llvm::Module::Max, "PIC Level", llvm::PICLevel::BigPIC);
+  Module->addModuleFlag(llvm::Module::Max, "PIE Level", llvm::PIELevel::Large);
 
   root->Accept(*this);
 
-  DBuilder->finalize();
+  if (Debug) {
+    DBuilder->finalize();
+  }
 
   if (llvm::verifyModule(*Module, &llvm::errs())) {
 #ifdef DEV
@@ -346,8 +362,6 @@ void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
 void CodeGen::PopBlock() { break_continue_stack_.pop(); }
 
 void CodeGen::Visit(const UnaryOpExpr* node) {
-  debug_info_.EmitLocation(node);
-
   auto is_unsigned{node->GetExpr()->GetType()->IsUnsigned()};
 
   switch (node->GetOp()) {
@@ -368,14 +382,17 @@ void CodeGen::Visit(const UnaryOpExpr* node) {
       break;
     case Tag::kMinus:
       node->GetExpr()->Accept(*this);
+      debug_info_.EmitLocation(node);
       result_ = NegOp(result_, is_unsigned);
       break;
     case Tag::kTilde:
       node->GetExpr()->Accept(*this);
+      debug_info_.EmitLocation(node);
       result_ = Builder.CreateNot(result_);
       break;
     case Tag::kExclaim:
       node->GetExpr()->Accept(*this);
+      debug_info_.EmitLocation(node);
       result_ = LogicNotOp(result_);
       break;
     case Tag::kStar:
@@ -390,16 +407,13 @@ void CodeGen::Visit(const UnaryOpExpr* node) {
 }
 
 void CodeGen::Visit(const TypeCastExpr* node) {
-  debug_info_.EmitLocation(node);
-
   node->GetExpr()->Accept(*this);
+  debug_info_.EmitLocation(node);
   result_ = CastTo(result_, node->GetCastToType()->GetLLVMType(),
                    node->GetExpr()->GetType()->IsUnsigned());
 }
 
 void CodeGen::Visit(const BinaryOpExpr* node) {
-  debug_info_.EmitLocation(node);
-
   switch (node->GetOp()) {
     case Tag::kPipePipe:
       result_ = LogicOrOp(node);
@@ -421,6 +435,8 @@ void CodeGen::Visit(const BinaryOpExpr* node) {
   auto lhs{result_};
   node->GetRHS()->Accept(*this);
   auto rhs{result_};
+
+  debug_info_.EmitLocation(node);
 
   bool is_unsigned{node->GetLHS()->GetType()->IsUnsigned()};
 
@@ -482,9 +498,8 @@ void CodeGen::Visit(const BinaryOpExpr* node) {
 }
 
 void CodeGen::Visit(const ConditionOpExpr* node) {
-  debug_info_.EmitLocation(node);
-
   if (auto cond{CalcConstantExpr{}.Calc(node->GetCond())}) {
+    debug_info_.EmitLocation(node);
     auto live{node->GetLHS()}, dead{node->GetRHS()};
     if (cond->isZeroValue()) {
       std::swap(live, dead);
@@ -501,6 +516,7 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
     node->GetLHS()->Accept(*this);
     auto lhs{result_};
     node->GetRHS()->Accept(*this);
+    debug_info_.EmitLocation(node);
     result_ = Builder.CreateSelect(cond, lhs, result_);
     return;
   }
@@ -531,6 +547,7 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
 
   assert(lhs->getType() == rhs->getType());
 
+  debug_info_.EmitLocation(node);
   auto phi{Builder.CreatePHI(lhs->getType(), 2)};
   phi->addIncoming(lhs, lhs_block);
   phi->addIncoming(rhs, rhs_block);
@@ -540,8 +557,6 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
 
 // LLVM 默认使用本机 C 调用约定
 void CodeGen::Visit(const FuncCallExpr* node) {
-  debug_info_.EmitLocation(node);
-
   if (MayCallBuiltinFunc(node)) {
     return;
   }
@@ -557,6 +572,7 @@ void CodeGen::Visit(const FuncCallExpr* node) {
   }
   Finish_Load();
 
+  debug_info_.EmitLocation(node);
   result_ = Builder.CreateCall(callee, args);
 }
 
@@ -608,8 +624,6 @@ void CodeGen::Visit(const EnumeratorExpr* node) {
 }
 
 void CodeGen::Visit(const ObjectExpr* node) {
-  debug_info_.EmitLocation(node);
-
   llvm::Value* ptr;
   if (node->InGlobal()) {
     ptr = node->GetGlobalPtr();
@@ -943,7 +957,10 @@ void CodeGen::Visit(const Declaration* node) {
 
   // 对于函数声明, 当函数调用或者定义时处理
   // 对于全局变量和局部静态变量, 在语法分析时已经处理完了
-  if (!node->IsObjDecl() || node->IsObjDeclInGlobal()) {
+  if (!node->IsObjDecl()) {
+    return;
+  } else if (node->IsObjDeclInGlobal()) {
+    debug_info_.EmitGlobalVar(node);
     return;
   }
 
@@ -953,18 +970,11 @@ void CodeGen::Visit(const Declaration* node) {
 void CodeGen::Visit(const FuncDef* node) {
   StartFunction(node);
 
-  auto unit{DBuilder->createFile(debug_info_.GetCu()->getFilename(),
-                                 debug_info_.GetCu()->getDirectory())};
-  llvm::DIScope* file_context{unit};
-  auto line_no{node->GetLoc().GetRow()};
-  auto sp{DBuilder->createFunction(
-      file_context, node->GetFuncType()->FuncGetName(), "", unit, line_no,
-      debug_info_.CreateFunctionType(node->GetFuncType(), unit), line_no,
-      llvm::DINode::FlagPrototyped, llvm::DISubprogram::SPFlagDefinition)};
-  func_->setSubprogram(sp);
-
-  debug_info_.PushLexicalBlock(sp);
-
+  llvm::DISubprogram* sp{};
+  if (Debug) {
+    sp = debug_info_.EmitFuncStart(node);
+    func_->setSubprogram(sp);
+  }
   debug_info_.EmitLocation(nullptr);
 
   std::int32_t arg_index{};
@@ -974,13 +984,17 @@ void CodeGen::Visit(const FuncDef* node) {
                                     (*iter)->GetName())};
     (*iter)->SetLocalPtr(ptr);
 
-    auto d{DBuilder->createParameterVariable(
-        sp, arg.getName(), ++arg_index, unit, line_no,
-        debug_info_.GetType((*iter)->GetType(), unit), true)};
+    if (Debug) {
+      auto unit{debug_info_.GetCu()->getFile()};
+      auto line_no{node->GetLoc().GetRow()};
+      auto d{DBuilder->createParameterVariable(
+          sp, arg.getName(), ++arg_index, unit, line_no,
+          debug_info_.GetType((*iter)->GetType(), unit), true)};
 
-    DBuilder->insertDeclare(ptr, d, DBuilder->createExpression(),
-                            llvm::DebugLoc::get(line_no, 0, sp),
-                            Builder.GetInsertBlock());
+      DBuilder->insertDeclare(ptr, d, DBuilder->createExpression(),
+                              llvm::DebugLoc::get(line_no, 0, sp),
+                              Builder.GetInsertBlock());
+    }
 
     // 将参数的值保存到分配的内存中
     Builder.CreateStore(&arg, ptr, is_volatile_);
@@ -988,15 +1002,24 @@ void CodeGen::Visit(const FuncDef* node) {
   }
 
   debug_info_.EmitLocation(node->GetBody());
+
+  if (node->GetFuncType()->FuncGetName() == "main") {
+    Builder.CreateStore(Builder.getInt32(0), return_value_);
+  }
+
   EmitStmt(node->GetBody());
   FinishFunction(node);
 
-  debug_info_.PopLexicalBlock();
+  if (Debug) {
+    debug_info_.PopLexicalBlock();
+  }
 }
 
 llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   auto is_unsigned{expr->GetType()->IsUnsigned()};
   auto lhs_ptr{GetPtr(expr)};
+
+  debug_info_.EmitLocation(expr);
   llvm::Value* lhs_value{Builder.CreateLoad(lhs_ptr, is_volatile_)};
 
   if (is_bit_field_) {
@@ -1067,6 +1090,7 @@ llvm::Value* CodeGen::Deref(const UnaryOpExpr* node) {
     binary->GetLHS()->Accept(*this);
     auto lhs{result_};
     binary->GetRHS()->Accept(*this);
+    debug_info_.EmitLocation(node);
     if (IsArrayPointer(lhs->getType())) {
       result_ = Builder.CreateInBoundsGEP(lhs, {result_, Builder.getInt64(0)});
     } else {
@@ -1075,9 +1099,11 @@ llvm::Value* CodeGen::Deref(const UnaryOpExpr* node) {
       is_volatile_ = false;
     }
   } else if (IsFuncPointer(node->GetExpr()->GetType()->GetLLVMType())) {
+    debug_info_.EmitLocation(node);
     node->GetExpr()->Accept(*this);
   } else {
     node->GetExpr()->Accept(*this);
+    debug_info_.EmitLocation(node);
     result_ = Builder.CreateLoad(result_, is_volatile_);
     is_volatile_ = false;
   }
@@ -1352,6 +1378,7 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr* node) {
   rhs_block = Builder.GetInsertBlock();
   EmitBlock(end_block);
 
+  debug_info_.EmitLocation(node);
   phi->addIncoming(rhs_value, rhs_block);
 
   return Builder.CreateZExt(phi, Builder.getInt32Ty());
@@ -1384,6 +1411,7 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr* node) {
 
   EmitBlock(end_block);
 
+  debug_info_.EmitLocation(node);
   phi->addIncoming(rhs_value, rhs_block);
 
   return Builder.CreateZExt(phi, Builder.getInt32Ty());
@@ -1396,12 +1424,14 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
   auto rhs{result_};
 
   auto lhs_ptr{GetPtr(node->GetLHS())};
+  debug_info_.EmitLocation(node);
 
   return Assign(lhs_ptr, rhs);
 }
 
 llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
   auto ptr{GetPtr(node)};
+  debug_info_.EmitLocation(node);
   auto type{ptr->getType()->getPointerElementType()};
 
   // 是位域
@@ -1668,6 +1698,8 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
 
   is_volatile_ = obj->GetQualType().IsVolatile();
 
+  debug_info_.EmitLocalVar(node);
+
   if (node->HasLocalInit()) {
     if (type->IsScalarTy()) {
       auto init{node->GetLocalInits()};
@@ -1829,10 +1861,6 @@ void CodeGen::StartFunction(const FuncDef* node) {
   }
 
   Builder.SetInsertPoint(entry);
-
-  if (node->GetFuncType()->FuncGetName() == "main") {
-    Builder.CreateStore(Builder.getInt32(0), return_value_);
-  }
 }
 
 void CodeGen::FinishFunction(const FuncDef* node) {

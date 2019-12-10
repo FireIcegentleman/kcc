@@ -827,6 +827,7 @@ Expr* Parser::ParseIndexExpr(Expr* expr) {
 
 Expr* Parser::ParseFuncCallExpr(Expr* expr) {
   std::vector<Expr*> args;
+  auto loc{Peek().GetLoc()};
 
   if (expr->GetType()->IsFunctionTy() &&
       expr->GetType()->FuncGetName() == "__builtin_va_arg_sub") {
@@ -834,7 +835,7 @@ Expr* Parser::ParseFuncCallExpr(Expr* expr) {
     Expect(Tag::kComma);
     auto type{ParseTypeName()};
     Expect(Tag::kRightParen);
-    auto ret{MakeAstNode<FuncCallExpr>(expr->GetLoc(), expr, args)};
+    auto ret{MakeAstNode<FuncCallExpr>(loc, expr, args)};
     ret->SetVaArgType(type.GetType());
     return ret;
   }
@@ -847,7 +848,7 @@ Expr* Parser::ParseFuncCallExpr(Expr* expr) {
     }
   }
 
-  return MakeAstNode<FuncCallExpr>(expr->GetLoc(), expr, args);
+  return MakeAstNode<FuncCallExpr>(loc, expr, args);
 }
 
 Expr* Parser::ParseMemberRefExpr(Expr* expr) {

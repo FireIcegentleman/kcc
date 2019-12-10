@@ -37,6 +37,8 @@ class Scope {
 
   auto begin() { return std::begin(usual_); }
   auto end() { return std::end(usual_); }
+  auto begin() const { return std::begin(usual_); }
+  auto end() const { return std::end(usual_); }
 
   void InsertTag(IdentifierExpr* ident);
   void InsertUsual(IdentifierExpr* ident);

@@ -107,18 +107,6 @@ void Preprocessor::SetMacroDefinitions(
 std::string Preprocessor::Cpp(const std::string &input_file) {
   Module = std::make_unique<llvm::Module>(input_file, Context);
 
-  Module->addModuleFlag(llvm::Module::Warning, "wchar_size", 4);
-  Module->addModuleFlag(llvm::Module::Warning, "PIC Level",
-                        llvm::PICLevel::BigPIC);
-  Module->addModuleFlag(llvm::Module::Warning, "PIE Level",
-                        llvm::PIELevel::Large);
-
-  Module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
-                        llvm::DEBUG_METADATA_VERSION);
-
-  Module->addModuleFlag(llvm::Module::Warning, "Dwarf Version",
-                        llvm::dwarf::DWARF_VERSION);
-
   // 获取当前计算机的目标三元组
   auto target_triple{llvm::sys::getDefaultTargetTriple()};
 

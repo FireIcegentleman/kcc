@@ -29,11 +29,18 @@ class DebugInfo {
   void PopLexicalBlock();
 
   void EmitLocation(const AstNode* ast);
+  void EmitLocalVar(const Declaration* decl);
+  void EmitGlobalVar(const Declaration* decl);
+  llvm::DISubprogram* EmitFuncStart(const FuncDef* func_def);
 
-  llvm::DISubroutineType* CreateFunctionType(Type* func_type,
-                                             llvm::DIFile* unit);
-  static llvm::DIType* GetBuiltinType(Type* type);
-  llvm::DIType* GetType(Type* type, llvm::DIFile* unit);
+  llvm::DIType* GetBuiltinType(Type* type);
+  llvm::DIType* GetPointerType(Type* type, llvm::DIFile* unit);
+  llvm::DIType* GetArrayType(Type* type, llvm::DIFile* unit);
+  llvm::DISubroutineType* CreateFunctionType(Type* type, llvm::DIFile* unit);
+  llvm::DIType* CreateStructType(Type* type, llvm::DIFile* unit,
+                                 const Location& loc);
+  llvm::DIType* GetType(Type* type, llvm::DIFile* unit,
+                        const Location& loc = Location{});
 
  private:
   llvm::DICompileUnit* cu_;
