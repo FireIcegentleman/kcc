@@ -2479,12 +2479,6 @@ void Parser::ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
       return;
     }
 
-    if (!designated && !has_brace &&
-        (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
-      PutBack();
-      return;
-    }
-
     if ((designated = Try(Tag::kPeriod))) {
       auto tok{Expect(Tag::kIdentifier)};
       auto name{tok.GetIdentifier()};
@@ -2735,13 +2729,6 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
       if (has_brace) {
         Next();
       }
-      return llvm::ConstantStruct::get(
-          llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
-    }
-
-    if (!designated && !has_brace &&
-        (Test(Tag::kPeriod) || Test(Tag::kLeftSquare))) {
-      PutBack();
       return llvm::ConstantStruct::get(
           llvm::cast<llvm::StructType>(type->GetLLVMType()), val);
     }
