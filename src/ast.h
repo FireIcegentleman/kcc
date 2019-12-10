@@ -106,7 +106,7 @@ class Expr : public AstNode {
   virtual bool IsLValue() const = 0;
 
   QualType GetQualType() const;
-  Type*& GetType();
+  Type* GetType();
   const Type* GetType() const;
 
   bool IsConst() const;

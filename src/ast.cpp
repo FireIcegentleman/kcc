@@ -35,7 +35,7 @@ void AstNode::SetLoc(const Location& loc) { loc_ = loc; }
  */
 QualType Expr::GetQualType() const { return type_; }
 
-Type*& Expr::GetType() { return type_.GetType(); }
+Type* Expr::GetType() { return type_.GetType(); }
 
 const Type* Expr::GetType() const { return type_.GetType(); }
 

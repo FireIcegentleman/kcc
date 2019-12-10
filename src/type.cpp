@@ -54,7 +54,7 @@ const Type* QualType::operator->() const {
   return type_;
 }
 
-Type*& QualType::GetType() {
+Type* QualType::GetType() {
   assert(type_ != nullptr);
   return type_;
 }

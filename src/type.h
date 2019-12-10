@@ -89,7 +89,7 @@ class QualType {
   Type* operator->();
   const Type* operator->() const;
 
-  Type*& GetType();
+  Type* GetType();
   const Type* GetType() const;
 
   std::uint32_t GetTypeQual() const;
