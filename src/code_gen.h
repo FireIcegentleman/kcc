@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <stack>
 #include <string>
 #include <unordered_map>
@@ -59,6 +60,14 @@ class CodeGen : public Visitor {
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
+
+  void TryEmitLocation(const AstNode *node);
+  void TryEmitFuncStart(const FuncDef *node);
+  void TryEmitFuncEnd();
+  void TryEmitParamVar(const std::string &name, Type *type,
+                       llvm::AllocaInst *ptr, const Location &loc);
+  void TryEmitLocalVar(const Declaration *node);
+  void TryEmitGlobalVar(const Declaration *node);
 
   virtual void Visit(const UnaryOpExpr *node) override;
   virtual void Visit(const TypeCastExpr *node) override;
@@ -161,7 +170,7 @@ class CodeGen : public Visitor {
 
   bool is_volatile_{false};
 
-  DebugInfo debug_info_;
+  std::unique_ptr<DebugInfo> debug_info_;
 };
 
 }  // namespace kcc

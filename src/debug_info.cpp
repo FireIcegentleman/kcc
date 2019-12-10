@@ -5,8 +5,12 @@
 #include "debug_info.h"
 
 #include <cassert>
+#include <filesystem>
 
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/BinaryFormat/Dwarf.h>
+#include <llvm/IR/DebugLoc.h>
+#include <llvm/IR/Module.h>
 
 #include "llvm_common.h"
 #include "scope.h"
@@ -14,47 +18,140 @@
 
 namespace kcc {
 
-llvm::DICompileUnit* DebugInfo::GetCu() const { return cu_; }
+DebugInfo::DebugInfo(const std::string& file_name) {
+  optimize_ = OptimizationLevel != OptLevel::kO0;
 
-void DebugInfo::SetCu(llvm::DICompileUnit* cu) { cu_ = cu; }
+  builder_ = new llvm::DIBuilder{*Module};
 
-void DebugInfo::PushLexicalBlock(llvm::DIScope* scope) {
-  lexical_blocks_.push_back(scope);
+  std::filesystem::path path{file_name};
+  path /= std::filesystem::current_path();
+  file_ = builder_->createFile(path.filename().string(),
+                               path.parent_path().string());
+
+  cu_ = builder_->createCompileUnit(
+      llvm::dwarf::DW_LANG_C99, file_, "kcc " KCC_VERSION, optimize_, "", 0, "",
+      llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false,
+      llvm::DICompileUnit::DebugNameTableKind::None);
+
+  Module->addModuleFlag(llvm::Module::Warning, "Dwarf Version",
+                        llvm::dwarf::DWARF_VERSION);
+  Module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                        llvm::DEBUG_METADATA_VERSION);
 }
 
-void DebugInfo::PopLexicalBlock() { lexical_blocks_.pop_back(); }
+void DebugInfo::Finalize() {
+  assert(std::empty(lexical_blocks_));
+  assert(subprogram_ == nullptr);
+  assert(arg_index_ == 0);
 
-void DebugInfo::EmitLocation(const AstNode* ast) {
-  if (Debug) {
-    if (!ast) {
-      return;
-    }
-
-    llvm::DIScope* scope;
-    if (std::empty(lexical_blocks_)) {
-      scope = cu_;
-    } else {
-      scope = lexical_blocks_.back();
-    }
-
-    auto loc{ast->GetLoc()};
-    Builder.SetCurrentDebugLocation(
-        llvm::DebugLoc::get(loc.GetRow(), loc.GetColumn(), scope));
-  }
+  builder_->finalize();
 }
 
-llvm::DISubroutineType* DebugInfo::CreateFunctionType(Type* type,
-                                                      llvm::DIFile* unit) {
-  llvm::SmallVector<llvm::Metadata*, 8> ele_types;
-
-  ele_types.push_back(GetType(type->FuncGetReturnType().GetType(), unit));
-
-  for (const auto& item : type->FuncGetParams()) {
-    ele_types.push_back(GetType(item->GetType(), unit));
+void DebugInfo::EmitLocation(const AstNode* node) {
+  if (!node) {
+    return Builder.SetCurrentDebugLocation(llvm::DebugLoc{});
   }
 
-  return DBuilder->createSubroutineType(
-      DBuilder->getOrCreateTypeArray(ele_types));
+  // 该作用域既可以是 compile-unit level
+  // 也可以是最近的封闭词法块(如当前函数)
+  llvm::DIScope* scope;
+  if (std::empty(lexical_blocks_)) {
+    scope = cu_;
+  } else {
+    scope = lexical_blocks_.back();
+  }
+
+  auto loc{node->GetLoc()};
+  Builder.SetCurrentDebugLocation(
+      llvm::DebugLoc::get(loc.GetRow(), loc.GetColumn(), scope));
+}
+
+void DebugInfo::EmitFuncStart(const FuncDef* node) {
+  assert(node != nullptr);
+
+  auto func_type{node->GetFuncType()};
+  auto func_name{func_type->FuncGetName()};
+
+  auto line_no{node->GetLoc().GetRow()};
+
+  subprogram_ = builder_->createFunction(
+      file_, func_name, func_name, file_, line_no,
+      GetFunctionType(func_type, file_), line_no, llvm::DINode::FlagPrototyped,
+      llvm::DISubprogram::SPFlagDefinition);
+
+  lexical_blocks_.push_back(subprogram_);
+
+  auto func{Module->getFunction(func_name)};
+  assert(func != nullptr);
+  func->setSubprogram(subprogram_);
+}
+
+void DebugInfo::EmitFuncEnd() {
+  subprogram_ = nullptr;
+  arg_index_ = 0;
+  lexical_blocks_.pop_back();
+}
+
+void DebugInfo::EmitParamVar(const std::string& name, Type* type,
+                             llvm::AllocaInst* ptr, const Location& loc) {
+  assert(subprogram_ != nullptr);
+
+  auto line_no{loc.GetRow()};
+  auto param{builder_->createParameterVariable(subprogram_, name, ++arg_index_,
+                                               file_, line_no,
+                                               GetType(type, file_), true)};
+
+  builder_->insertDeclare(ptr, param, builder_->createExpression(),
+                          llvm::DebugLoc::get(line_no, 0, subprogram_),
+                          Builder.GetInsertBlock());
+}
+
+void DebugInfo::EmitLocalVar(const Declaration* decl) {
+  assert(decl && decl->IsObjDecl());
+
+  llvm::DIScope* scope{lexical_blocks_.back()};
+  auto ident{decl->GetIdent()};
+  auto loc{decl->GetLoc()};
+  auto ptr{decl->GetIdent()->ToObjectExpr()->GetLocalPtr()};
+
+  auto var{builder_->createAutoVariable(
+      scope, ident->GetName(), file_, loc.GetRow(),
+      GetType(ident->GetType(), file_), optimize_)};
+
+  builder_->insertDeclare(
+      ptr, var, builder_->createExpression(),
+      llvm::DebugLoc::get(loc.GetRow(), loc.GetColumn(), scope),
+      Builder.GetInsertBlock());
+}
+
+void DebugInfo::EmitGlobalVar(const Declaration* decl) {
+  assert(decl != nullptr);
+
+  auto ptr{decl->GetIdent()->ToObjectExpr()->GetGlobalPtr()};
+  auto ident{decl->GetIdent()};
+  auto name{ident->GetName()};
+  auto loc{decl->GetLoc()};
+
+  auto info{builder_->createGlobalVariableExpression(
+      cu_, name, name, file_, loc.GetRow(),
+      GetType(ident->GetType(), file_, loc), ptr->hasInternalLinkage())};
+
+  ptr->addDebugInfo(info);
+}
+
+llvm::DIType* DebugInfo::GetType(Type* type, llvm::DIFile* unit,
+                                 const Location& loc) {
+  if (type->IsPointerTy()) {
+    return GetPointerType(type, unit);
+  } else if (type->IsArrayTy()) {
+    return GetArrayType(type, unit);
+  } else if (type->IsStructOrUnionTy()) {
+    return GetStructType(type, unit, loc);
+  } else if (type->IsFunctionTy()) {
+    return GetFunctionType(type, unit);
+  } else {
+    return GetBuiltinType(type);
+  }
 }
 
 llvm::DIType* DebugInfo::GetBuiltinType(Type* type) {
@@ -76,33 +173,44 @@ llvm::DIType* DebugInfo::GetBuiltinType(Type* type) {
     assert(false);
   }
 
-  return DBuilder->createBasicType(type->ToString(), type->GetWidth() * 8,
+  return builder_->createBasicType(type->ToString(), type->GetWidth() * 8,
                                    encoding);
 }
 
 llvm::DIType* DebugInfo::GetPointerType(Type* type, llvm::DIFile* unit) {
-  return DBuilder->createPointerType(
-      GetType(type->PointerGetElementType().GetType(), unit),
-      type->GetWidth() * 8);
+  auto pointee_type{GetType(type->PointerGetElementType().GetType(), unit)};
+  auto size_in_bit{type->GetWidth() * 8};
+  auto align_in_bit{type->GetAlign() * 8};
+
+  return builder_->createPointerType(pointee_type, size_in_bit, align_in_bit);
 }
 
-llvm::DIType* DebugInfo::GetType(Type* type, llvm::DIFile* unit,
-                                 const Location& loc) {
-  if (type->IsPointerTy()) {
-    return GetPointerType(type, unit);
-  } else if (type->IsArrayTy()) {
-    return GetArrayType(type, unit);
-  } else if (type->IsStructOrUnionTy()) {
-    return CreateStructType(type, unit, loc);
-  } else if (type->IsFunctionTy()) {
-    return CreateFunctionType(type, unit);
+llvm::DIType* DebugInfo::GetArrayType(Type* type, llvm::DIFile* unit) {
+  std::int32_t size{}, align{};
+
+  if (type->IsComplete()) {
+    size = type->GetWidth();
+    align = type->GetAlign();
   } else {
-    return GetBuiltinType(type);
+    align = type->ArrayGetElementType()->GetAlign();
   }
+
+  // 下标范围
+  llvm::SmallVector<llvm::Metadata*, 8> subscripts;
+  QualType qual_type{type};
+  while (qual_type->IsArrayTy()) {
+    subscripts.push_back(
+        builder_->getOrCreateSubrange(0, type->ArrayGetNumElements()));
+    qual_type = qual_type->ArrayGetElementType();
+  }
+
+  return builder_->createArrayType(
+      size, align * 8, GetType(type->ArrayGetElementType().GetType(), unit),
+      builder_->getOrCreateArray(subscripts));
 }
 
-llvm::DIType* DebugInfo::CreateStructType(Type* type, llvm::DIFile* unit,
-                                          const Location& loc) {
+llvm::DIType* DebugInfo::GetStructType(Type* type, llvm::DIFile* file,
+                                       const Location& loc) {
   std::int32_t tag{};
   if (type->IsStructTy()) {
     tag = llvm::dwarf::DW_TAG_structure_type;
@@ -120,7 +228,7 @@ llvm::DIType* DebugInfo::CreateStructType(Type* type, llvm::DIFile* unit,
     scope = lexical_blocks_.back();
   }
 
-  auto fwd_type{DBuilder->createReplaceableCompositeType(tag, name, scope, unit,
+  auto fwd_type{builder_->createReplaceableCompositeType(tag, name, scope, file,
                                                          loc.GetRow())};
   if (!type->IsComplete()) {
     return fwd_type;
@@ -128,7 +236,7 @@ llvm::DIType* DebugInfo::CreateStructType(Type* type, llvm::DIFile* unit,
 
   llvm::SmallVector<llvm::Metadata*, 16> ele_types;
   for (const auto& [name, ident] : *type->StructGetScope()) {
-    auto member_type{GetType(ident->GetType(), unit, ident->GetLoc())};
+    auto member_type{GetType(ident->GetType(), file, ident->GetLoc())};
     auto member_name{name};
 
     if (std::empty(name)) {
@@ -144,91 +252,34 @@ llvm::DIType* DebugInfo::CreateStructType(Type* type, llvm::DIFile* unit,
       align = ident->GetType()->GetAlign();
     }
 
-    member_type = DBuilder->createMemberType(
-        scope, name, unit, line, size, align,
+    member_type = builder_->createMemberType(
+        scope, name, file, line, size, align,
         ident->ToObjectExpr()->GetOffset(), llvm::DINode::DIFlags::FlagPublic,
         member_type);
 
     ele_types.push_back(member_type);
   }
 
-  auto real_type{DBuilder->createStructType(
-      scope, name, unit, loc.GetRow(), type->GetWidth() * 8,
+  auto real_type{builder_->createStructType(
+      scope, name, file, loc.GetRow(), type->GetWidth() * 8,
       type->GetAlign() * 8, llvm::DINode::DIFlags::FlagZero, nullptr,
-      DBuilder->getOrCreateArray(ele_types))};
+      builder_->getOrCreateArray(ele_types))};
 
   return real_type;
 }
 
-llvm::DIType* DebugInfo::GetArrayType(Type* type, llvm::DIFile* unit) {
-  std::int32_t size{}, align{};
+llvm::DISubroutineType* DebugInfo::GetFunctionType(Type* type,
+                                                   llvm::DIFile* file) {
+  llvm::SmallVector<llvm::Metadata*, 8> ele_types;
 
-  if (type->IsComplete()) {
-    size = type->GetWidth();
-    align = type->GetAlign();
-  } else {
-    align = type->ArrayGetElementType()->GetAlign();
+  ele_types.push_back(GetType(type->FuncGetReturnType().GetType(), file));
+
+  for (const auto& item : type->FuncGetParams()) {
+    ele_types.push_back(GetType(item->GetType(), file));
   }
 
-  llvm::SmallVector<llvm::Metadata*, 8> subscripts;
-  QualType sub_type{type};
-  while (sub_type->IsArrayTy()) {
-    subscripts.push_back(
-        DBuilder->getOrCreateSubrange(0, type->ArrayGetNumElements()));
-    sub_type = sub_type->ArrayGetElementType();
-  }
-
-  return DBuilder->createArrayType(
-      size, align, GetType(type->ArrayGetElementType().GetType(), unit),
-      DBuilder->getOrCreateArray(subscripts));
-}
-
-void DebugInfo::EmitLocalVar(const Declaration* decl) {
-  if (Debug) {
-    llvm::DIScope* scope{lexical_blocks_.back()};
-
-    auto var{DBuilder->createAutoVariable(
-        scope, decl->GetIdent()->GetName(), lexical_blocks_.back()->getFile(),
-        decl->GetLoc().GetRow(),
-        GetType(decl->GetIdent()->GetType(),
-                lexical_blocks_.back()->getFile()))};
-
-    DBuilder->insertDeclare(
-        decl->GetIdent()->ToObjectExpr()->GetLocalPtr(), var,
-        DBuilder->createExpression(),
-        llvm::DebugLoc::get(decl->GetLoc().GetRow(), decl->GetLoc().GetColumn(),
-                            scope),
-        Builder.GetInsertBlock());
-  }
-}
-
-void DebugInfo::EmitGlobalVar(const Declaration* decl) {
-  if (Debug) {
-    llvm::DIScope* scope{cu_};
-    auto var{decl->GetIdent()->ToObjectExpr()->GetGlobalPtr()};
-    var->addDebugInfo(DBuilder->createGlobalVariableExpression(
-        scope, decl->GetIdent()->GetName(), "", cu_->getFile(),
-        decl->GetLoc().GetRow(),
-        GetType(decl->GetIdent()->GetType(), cu_->getFile(), decl->GetLoc()),
-        var->hasInternalLinkage()));
-  }
-}
-
-llvm::DISubprogram* DebugInfo::EmitFuncStart(const FuncDef* func_def) {
-  llvm::DISubprogram* sp{};
-
-  if (Debug) {
-    auto unit{DBuilder->createFile(cu_->getFilename(), cu_->getDirectory())};
-    llvm::DIScope* file_context{unit};
-    auto line_no{func_def->GetLoc().GetRow()};
-    sp = DBuilder->createFunction(
-        file_context, func_def->GetFuncType()->FuncGetName(), "", unit, line_no,
-        CreateFunctionType(func_def->GetFuncType(), unit), line_no,
-        llvm::DINode::FlagPrototyped, llvm::DISubprogram::SPFlagDefinition);
-    lexical_blocks_.push_back(sp);
-  }
-
-  return sp;
+  return builder_->createSubroutineType(
+      builder_->getOrCreateTypeArray(ele_types));
 }
 
 }  // namespace kcc

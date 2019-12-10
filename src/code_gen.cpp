@@ -5,7 +5,6 @@
 #include "code_gen.h"
 
 #include <cassert>
-#include <filesystem>
 #include <vector>
 
 #include <llvm/IR/Attributes.h>
@@ -48,23 +47,7 @@ CodeGen::BreakContinue::BreakContinue(llvm::BasicBlock* break_block,
  */
 void CodeGen::GenCode(const TranslationUnit* root) {
   if (Debug) {
-    DBuilder = new llvm::DIBuilder{*Module};
-
-    std::filesystem::path path{root->GetLoc().GetFileName()};
-    path = std::filesystem::current_path() / path;
-
-    debug_info_.SetCu(DBuilder->createCompileUnit(
-        llvm::dwarf::DW_LANG_C99,
-        DBuilder->createFile(path.filename().string(),
-                             path.parent_path().string()),
-        "kcc " KCC_VERSION, OptimizationLevel != OptLevel::kO0, "", 0, "",
-        llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false,
-        llvm::DICompileUnit::DebugNameTableKind::None));
-
-    Module->addModuleFlag(llvm::Module::Warning, "Dwarf Version",
-                          llvm::dwarf::DWARF_VERSION);
-    Module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
-                          llvm::DEBUG_METADATA_VERSION);
+    debug_info_ = std::make_unique<DebugInfo>(root->GetLoc().GetFileName());
   }
 
   Module->addModuleFlag(llvm::Module::Error, "wchar_size", 4);
@@ -73,8 +56,8 @@ void CodeGen::GenCode(const TranslationUnit* root) {
 
   root->Accept(*this);
 
-  if (Debug) {
-    DBuilder->finalize();
+  if (debug_info_) {
+    debug_info_->Finalize();
   }
 
   if (llvm::verifyModule(*Module, &llvm::errs())) {
@@ -361,6 +344,43 @@ void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
 
 void CodeGen::PopBlock() { break_continue_stack_.pop(); }
 
+void CodeGen::TryEmitLocation(const AstNode* node) {
+  if (debug_info_) {
+    debug_info_->EmitLocation(node);
+  }
+}
+
+void CodeGen::TryEmitFuncStart(const FuncDef* node) {
+  if (debug_info_) {
+    debug_info_->EmitFuncStart(node);
+  }
+}
+
+void CodeGen::TryEmitFuncEnd() {
+  if (debug_info_) {
+    debug_info_->EmitFuncEnd();
+  }
+}
+
+void CodeGen::TryEmitParamVar(const std::string& name, Type* type,
+                              llvm::AllocaInst* ptr, const Location& loc) {
+  if (debug_info_) {
+    debug_info_->EmitParamVar(name, type, ptr, loc);
+  }
+}
+
+void CodeGen::TryEmitLocalVar(const Declaration* node) {
+  if (debug_info_) {
+    debug_info_->EmitLocalVar(node);
+  }
+}
+
+void CodeGen::TryEmitGlobalVar(const Declaration* node) {
+  if (debug_info_) {
+    debug_info_->EmitGlobalVar(node);
+  }
+}
+
 void CodeGen::Visit(const UnaryOpExpr* node) {
   auto is_unsigned{node->GetExpr()->GetType()->IsUnsigned()};
 
@@ -382,17 +402,17 @@ void CodeGen::Visit(const UnaryOpExpr* node) {
       break;
     case Tag::kMinus:
       node->GetExpr()->Accept(*this);
-      debug_info_.EmitLocation(node);
+      TryEmitLocation(node);
       result_ = NegOp(result_, is_unsigned);
       break;
     case Tag::kTilde:
       node->GetExpr()->Accept(*this);
-      debug_info_.EmitLocation(node);
+      TryEmitLocation(node);
       result_ = Builder.CreateNot(result_);
       break;
     case Tag::kExclaim:
       node->GetExpr()->Accept(*this);
-      debug_info_.EmitLocation(node);
+      TryEmitLocation(node);
       result_ = LogicNotOp(result_);
       break;
     case Tag::kStar:
@@ -408,7 +428,7 @@ void CodeGen::Visit(const UnaryOpExpr* node) {
 
 void CodeGen::Visit(const TypeCastExpr* node) {
   node->GetExpr()->Accept(*this);
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   result_ = CastTo(result_, node->GetCastToType()->GetLLVMType(),
                    node->GetExpr()->GetType()->IsUnsigned());
 }
@@ -436,7 +456,7 @@ void CodeGen::Visit(const BinaryOpExpr* node) {
   node->GetRHS()->Accept(*this);
   auto rhs{result_};
 
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   bool is_unsigned{node->GetLHS()->GetType()->IsUnsigned()};
 
@@ -499,7 +519,7 @@ void CodeGen::Visit(const BinaryOpExpr* node) {
 
 void CodeGen::Visit(const ConditionOpExpr* node) {
   if (auto cond{CalcConstantExpr{}.Calc(node->GetCond())}) {
-    debug_info_.EmitLocation(node);
+    TryEmitLocation(node);
     auto live{node->GetLHS()}, dead{node->GetRHS()};
     if (cond->isZeroValue()) {
       std::swap(live, dead);
@@ -516,7 +536,7 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
     node->GetLHS()->Accept(*this);
     auto lhs{result_};
     node->GetRHS()->Accept(*this);
-    debug_info_.EmitLocation(node);
+    TryEmitLocation(node);
     result_ = Builder.CreateSelect(cond, lhs, result_);
     return;
   }
@@ -547,7 +567,8 @@ void CodeGen::Visit(const ConditionOpExpr* node) {
 
   assert(lhs->getType() == rhs->getType());
 
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
+
   auto phi{Builder.CreatePHI(lhs->getType(), 2)};
   phi->addIncoming(lhs, lhs_block);
   phi->addIncoming(rhs, rhs_block);
@@ -572,14 +593,14 @@ void CodeGen::Visit(const FuncCallExpr* node) {
   }
   Finish_Load();
 
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   result_ = Builder.CreateCall(callee, args);
 }
 
 // 常量用 ConstantFP / ConstantInt 类表示
 // 在 LLVM IR 中, 常量都是唯一且共享的
 void CodeGen::Visit(const ConstantExpr* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   auto type{node->GetType()->GetLLVMType()};
 
@@ -594,12 +615,12 @@ void CodeGen::Visit(const ConstantExpr* node) {
 
 // 注意已经添加空字符了
 void CodeGen::Visit(const StringLiteralExpr* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   result_ = node->GetPtr();
 }
 
 void CodeGen::Visit(const IdentifierExpr* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   auto type{node->GetType()};
   assert(type->IsFunctionTy());
@@ -619,7 +640,7 @@ void CodeGen::Visit(const IdentifierExpr* node) {
 }
 
 void CodeGen::Visit(const EnumeratorExpr* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   result_ = llvm::ConstantInt::get(Builder.getInt32Ty(), node->GetVal());
 }
 
@@ -643,19 +664,19 @@ void CodeGen::Visit(const ObjectExpr* node) {
 }
 
 void CodeGen::Visit(const StmtExpr* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   node->GetBlock()->Accept(*this);
 }
 
 void CodeGen::Visit(const LabelStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   EmitBlock(GetBasicBlockForLabel(node));
   EmitStmt(node->GetStmt());
 }
 
 void CodeGen::Visit(const CaseStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   auto block{CreateBasicBlock("switch.case")};
   EmitBlock(block);
@@ -678,7 +699,7 @@ void CodeGen::Visit(const CaseStmt* node) {
 }
 
 void CodeGen::Visit(const DefaultStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   auto default_block{switch_inst_->getDefaultDest()};
   assert(default_block->empty());
@@ -688,7 +709,7 @@ void CodeGen::Visit(const DefaultStmt* node) {
 }
 
 void CodeGen::Visit(const CompoundStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   for (const auto& item : node->GetStmts()) {
     EmitStmt(item);
@@ -696,7 +717,7 @@ void CodeGen::Visit(const CompoundStmt* node) {
 }
 
 void CodeGen::Visit(const ExprStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   if (auto expr{node->GetExpr()}) {
     expr->Accept(*this);
@@ -706,7 +727,7 @@ void CodeGen::Visit(const ExprStmt* node) {
 }
 
 void CodeGen::Visit(const IfStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   if (auto cond{CalcConstantExpr{}.Calc(node->GetCond())}) {
     auto executed{node->GetThen()}, skipped{node->GetElse()};
@@ -747,7 +768,7 @@ void CodeGen::Visit(const IfStmt* node) {
 }
 
 void CodeGen::Visit(const SwitchStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   node->GetCond()->Accept(*this);
   auto cond_val{result_};
@@ -779,7 +800,7 @@ void CodeGen::Visit(const SwitchStmt* node) {
 }
 
 void CodeGen::Visit(const WhileStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   auto cond_block{CreateBasicBlock("while.cond")};
   EmitBlock(cond_block);
@@ -823,7 +844,7 @@ void CodeGen::Visit(const WhileStmt* node) {
 }
 
 void CodeGen::Visit(const DoWhileStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   auto body_block{CreateBasicBlock("do.while.body")};
   auto cond_block{CreateBasicBlock("do.while.cond")};
@@ -856,7 +877,7 @@ void CodeGen::Visit(const DoWhileStmt* node) {
 }
 
 void CodeGen::Visit(const ForStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   if (auto init{node->GetInit()}) {
     init->Accept(*this);
@@ -897,12 +918,12 @@ void CodeGen::Visit(const ForStmt* node) {
 }
 
 void CodeGen::Visit(const GotoStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   EmitBranchThroughCleanup(GetBasicBlockForLabel(node->GetLabel()));
 }
 
 void CodeGen::Visit(const ContinueStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   if (std::empty(break_continue_stack_)) {
     Error(node->GetLoc(), "continue stmt not in a loop or switch");
@@ -912,7 +933,7 @@ void CodeGen::Visit(const ContinueStmt* node) {
 }
 
 void CodeGen::Visit(const BreakStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   if (std::empty(break_continue_stack_)) {
     Error(node->GetLoc(), "break stmt not in a loop or switch");
@@ -922,7 +943,7 @@ void CodeGen::Visit(const BreakStmt* node) {
 }
 
 void CodeGen::Visit(const ReturnStmt* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   auto expr{node->GetExpr()};
 
@@ -945,7 +966,7 @@ void CodeGen::Visit(const ReturnStmt* node) {
 }
 
 void CodeGen::Visit(const TranslationUnit* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   for (const auto& item : node->GetExtDecl()) {
     item->Accept(*this);
@@ -953,14 +974,14 @@ void CodeGen::Visit(const TranslationUnit* node) {
 }
 
 void CodeGen::Visit(const Declaration* node) {
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   // 对于函数声明, 当函数调用或者定义时处理
   // 对于全局变量和局部静态变量, 在语法分析时已经处理完了
   if (!node->IsObjDecl()) {
     return;
   } else if (node->IsObjDeclInGlobal()) {
-    debug_info_.EmitGlobalVar(node);
+    TryEmitGlobalVar(node);
     return;
   }
 
@@ -970,38 +991,25 @@ void CodeGen::Visit(const Declaration* node) {
 void CodeGen::Visit(const FuncDef* node) {
   StartFunction(node);
 
-  llvm::DISubprogram* sp{};
-  if (Debug) {
-    sp = debug_info_.EmitFuncStart(node);
-    func_->setSubprogram(sp);
-  }
-  debug_info_.EmitLocation(nullptr);
+  TryEmitFuncStart(node);
+  TryEmitLocation(nullptr);
 
-  std::int32_t arg_index{};
   auto iter{std::begin(node->GetFuncType()->FuncGetParams())};
   for (auto&& arg : func_->args()) {
-    auto ptr{CreateEntryBlockAlloca((*iter)->GetType()->GetLLVMType(),
-                                    (*iter)->GetName())};
+    auto obj{*iter};
+    auto type{obj->GetType()};
+    auto name{obj->GetName()};
+
+    auto ptr{CreateEntryBlockAlloca(type->GetLLVMType(), name)};
     (*iter)->SetLocalPtr(ptr);
 
-    if (Debug) {
-      auto unit{debug_info_.GetCu()->getFile()};
-      auto line_no{node->GetLoc().GetRow()};
-      auto d{DBuilder->createParameterVariable(
-          sp, arg.getName(), ++arg_index, unit, line_no,
-          debug_info_.GetType((*iter)->GetType(), unit), true)};
-
-      DBuilder->insertDeclare(ptr, d, DBuilder->createExpression(),
-                              llvm::DebugLoc::get(line_no, 0, sp),
-                              Builder.GetInsertBlock());
-    }
-
+    TryEmitParamVar(name, type, ptr, obj->GetLoc());
     // 将参数的值保存到分配的内存中
     Builder.CreateStore(&arg, ptr, is_volatile_);
     ++iter;
   }
 
-  debug_info_.EmitLocation(node->GetBody());
+  TryEmitLocation(node);
 
   if (node->GetFuncType()->FuncGetName() == "main") {
     Builder.CreateStore(Builder.getInt32(0), return_value_);
@@ -1010,16 +1018,14 @@ void CodeGen::Visit(const FuncDef* node) {
   EmitStmt(node->GetBody());
   FinishFunction(node);
 
-  if (Debug) {
-    debug_info_.PopLexicalBlock();
-  }
+  TryEmitFuncEnd();
 }
 
 llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   auto is_unsigned{expr->GetType()->IsUnsigned()};
   auto lhs_ptr{GetPtr(expr)};
 
-  debug_info_.EmitLocation(expr);
+  TryEmitLocation(expr);
   llvm::Value* lhs_value{Builder.CreateLoad(lhs_ptr, is_volatile_)};
 
   if (is_bit_field_) {
@@ -1090,7 +1096,7 @@ llvm::Value* CodeGen::Deref(const UnaryOpExpr* node) {
     binary->GetLHS()->Accept(*this);
     auto lhs{result_};
     binary->GetRHS()->Accept(*this);
-    debug_info_.EmitLocation(node);
+    TryEmitLocation(node);
     if (IsArrayPointer(lhs->getType())) {
       result_ = Builder.CreateInBoundsGEP(lhs, {result_, Builder.getInt64(0)});
     } else {
@@ -1099,11 +1105,11 @@ llvm::Value* CodeGen::Deref(const UnaryOpExpr* node) {
       is_volatile_ = false;
     }
   } else if (IsFuncPointer(node->GetExpr()->GetType()->GetLLVMType())) {
-    debug_info_.EmitLocation(node);
+    TryEmitLocation(node);
     node->GetExpr()->Accept(*this);
   } else {
     node->GetExpr()->Accept(*this);
-    debug_info_.EmitLocation(node);
+    TryEmitLocation(node);
     result_ = Builder.CreateLoad(result_, is_volatile_);
     is_volatile_ = false;
   }
@@ -1378,7 +1384,7 @@ llvm::Value* CodeGen::LogicOrOp(const BinaryOpExpr* node) {
   rhs_block = Builder.GetInsertBlock();
   EmitBlock(end_block);
 
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   phi->addIncoming(rhs_value, rhs_block);
 
   return Builder.CreateZExt(phi, Builder.getInt32Ty());
@@ -1411,7 +1417,7 @@ llvm::Value* CodeGen::LogicAndOp(const BinaryOpExpr* node) {
 
   EmitBlock(end_block);
 
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   phi->addIncoming(rhs_value, rhs_block);
 
   return Builder.CreateZExt(phi, Builder.getInt32Ty());
@@ -1424,14 +1430,14 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
   auto rhs{result_};
 
   auto lhs_ptr{GetPtr(node->GetLHS())};
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
 
   return Assign(lhs_ptr, rhs);
 }
 
 llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
   auto ptr{GetPtr(node)};
-  debug_info_.EmitLocation(node);
+  TryEmitLocation(node);
   auto type{ptr->getType()->getPointerElementType()};
 
   // 是位域
@@ -1698,7 +1704,7 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
 
   is_volatile_ = obj->GetQualType().IsVolatile();
 
-  debug_info_.EmitLocalVar(node);
+  TryEmitLocation(node);
 
   if (node->HasLocalInit()) {
     if (type->IsScalarTy()) {

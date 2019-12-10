@@ -4,12 +4,16 @@
 
 #pragma once
 
+#include <cstdint>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalVariable.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
 
 #include "ast.h"
@@ -18,34 +22,46 @@
 
 namespace kcc {
 
-inline llvm::DIBuilder* DBuilder;
-
+// LLVM 中使用的是 DWARF
+// 它是一种广泛使用的标准化调试数据格式
 class DebugInfo {
  public:
-  llvm::DICompileUnit* GetCu() const;
-  void SetCu(llvm::DICompileUnit* cu);
+  explicit DebugInfo(const std::string& file_name);
+  // 代码生成完毕之后调用它
+  void Finalize();
 
-  void PushLexicalBlock(llvm::DIScope* scope);
-  void PopLexicalBlock();
+  void EmitLocation(const AstNode* node);
 
-  void EmitLocation(const AstNode* ast);
-  void EmitLocalVar(const Declaration* decl);
-  void EmitGlobalVar(const Declaration* decl);
-  llvm::DISubprogram* EmitFuncStart(const FuncDef* func_def);
+  void EmitFuncStart(const FuncDef* node);
+  void EmitFuncEnd();
 
-  llvm::DIType* GetBuiltinType(Type* type);
-  llvm::DIType* GetPointerType(Type* type, llvm::DIFile* unit);
-  llvm::DIType* GetArrayType(Type* type, llvm::DIFile* unit);
-  llvm::DISubroutineType* CreateFunctionType(Type* type, llvm::DIFile* unit);
-  llvm::DIType* CreateStructType(Type* type, llvm::DIFile* unit,
-                                 const Location& loc);
-  llvm::DIType* GetType(Type* type, llvm::DIFile* unit,
-                        const Location& loc = Location{});
+  void EmitParamVar(const std::string& name, Type* type, llvm::AllocaInst* ptr,
+                    const Location& loc);
+  void EmitLocalVar(const Declaration* node);
+  void EmitGlobalVar(const Declaration* node);
 
  private:
-  llvm::DICompileUnit* cu_;
+  llvm::DIType* GetType(Type* type, llvm::DIFile* file,
+                        const Location& loc = Location{});
+  llvm::DIType* GetBuiltinType(Type* type);
+  llvm::DIType* GetPointerType(Type* type, llvm::DIFile* file);
+  llvm::DIType* GetArrayType(Type* type, llvm::DIFile* file);
+  llvm::DIType* GetStructType(Type* type, llvm::DIFile* file,
+                              const Location& loc);
+  llvm::DISubroutineType* GetFunctionType(Type* type, llvm::DIFile* file);
 
+  bool optimize_;
+  // DWARF 中一段代码的顶级容器, 它包含单个翻译单元类型和函数数据
+  llvm::DICompileUnit* cu_;
+  llvm::DIFile* file_;
+  // 类似与 IRBuilder
+  llvm::DIBuilder* builder_;
   std::vector<llvm::DIScope*> lexical_blocks_;
+
+  llvm::DISubprogram* subprogram_{};
+  std::int32_t arg_index_{};
+
+  std::unordered_map<Type*, llvm::DIType*> type_cache_;
 };
 
 }  // namespace kcc
