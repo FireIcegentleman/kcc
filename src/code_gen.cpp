@@ -376,7 +376,7 @@ void CodeGen::TryEmitLocalVar(const Declaration* node) {
 }
 
 void CodeGen::TryEmitGlobalVar(const Declaration* node) {
-  if (debug_info_) {
+  if (debug_info_ && node->GetIdent()->ToObjectExpr()->HasGlobalPtr()) {
     debug_info_->EmitGlobalVar(node);
   }
 }
@@ -1704,7 +1704,7 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
 
   is_volatile_ = obj->GetQualType().IsVolatile();
 
-  TryEmitLocation(node);
+  TryEmitLocalVar(node);
 
   if (node->HasLocalInit()) {
     if (type->IsScalarTy()) {

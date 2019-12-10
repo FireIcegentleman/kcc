@@ -413,6 +413,7 @@ class ObjectExpr : public IdentifierExpr {
   void SetGlobalPtr(llvm::GlobalVariable* global_ptr);
   llvm::AllocaInst* GetLocalPtr() const;
   llvm::GlobalVariable* GetGlobalPtr() const;
+  bool HasGlobalPtr() const;
 
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;

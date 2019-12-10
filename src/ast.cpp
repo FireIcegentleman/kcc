@@ -945,6 +945,8 @@ llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() const {
   return global_ptr_;
 }
 
+bool ObjectExpr::HasGlobalPtr() const { return global_ptr_; }
+
 std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() {
   return indexs_;
 }

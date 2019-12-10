@@ -41,14 +41,15 @@ class DebugInfo {
   void EmitGlobalVar(const Declaration* node);
 
  private:
-  llvm::DIType* GetType(Type* type, llvm::DIFile* file,
-                        const Location& loc = Location{});
-  llvm::DIType* GetBuiltinType(Type* type);
-  llvm::DIType* GetPointerType(Type* type, llvm::DIFile* file);
-  llvm::DIType* GetArrayType(Type* type, llvm::DIFile* file);
-  llvm::DIType* GetStructType(Type* type, llvm::DIFile* file,
-                              const Location& loc);
-  llvm::DISubroutineType* GetFunctionType(Type* type, llvm::DIFile* file);
+  llvm::DIScope* GetScope();
+
+  llvm::DIType* GetOrCreateType(Type* type, const Location& loc = Location{});
+
+  llvm::DIType* CreateBuiltinType(Type* type);
+  llvm::DIType* CreatePointerType(Type* type);
+  llvm::DIType* CreateArrayType(Type* type);
+  llvm::DIType* CreateStructType(Type* type, const Location& loc);
+  llvm::DISubroutineType* CreateFunctionType(Type* type);
 
   bool optimize_;
   // DWARF 中一段代码的顶级容器, 它包含单个翻译单元类型和函数数据
