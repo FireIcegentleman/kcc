@@ -25,6 +25,9 @@ class Location {
   std::string GetLineContent() const;
   std::string GetPositionArrow() const;
 
+  std::int32_t GetRow() const;
+  std::int32_t GetColumn() const;
+
  private:
   std::string file_name_;
   const char *content_;

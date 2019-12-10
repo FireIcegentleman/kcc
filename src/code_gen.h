@@ -18,6 +18,7 @@
 #include <llvm/IR/ValueHandle.h>
 
 #include "ast.h"
+#include "debug_info.h"
 #include "visitor.h"
 
 namespace kcc {
@@ -159,6 +160,8 @@ class CodeGen : public Visitor {
   ObjectExpr *bit_field_{nullptr};
 
   bool is_volatile_{false};
+
+  DebugInfo debug_info_;
 };
 
 }  // namespace kcc

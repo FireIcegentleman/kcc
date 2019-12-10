@@ -18,6 +18,8 @@ namespace kcc {
 
 enum class OptLevel { kO0, kO1, kO2, kO3 };
 
+enum class Langs { kC, kCpp };
+
 enum class LangStds { kC89, kC99, kC11, kC17, kGnu89, kGnu99, kGnu11, kGnu17 };
 
 inline std::vector<std::string> SoFile;
@@ -71,12 +73,11 @@ inline llvm::cl::opt<std::string> OutputFilePath{
 
 inline llvm::cl::opt<OptLevel> OptimizationLevel{
     llvm::cl::desc{"Set optimization level to <number>"},
-    llvm::cl::value_desc{"number"}, llvm::cl::init(OptLevel::kO2),
+    llvm::cl::value_desc{"number"}, llvm::cl::init(OptLevel::kO0),
     llvm::cl::values(
-        clEnumValN(OptLevel::kO0, "O0", "No optimizations"),
+        clEnumValN(OptLevel::kO0, "O0", "No optimizations (default)"),
         clEnumValN(OptLevel::kO1, "O1", "Enable trivial optimizations"),
-        clEnumValN(OptLevel::kO2, "O2",
-                   "Enable default optimizations (default)"),
+        clEnumValN(OptLevel::kO2, "O2", "Enable default optimizations"),
         clEnumValN(OptLevel::kO3, "O3", "Enable expensive optimizations")),
     llvm::cl::cat{Category}};
 
@@ -103,6 +104,13 @@ inline llvm::cl::list<std::string> Libs{
     "l", llvm::cl::desc{"Add library"}, llvm::cl::value_desc{"file"},
     llvm::cl::Prefix, llvm::cl::cat{Category}};
 
+inline llvm::cl::opt<bool> Version{"v", llvm::cl::desc{"Version Information"},
+                                   llvm::cl::cat{Category}};
+
+inline llvm::cl::opt<bool> Debug{
+    "g", llvm::cl::desc{"Generate source-level debug information"},
+    llvm::cl::cat{Category}};
+
 // 忽略
 inline llvm::cl::opt<LangStds> LangStd{
     "std",
@@ -121,12 +129,28 @@ inline llvm::cl::opt<LangStds> LangStd{
                    "ISO C 2017 with GNU extensions (default)")),
     llvm::cl::cat{Category}};
 
-inline llvm::cl::opt<bool> Debug{
-    "g", llvm::cl::desc{"Generate source-level debug information"},
+inline llvm::cl::opt<Langs> Lang{
+    "x",
+    llvm::cl::desc{"Specify language"},
+    llvm::cl::init(Langs::kC),
+    llvm::cl::Prefix,
+    llvm::cl::values(clEnumValN(Langs::kC, "c", "C"),
+                     clEnumValN(Langs::kCpp, "c++", "C++")),
     llvm::cl::cat{Category}};
 
 inline llvm::cl::opt<bool> FPic{
     "fPIC", llvm::cl::desc{"Emit position-independent code"},
+    llvm::cl::cat{Category}};
+
+inline llvm::cl::opt<bool> FPch{
+    "fpch-preprocess",
+    llvm::cl::desc{"Allows use of a precompiled header together with -E"},
+    llvm::cl::cat{Category}};
+
+inline llvm::cl::opt<bool> DD{
+    "dD",
+    llvm::cl::desc{
+        "make debugging dumps during compilation as specified by letters"},
     llvm::cl::cat{Category}};
 
 #ifdef DEV

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
@@ -69,6 +70,13 @@ void InitCommandLine(int argc, char *argv[]) {
 }
 
 void CommandLineCheck() {
+  if (Version) {
+    std::cout << "Kaiser's C Compiler\n";
+    std::cout << "Version " << KCC_VERSION << '\n';
+    std::cout << "InstalledDir: " << GetPath() << std::endl;
+    std::exit(EXIT_SUCCESS);
+  }
+
   std::vector<std::string> files;
 
   for (const auto &item : InputFilePaths) {
@@ -145,10 +153,6 @@ void CommandLineCheck() {
 
   for (auto &&item : Libs) {
     item = "-l" + item;
-  }
-
-  if (OptimizationLevel != OptLevel::kO0) {
-    MacroDefines.push_back("NDEBUG");
   }
 }
 

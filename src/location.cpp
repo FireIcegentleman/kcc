@@ -82,4 +82,8 @@ std::string Location::GetPositionArrow() const {
   return fmt::format(fmt("{}{}\n"), std::string(column_ - 1, ' '), "^");
 }
 
+std::int32_t Location::GetRow() const { return row_; }
+
+std::int32_t Location::GetColumn() const { return column_; }
+
 }  // namespace kcc
