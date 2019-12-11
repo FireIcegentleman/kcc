@@ -1232,7 +1232,9 @@ const Stmt* IfStmt::GetThen() const { return then_block_; }
 const Stmt* IfStmt::GetElse() const { return else_block_; }
 
 IfStmt::IfStmt(Expr* cond, Stmt* then_block, Stmt* else_block)
-    : cond_{cond}, then_block_{then_block}, else_block_{else_block} {}
+    : cond_{Expr::MayCast(cond)},
+      then_block_{then_block},
+      else_block_{else_block} {}
 
 /*
  * SwitchStmt
@@ -1288,7 +1290,8 @@ const Expr* WhileStmt::GetCond() const { return cond_; }
 
 const Stmt* WhileStmt::GetBlock() const { return block_; }
 
-WhileStmt::WhileStmt(Expr* cond, Stmt* block) : cond_{cond}, block_{block} {}
+WhileStmt::WhileStmt(Expr* cond, Stmt* block)
+    : cond_{Expr::MayCast(cond)}, block_{block} {}
 
 /*
  * DoWhileStmt
@@ -1316,7 +1319,7 @@ const Expr* DoWhileStmt::GetCond() const { return cond_; }
 const Stmt* DoWhileStmt::GetBlock() const { return block_; }
 
 DoWhileStmt::DoWhileStmt(Expr* cond, Stmt* block)
-    : cond_{cond}, block_{block} {}
+    : cond_{Expr::MayCast(cond)}, block_{block} {}
 
 /*
  * ForStmt

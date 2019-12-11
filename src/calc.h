@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 
 #include <llvm/IR/Constants.h>
 
@@ -19,7 +20,7 @@ class CalcConstantExpr : public Visitor {
   explicit CalcConstantExpr(const Location& loc = {});
 
   llvm::Constant* Calc(const Expr* expr);
-  std::int64_t CalcInteger(const Expr* expr);
+  std::optional<std::int64_t> CalcInteger(const Expr* expr);
 
  private:
   static llvm::Constant* Throw(llvm::Constant* value = nullptr);

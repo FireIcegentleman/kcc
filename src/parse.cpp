@@ -118,7 +118,7 @@ std::int64_t Parser::ParseInt64Constant() {
     Error(expr, "expect integer");
   }
 
-  auto val{CalcConstantExpr{}.CalcInteger(expr)};
+  auto val{*CalcConstantExpr{}.CalcInteger(expr)};
 
   return val;
 }
@@ -1485,7 +1485,7 @@ void Parser::ParseStaticAssertDecl() {
   Expect(Tag::kRightParen);
   Expect(Tag::kSemicolon);
 
-  if (!CalcConstantExpr{}.CalcInteger(expr)) {
+  if (!*CalcConstantExpr{}.CalcInteger(expr)) {
     Error(expr, "static_assert failed \"{}\"", msg);
   }
 }
@@ -1878,7 +1878,7 @@ void Parser::ParseBitField(StructType* type, const Token& tok,
   }
 
   auto expr{ParseConstantExpr()};
-  auto width{CalcConstantExpr{}.CalcInteger(expr)};
+  auto width{*CalcConstantExpr{}.CalcInteger(expr)};
 
   if (width < 0) {
     Error(expr, "expect non negative value");
@@ -1964,7 +1964,7 @@ void Parser::ParseEnumerator() {
 
     if (Try(Tag::kEqual)) {
       auto expr{ParseConstantExpr()};
-      val = CalcConstantExpr{}.CalcInteger(expr);
+      val = *CalcConstantExpr{}.CalcInteger(expr);
     }
 
     auto enumer{MakeAstNode<EnumeratorExpr>(tok, tok.GetIdentifier(), val)};
@@ -1986,7 +1986,7 @@ std::int32_t Parser::ParseAlignas() {
     align = type->GetAlign();
   } else {
     auto expr{ParseConstantExpr()};
-    align = CalcConstantExpr{}.CalcInteger(expr);
+    align = *CalcConstantExpr{}.CalcInteger(expr);
   }
 
   Expect(Tag::kRightParen);
@@ -2171,14 +2171,16 @@ std::int64_t Parser::ParseArrayLength() {
           expr->GetType()->ToString());
   }
 
-  // 不支持变长数组
   auto len{CalcConstantExpr{}.CalcInteger(expr)};
 
-  if (len < 0) {
-    Error(expr, "Array size must be greater than zero: '{}'", len);
+  if (!len) {
+    // FIXME
+    Warning(expr->GetLoc(), "not support VLA");
+  } else if (*len < 0) {
+    Error(expr, "Array size must be greater than zero: '{}'", *len);
   }
 
-  return len;
+  return *len;
 }
 
 std::pair<std::vector<ObjectExpr*>, bool> Parser::ParseParamTypeList() {
@@ -2353,7 +2355,7 @@ void Parser::ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
         Error(expr, "expect integer type");
       }
 
-      index = CalcConstantExpr{}.CalcInteger(expr);
+      index = *CalcConstantExpr{}.CalcInteger(expr);
       Expect(Tag::kRightSquare);
 
       if (type->IsComplete() && index >= type->ArrayGetNumElements()) {
@@ -2575,7 +2577,7 @@ llvm::Constant* Parser::ParseConstantArrayInitializer(Type* type,
         Error(expr, "expect integer type");
       }
 
-      index = CalcConstantExpr{}.CalcInteger(expr);
+      index = *CalcConstantExpr{}.CalcInteger(expr);
       Expect(Tag::kRightSquare);
 
       if (type->IsComplete() && index >= type->ArrayGetNumElements()) {
@@ -2998,18 +3000,30 @@ Expr* Parser::ParseOffsetof() {
   }
 
   Expect(Tag::kComma);
-  token = Expect(Tag::kIdentifier);
-  auto name{token.GetIdentifier()};
-  Expect(Tag::kRightParen);
 
-  auto obj{type->StructGetMember(name)};
-  if (obj->BitFieldWidth()) {
-    Error(token, "cannot compute offset of bit-field '{}'", obj->GetName());
+  std::uint64_t offset{};
+
+  while (true) {
+    token = Expect(Tag::kIdentifier);
+    auto name{token.GetIdentifier()};
+    auto obj{type->StructGetMember(name)};
+
+    if (obj->BitFieldWidth()) {
+      Error(token, "cannot compute offset of bit-field '{}'", obj->GetName());
+    }
+
+    offset += obj->GetOffset();
+
+    if (!Try(Tag::kPeriod)) {
+      Expect(Tag::kRightParen);
+      break;
+    }
+
+    type = obj->GetType();
   }
 
   return MakeAstNode<ConstantExpr>(
-      token, ArithmeticType::Get(kLong | kUnsigned),
-      static_cast<std::uint64_t>(obj->GetOffset()));
+      token, ArithmeticType::Get(kLong | kUnsigned), offset);
 }
 
 Expr* Parser::ParseHugeVal() {

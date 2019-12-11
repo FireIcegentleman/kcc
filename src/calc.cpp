@@ -26,13 +26,17 @@ llvm::Constant* CalcConstantExpr::Calc(const Expr* expr) {
   return val_;
 }
 
-std::int64_t CalcConstantExpr::CalcInteger(const Expr* expr) {
+std::optional<std::int64_t> CalcConstantExpr::CalcInteger(const Expr* expr) {
   auto val{Calc(expr)};
+
+  if (!val) {
+    return {};
+  }
 
   if (auto p{llvm::dyn_cast<llvm::ConstantInt>(val)}) {
     return p->getValue().getSExtValue();
   } else {
-    Error(expr->GetLoc(), "expect integer constant expression, but got '{}",
+    Error(expr->GetLoc(), "expect integer constant expression, but got '{}'",
           LLVMConstantToStr(val));
   }
 }
@@ -256,7 +260,8 @@ void CalcConstantExpr::Visit(const IdentifierExpr* node) {
 }
 
 void CalcConstantExpr::Visit(const ObjectExpr* node) {
-  if (node->GetType()->IsArrayTy()) {
+  if ((node->IsGlobalVar() || node->IsLocalStaticVar()) &&
+      node->GetType()->IsArrayTy()) {
     val_ = node->GetGlobalPtr();
   } else {
     Throw();
