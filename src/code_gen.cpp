@@ -62,9 +62,9 @@ void CodeGen::GenCode(const TranslationUnit* root) {
 
   if (llvm::verifyModule(*Module, &llvm::errs())) {
 #ifdef DEV
-    Warning("module is broken");
+    Warning("module '{}' is broken", Module->getName().str());
 #else
-    Error("module is broken");
+    Error("module '{}' is broken", Module->getName().str());
 #endif
   }
 
@@ -1695,6 +1695,9 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
     node->GetArgs().front()->Accept(*this);
     result_ = Builder.CreateCall(cttz_i32_, {result_, Builder.getTrue()});
 
+    return true;
+  } else if (func_name == "__builtin_expect") {
+    node->GetArgs().front()->Accept(*this);
     return true;
   } else {
     return false;

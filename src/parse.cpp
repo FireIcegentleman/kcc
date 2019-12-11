@@ -267,10 +267,6 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
     }
   }
 
-  if (type->IsStructOrUnionTy() && !type->IsComplete()) {
-    Error(token, "variable has incomplete type '{}'", type.ToString());
-  }
-
   if (type->IsFunctionTy()) {
     if (align > 0) {
       Error(token, "'_Alignas' attribute applies to func");
@@ -369,11 +365,6 @@ Expr* Parser::ParseExpr() {
   // GCC 扩展, 当使用 -ansi 时避免警告
   Try(Tag::kExtension);
 
-  // GCC 扩展, 语句表达式
-  if (auto expr{TryParseStmtExpr()}) {
-    return expr;
-  }
-
   auto lhs{ParseAssignExpr()};
 
   auto token{Peek()};
@@ -388,12 +379,6 @@ Expr* Parser::ParseExpr() {
 
 Expr* Parser::ParseAssignExpr() {
   Try(Tag::kExtension);
-
-  // 因为有很多是直接调用该函数而不是 ParseExpr
-  // 所以需要再做一遍
-  if (auto expr{TryParseStmtExpr()}) {
-    return expr;
-  }
 
   auto lhs{ParseConditionExpr()};
   Expr* rhs;
@@ -879,6 +864,10 @@ Expr* Parser::ParseMemberRefExpr(Expr* expr) {
 
 Expr* Parser::ParsePrimaryExpr() {
   auto token{Peek()};
+
+  if (auto expr{TryParseStmtExpr()}) {
+    return expr;
+  }
 
   if (Peek().IsIdentifier()) {
     auto name{Next().GetIdentifier()};
@@ -2959,6 +2948,8 @@ QualType Parser::ParseTypeof() {
 }
 
 Expr* Parser::TryParseStmtExpr() {
+  Try(Tag::kExtension);
+
   if (Try(Tag::kLeftParen)) {
     if (Test(Tag::kLeftBrace)) {
       return ParseStmtExpr();
@@ -3099,6 +3090,14 @@ void Parser::AddBuiltin() {
   ctz->FuncSetName("__builtin_ctz");
   scope_->InsertUsual(
       MakeAstNode<IdentifierExpr>(loc, "__builtin_ctz", ctz, kExternal, false));
+
+  auto long_integer{
+      MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kLong))};
+  auto expect{FunctionType::Get(ArithmeticType::Get(kLong),
+                                {long_integer, long_integer})};
+  expect->FuncSetName("__builtin_expect");
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_expect",
+                                                  expect, kExternal, false));
 }
 
 }  // namespace kcc
