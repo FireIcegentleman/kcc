@@ -1666,6 +1666,21 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
     result_ = Builder.CreateCall(ctpop_i32_, {result_});
 
     return true;
+  } else if (func_name == "__builtin_clz") {
+    if (!ctlz_i32_) {
+      auto func_type{llvm::FunctionType::get(
+          Builder.getInt32Ty(), {Builder.getInt32Ty(), Builder.getInt1Ty()},
+          false)};
+
+      ctlz_i32_ =
+          llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                 "llvm.ctlz.i32", Module.get());
+    }
+
+    node->GetArgs().front()->Accept(*this);
+    result_ = Builder.CreateCall(ctlz_i32_, {result_, Builder.getTrue()});
+
+    return true;
   } else {
     return false;
   }

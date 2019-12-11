@@ -3089,6 +3089,11 @@ void Parser::AddBuiltin() {
   popcount->FuncSetName("__builtin_popcount");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_popcount",
                                                   popcount, kExternal, false));
+
+  auto clz{FunctionType::Get(ArithmeticType::Get(kInt), {integer})};
+  clz->FuncSetName("__builtin_clz");
+  scope_->InsertUsual(
+      MakeAstNode<IdentifierExpr>(loc, "__builtin_clz", clz, kExternal, false));
 }
 
 }  // namespace kcc
