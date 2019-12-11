@@ -170,6 +170,8 @@ class Type {
   bool IsRealFloatPointTy() const;
   bool IsFloatPointTy() const;
 
+  bool IsIntegerOrBoolTy() const;
+
   PointerType* GetPointerTo();
 
   std::int32_t ArithmeticRank() const;

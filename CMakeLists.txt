@@ -100,6 +100,16 @@ foreach(USUAL_FILE ${USUAL_FILES})
 endforeach()
 
 add_test(
+  NAME "COMPILE--ZCC"
+  COMMAND
+    ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/zcc/*.c -O0 -g -std=gnu17 -o
+    ${TEST_BINARY_DIR}/zcc)
+
+add_test(NAME "COMPILE--ZCC--OPT"
+         COMMAND ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/zcc/*.c -O3
+                 -std=gnu17 -o ${TEST_BINARY_DIR}/zcc_opt)
+
+add_test(
   NAME "COMPILE--8CC"
   COMMAND
     ${KCC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/8cc/*.c -O0 -g -std=gnu17

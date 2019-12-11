@@ -433,8 +433,8 @@ void BinaryOpExpr::BitwiseOpCheck() {
   auto lhs_type{lhs_->GetQualType()};
   auto rhs_type{rhs_->GetQualType()};
 
-  if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
-    Error(this, "the operand should be Integer type");
+  if (!lhs_type->IsIntegerOrBoolTy() || !rhs_type->IsIntegerOrBoolTy()) {
+    Error(this, "the operand should be Integer or bool type");
   }
 
   type_ = Expr::Convert(lhs_, rhs_);
@@ -444,8 +444,8 @@ void BinaryOpExpr::ShiftOpCheck() {
   auto lhs_type{lhs_->GetQualType()};
   auto rhs_type{rhs_->GetQualType()};
 
-  if (!lhs_type->IsIntegerTy() || !rhs_type->IsIntegerTy()) {
-    Error(this, "the operand should be Integer type");
+  if (!lhs_type->IsIntegerOrBoolTy() || !rhs_type->IsIntegerOrBoolTy()) {
+    Error(this, "the operand should be Integer or bool type");
   }
 
   lhs_ =
@@ -625,7 +625,8 @@ void FuncCallExpr::Check() {
   }
 
   if (args_iter != std::end(args_) && !callee_->GetType()->FuncIsVarArgs()) {
-    Error(loc_, "too many arguments for function call");
+    Error(loc_, "too many arguments for function call: (func type: '{}')",
+          callee_->GetType()->ToString());
   }
 
   while (args_iter != std::end(args_)) {

@@ -274,6 +274,8 @@ bool Type::IsFloatPointTy() const {
   return IsRealFloatPointTy();
 }
 
+bool Type::IsIntegerOrBoolTy() const { return IsIntegerTy() || IsBoolTy(); }
+
 PointerType* Type::GetPointerTo() { return PointerType::Get(this); }
 
 std::int32_t Type::ArithmeticRank() const {
@@ -814,6 +816,8 @@ ArrayType::ArrayType(QualType contained_type, std::int64_t num_elements)
   if (IsComplete()) {
     llvm_type_ =
         llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
+  } else {
+    llvm_type_ = llvm::ArrayType::get(contained_type_->GetLLVMType(), 0);
   }
 }
 
