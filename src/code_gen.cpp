@@ -1059,7 +1059,7 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   llvm::Value* lhs_value{Builder.CreateLoad(lhs_ptr, is_volatile_)};
 
   if (is_bit_field_) {
-    auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
+    auto size{bit_field_->GetType()->IsCharacterTy() ? 8 : 32};
 
     lhs_value = Builder.CreateShl(
         lhs_value,
@@ -1094,7 +1094,7 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
     rhs_value = AddOp(lhs_value, NegOp(one_value, false), is_unsigned);
   }
 
-  Assign(lhs_ptr, rhs_value);
+  Assign(lhs_ptr, rhs_value, is_unsigned);
 
   return is_postfix ? lhs_value : rhs_value;
 }
@@ -1462,7 +1462,7 @@ llvm::Value* CodeGen::AssignOp(const BinaryOpExpr* node) {
   auto lhs_ptr{GetPtr(node->GetLHS())};
   TryEmitLocation(node);
 
-  return Assign(lhs_ptr, rhs);
+  return Assign(lhs_ptr, rhs, node->GetRHS()->GetType()->IsUnsigned());
 }
 
 llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
@@ -1472,7 +1472,7 @@ llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
 
   // 是位域
   if (is_bit_field_) {
-    auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
+    auto size{bit_field_->GetType()->IsCharacterTy() ? 8 : 32};
 
     result_ = Builder.CreateLoad(ptr, is_volatile_);
 
@@ -1498,13 +1498,14 @@ llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
   return result_;
 }
 
-llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs) {
+llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
+                             bool is_unsigned) {
   if (is_bit_field_) {
-    auto size{bit_field_->GetType()->IsBoolTy() ? 8 : 32};
+    auto size{bit_field_->GetType()->IsCharacterTy() ? 8 : 32};
 
     result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
 
-    if (bit_field_->GetType()->IsBoolTy()) {
+    if (bit_field_->GetType()->IsCharacterTy()) {
       std::uint8_t zero{};
 
       // ....11111
@@ -1551,6 +1552,7 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs) {
     }
 
     rhs = Builder.CreateShl(rhs, bit_field_->GetBitFieldBegin());
+    rhs = CastTo(rhs, Builder.getInt32Ty(), is_unsigned);
     result_ = Builder.CreateOr(result_, rhs);
 
     Builder.CreateStore(result_, lhs_ptr, is_volatile_);
@@ -1892,6 +1894,8 @@ void CodeGen::InitLocalAggregate(const Declaration* node) {
       }
 
       value = Builder.CreateShl(value, bit_field_begin);
+      value = CastTo(value, Builder.getInt32Ty(),
+                     item.GetExpr()->GetType()->IsUnsigned());
       value = Builder.CreateOr(result_, value);
     }
 

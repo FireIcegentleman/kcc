@@ -45,7 +45,7 @@ void firm_debug_break(void)
 	DebugBreak();
 #elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64))
 	/* Break into the debugger. The ia32/x86_64 way under GCC. */
-	__asm__ volatile("int3");
+	raise(SIGINT);
 #else
 	/* Break into the debugger. Poor Unix way. */
 	raise(SIGINT);

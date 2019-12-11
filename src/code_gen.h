@@ -135,7 +135,7 @@ class CodeGen : public Visitor {
   llvm::Value *LogicAndOp(const BinaryOpExpr *node);
   llvm::Value *AssignOp(const BinaryOpExpr *node);
   llvm::Value *MemberRef(const BinaryOpExpr *node);
-  llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs);
+  llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs, bool is_unsigned);
 
   bool MayCallBuiltinFunc(const FuncCallExpr *node);
   llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
