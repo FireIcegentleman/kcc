@@ -74,15 +74,15 @@ echo "NAME           = $NAME" | tee summary-$NAME.txt
 echo "SPEEDTEST_OPTS = $SPEEDTEST_OPTS" | tee -a summary-$NAME.txt
 echo "CC_OPTS        = $CC_OPTS" | tee -a summary-$NAME.txt
 rm -f cachegrind.out.* speedtest1 speedtest1.db sqlite3.o
-kcc -g -O3 $CC_OPTS -c sqlite3.c
+kcc -g -O0 $CC_OPTS -c sqlite3.c
 size sqlite3.o | tee -a summary-$NAME.txt
 if test $doExplain -eq 1; then
-  kcc -g -O3 $CC_OPTS \
+  kcc -g -O0 $CC_OPTS \
      -DSQLITE_ENABLE_EXPLAIN_COMMENTS \
     ./shell.c ./sqlite3.c -o sqlite3 -ldl -lpthread -lm
 fi
 SRC=./speedtest1.c
-kcc -g -O3 $CC_OPTS $SRC ./sqlite3.o -o speedtest1 -ldl -lpthread -lm
+kcc -g -O0 $CC_OPTS $SRC ./sqlite3.o -o speedtest1 -ldl -lpthread -lm
 ls -l speedtest1 | tee -a summary-$NAME.txt
 valgrind --tool=cachegrind ./speedtest1 speedtest1.db \
     $SPEEDTEST_OPTS 2>&1 | tee -a summary-$NAME.txt

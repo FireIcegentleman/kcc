@@ -837,7 +837,9 @@ std::int32_t StructType::GetWidth() const {
 }
 
 std::int32_t StructType::GetAlign() const {
-  assert(IsComplete());
+  if (!IsComplete()) {
+    return 1;
+  }
 
   auto struct_type{llvm::cast<llvm::StructType>(llvm_type_)};
   return Module->getDataLayout().getStructLayout(struct_type)->getAlignment();
@@ -965,18 +967,12 @@ void StructType::AddMember(ObjectExpr* member) {
     offset_ = offset + member->GetType()->GetWidth();
     width_ = MakeAlign(offset_, align_);
 
-    if (member->GetType()->IsBoolTy()) {
-      member->SetType(ArithmeticType::Get(kChar | kUnsigned));
-    }
     llvm_types_.push_back(member->GetType()->GetLLVMType());
   } else {
     assert(offset_ == 0);
     width_ = std::max(width_, member->GetType()->GetWidth());
     width_ = MakeAlign(width_, align_);
 
-    if (member->GetType()->IsBoolTy()) {
-      member->SetType(ArithmeticType::Get(kChar | kUnsigned));
-    }
     assert(std::size(llvm_types_) == 0 || std::size(llvm_types_) == 1);
 
     if (std::empty(llvm_types_)) {

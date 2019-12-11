@@ -1788,6 +1788,11 @@ void Parser::ParseStructDeclList(StructType* type) {
       do {
         Token tok;
         auto copy{base_type};
+        if (copy->IsBoolTy()) {
+          copy = QualType{ArithmeticType::Get(kChar | kUnsigned),
+                          copy.GetTypeQual()};
+        }
+
         ParseDeclarator(tok, copy);
 
         TryParseAttributeSpec();
@@ -1867,7 +1872,7 @@ void Parser::ParseBitField(StructType* type, const Token& tok,
   // 标准中定义位域可以下列拥有四种类型之一
   // int / signed int / unsigned int / _Bool
   // 其他类型是实现定义的, 这里不支持其他类型
-  if (!member_type->IsIntTy() && !member_type->IsBoolTy()) {
+  if (!member_type->IsIntTy() && !member_type->IsCharacterTy()) {
     Error(Peek(), "expect int or bool type for bitfield but got ('{}')",
           member_type.ToString());
   }
