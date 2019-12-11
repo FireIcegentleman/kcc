@@ -3094,6 +3094,11 @@ void Parser::AddBuiltin() {
   clz->FuncSetName("__builtin_clz");
   scope_->InsertUsual(
       MakeAstNode<IdentifierExpr>(loc, "__builtin_clz", clz, kExternal, false));
+
+  auto ctz{FunctionType::Get(ArithmeticType::Get(kInt), {integer})};
+  ctz->FuncSetName("__builtin_ctz");
+  scope_->InsertUsual(
+      MakeAstNode<IdentifierExpr>(loc, "__builtin_ctz", ctz, kExternal, false));
 }
 
 }  // namespace kcc
