@@ -167,6 +167,7 @@ class CodeGen : public Visitor {
   llvm::Function *ctpop_i32_{};
   llvm::Function *ctlz_i32_{};
   llvm::Function *cttz_i32_{};
+  llvm::Function *fabs_f32_{};
 
   bool is_bit_field_{false};
   ObjectExpr *bit_field_{nullptr};

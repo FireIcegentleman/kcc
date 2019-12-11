@@ -3117,6 +3117,13 @@ void Parser::AddBuiltin() {
   expect->FuncSetName("__builtin_expect");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_expect",
                                                   expect, kExternal, false));
+
+  auto float_param{
+      MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kFloat))};
+  auto isinf_sign{FunctionType::Get(ArithmeticType::Get(kInt), {float_param})};
+  isinf_sign->FuncSetName("__builtin_isinf_sign");
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_isinf_sign", isinf_sign, kExternal, false));
 }
 
 }  // namespace kcc

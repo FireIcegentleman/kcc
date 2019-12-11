@@ -1701,6 +1701,31 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
   } else if (func_name == "__builtin_expect") {
     node->GetArgs().front()->Accept(*this);
     return true;
+  } else if (func_name == "__builtin_isinf_sign") {
+    if (!fabs_f32_) {
+      auto func_type{llvm::FunctionType::get(Builder.getFloatTy(),
+                                             {Builder.getFloatTy()}, false)};
+
+      fabs_f32_ =
+          llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                 "llvm.fabs.f32", Module.get());
+    }
+
+    node->GetArgs().front()->Accept(*this);
+    auto load{result_};
+    result_ = Builder.CreateCall(fabs_f32_, {result_});
+    auto mark{Builder.CreateFCmpOEQ(
+        result_,
+        llvm::ConstantFP::get(Builder.getFloatTy(),
+                              llvm::APFloat::getInf(GetFloatTypeSemantics(
+                                  Builder.getFloatTy()))))};
+    result_ = Builder.CreateBitCast(load, Builder.getInt32Ty());
+    result_ = Builder.CreateICmpSLT(result_, Builder.getInt32(0));
+    result_ = Builder.CreateSelect(result_, Builder.getInt32(-1),
+                                   Builder.getInt32(1));
+    result_ = Builder.CreateSelect(mark, result_, Builder.getInt32(0));
+
+    return true;
   } else {
     return false;
   }
