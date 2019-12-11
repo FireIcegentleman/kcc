@@ -3051,16 +3051,16 @@ void Parser::AddBuiltin() {
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
       loc, "__builtin_va_list", ArrayType::Get(va_list, 1), kNone, true));
 
-  auto param1{MakeAstNode<ObjectExpr>(loc, "", va_list->GetPointerTo())};
-  auto param2{MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kInt))};
+  auto va_list_ptr{MakeAstNode<ObjectExpr>(loc, "", va_list->GetPointerTo())};
+  auto integer{MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kInt))};
 
-  auto start{FunctionType::Get(VoidType::Get(), {param1, param2})};
+  auto start{FunctionType::Get(VoidType::Get(), {va_list_ptr, integer})};
   start->SetName("__builtin_va_start");
-  auto end{FunctionType::Get(VoidType::Get(), {param1})};
+  auto end{FunctionType::Get(VoidType::Get(), {va_list_ptr})};
   end->SetName("__builtin_va_end");
-  auto arg{FunctionType::Get(VoidType::Get(), {param1})};
+  auto arg{FunctionType::Get(VoidType::Get(), {va_list_ptr})};
   arg->SetName("__builtin_va_arg_sub");
-  auto copy{FunctionType::Get(VoidType::Get(), {param1, param1})};
+  auto copy{FunctionType::Get(VoidType::Get(), {va_list_ptr, va_list_ptr})};
   copy->SetName("__builtin_va_copy");
 
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_start",
@@ -3077,13 +3077,18 @@ void Parser::AddBuiltin() {
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
       loc, "__sync_synchronize", sync_synchronize, kExternal, false));
 
-  auto param3{
+  auto ulong{
       MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kLong | kUnsigned))};
   auto alloca{
-      FunctionType::Get(ArithmeticType::Get(kChar)->GetPointerTo(), {param3})};
+      FunctionType::Get(ArithmeticType::Get(kChar)->GetPointerTo(), {ulong})};
   alloca->FuncSetName("__builtin_alloca");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_alloca",
                                                   alloca, kExternal, false));
+
+  auto popcount{FunctionType::Get(ArithmeticType::Get(kInt), {integer})};
+  popcount->FuncSetName("__builtin_popcount");
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_popcount",
+                                                  popcount, kExternal, false));
 }
 
 }  // namespace kcc

@@ -1585,15 +1585,14 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
   auto func_name{node->GetFuncType()->FuncGetName()};
 
   if (func_name == "__builtin_va_start") {
-    auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
-                                           {Builder.getInt8PtrTy()}, false)};
     if (!va_start_) {
+      auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
+                                             {Builder.getInt8PtrTy()}, false)};
+
       va_start_ =
           llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                                  "llvm.va_start", Module.get());
     }
-
-    assert(std::size(node->GetArgs()) == 2);
 
     node->GetArgs().front()->Accept(*this);
 
@@ -1602,15 +1601,14 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
 
     return true;
   } else if (func_name == "__builtin_va_end") {
-    auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
-                                           {Builder.getInt8PtrTy()}, false)};
     if (!va_end_) {
+      auto func_type{llvm::FunctionType::get(Builder.getVoidTy(),
+                                             {Builder.getInt8PtrTy()}, false)};
+
       va_end_ =
           llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                                  "llvm.va_end", Module.get());
     }
-
-    assert(std::size(node->GetArgs()) == 1);
 
     node->GetArgs().front()->Accept(*this);
 
@@ -1619,7 +1617,6 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
 
     return true;
   } else if (func_name == "__builtin_va_arg_sub") {
-    assert(std::size(node->GetArgs()) == 1);
     assert(node->GetVaArgType() != nullptr);
 
     node->GetArgs().front()->Accept(*this);
@@ -1627,17 +1624,15 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
 
     return true;
   } else if (func_name == "__builtin_va_copy") {
-    auto func_type{llvm::FunctionType::get(
-        Builder.getVoidTy(), {Builder.getInt8PtrTy(), Builder.getInt8PtrTy()},
-        false)};
-
     if (!va_copy_) {
+      auto func_type{llvm::FunctionType::get(
+          Builder.getVoidTy(), {Builder.getInt8PtrTy(), Builder.getInt8PtrTy()},
+          false)};
+
       va_copy_ =
           llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                                  "llvm.va_copy", Module.get());
     }
-
-    assert(std::size(node->GetArgs()) == 2);
 
     node->GetArgs().front()->Accept(*this);
     auto arg1{result_};
@@ -1654,9 +1649,22 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
                                   llvm::SyncScope::System);
     return true;
   } else if (func_name == "__builtin_alloca") {
-    assert(std::size(node->GetArgs()) == 1);
     node->GetArgs().front()->Accept(*this);
     result_ = Builder.CreateAlloca(Builder.getInt8Ty(), result_);
+    return true;
+  } else if (func_name == "__builtin_popcount") {
+    if (!ctpop_i32_) {
+      auto func_type{llvm::FunctionType::get(Builder.getInt32Ty(),
+                                             {Builder.getInt32Ty()}, false)};
+
+      ctpop_i32_ =
+          llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                 "llvm.ctpop.i32", Module.get());
+    }
+
+    node->GetArgs().front()->Accept(*this);
+    result_ = Builder.CreateCall(ctpop_i32_, {result_});
+
     return true;
   } else {
     return false;
