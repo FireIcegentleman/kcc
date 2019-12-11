@@ -3124,6 +3124,11 @@ void Parser::AddBuiltin() {
   isinf_sign->FuncSetName("__builtin_isinf_sign");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
       loc, "__builtin_isinf_sign", isinf_sign, kExternal, false));
+
+  auto isfinite{FunctionType::Get(ArithmeticType::Get(kInt), {float_param})};
+  isfinite->FuncSetName("__builtin_isfinite");
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_isfinite",
+                                                  isfinite, kExternal, false));
 }
 
 }  // namespace kcc

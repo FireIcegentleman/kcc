@@ -1726,6 +1726,26 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
     result_ = Builder.CreateSelect(mark, result_, Builder.getInt32(0));
 
     return true;
+  } else if (func_name == "__builtin_isfinite") {
+    if (!fabs_f32_) {
+      auto func_type{llvm::FunctionType::get(Builder.getFloatTy(),
+                                             {Builder.getFloatTy()}, false)};
+
+      fabs_f32_ =
+          llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                                 "llvm.fabs.f32", Module.get());
+    }
+
+    node->GetArgs().front()->Accept(*this);
+    result_ = Builder.CreateCall(fabs_f32_, {result_});
+    result_ = Builder.CreateFCmpONE(
+        result_,
+        llvm::ConstantFP::get(Builder.getFloatTy(),
+                              llvm::APFloat::getInf(GetFloatTypeSemantics(
+                                  Builder.getFloatTy()))));
+    result_ = Builder.CreateZExt(result_, Builder.getInt32Ty());
+
+    return true;
   } else {
     return false;
   }
