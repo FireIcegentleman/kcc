@@ -19,7 +19,10 @@
 namespace kcc {
 
 Parser::Parser(std::vector<Token> tokens) : tokens_{std::move(tokens)} {
-  unit_ = MakeAstNode<TranslationUnit>(Peek());
+  Location loc;
+  loc.SetFileName(Module->getSourceFileName());
+  unit_ = MakeAstNode<TranslationUnit>(loc);
+
   AddBuiltin();
 }
 
@@ -218,8 +221,6 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
       // 这种情况是可以的
       if (ident->GetLinkage() == kNone) {
         Error(token, "conflicting linkage '{}'", name);
-      } else {
-        linkage = ident->GetLinkage();
       }
     } else {
       if (ident->GetLinkage() != kInternal) {
@@ -232,6 +233,10 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
     if (auto obj{ident->ToObjectExpr()}) {
       if (!(storage_class_spec & kExtern)) {
         obj->SetStorageClassSpec(obj->GetStorageClassSpec() & ~kExtern);
+      }
+
+      if (!ident->GetType()->IsComplete() && type->IsComplete()) {
+        ident->ToObjectExpr()->SetType(type.GetType());
       }
 
       auto decl{ident->ToObjectExpr()->GetDecl()};
@@ -251,6 +256,10 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
       }
 
       if (ident->IsObject()) {
+        if (!ident->GetType()->IsComplete() && type->IsComplete()) {
+          ident->ToObjectExpr()->SetType(type.GetType());
+        }
+
         auto decl{ident->ToObjectExpr()->GetDecl()};
         assert(decl != nullptr);
         return decl;
@@ -277,6 +286,11 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
   } else {
     auto obj{MakeAstNode<ObjectExpr>(token, name, type, storage_class_spec,
                                      linkage, false)};
+    if (scope_->IsBlockScope() && storage_class_spec & kStatic) {
+      obj->SetFuncName(func_def_->GetFuncType()->FuncGetName() +
+                       std::to_string(reinterpret_cast<std::intptr_t>(scope_)));
+    }
+
     if (align > 0) {
       if (align < type->GetWidth()) {
         Error(token,
@@ -290,17 +304,6 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
     scope_->InsertUsual(obj);
     auto decl{MakeAstNode<Declaration>(token, obj)};
     obj->SetDecl(decl);
-
-    if (obj->GetType()->IsComplete()) {
-      // 全局变量和局部静态变量提前生成
-      if (scope_->IsFileScope()) {
-        CreateGlobalVar(obj);
-      } else if (scope_->IsBlockScope() && storage_class_spec & kStatic) {
-        obj->SetName(func_def_->GetName() + "." + obj->GetName());
-        obj->SetGlobalPtr(
-            CreateLocalStaticVar(obj->GetQualType(), obj->GetName()));
-      }
-    }
 
     return decl;
   }
@@ -772,9 +775,8 @@ Expr* Parser::ParseCompoundLiteral(QualType type) {
 
     decl->SetConstant(
         ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
-    assert(decl->GetConstant() != nullptr);
 
-    obj->SetGlobalPtr(CreateGlobalCompoundLiteral(type, decl->GetConstant()));
+    obj->SetDecl(decl);
 
     return obj;
   } else {
@@ -2036,13 +2038,6 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
   auto decl{
       MakeDeclaration(tok, base_type, storage_class_spec, func_spec, align)};
 
-  bool flag{false};
-
-  if (decl && decl->IsObjDecl() && !decl->GetIdent()->GetType()->IsComplete() &&
-      Test(Tag::kEqual)) {
-    flag = true;
-  }
-
   if (decl && decl->IsObjDecl()) {
     if (Try(Tag::kEqual)) {
       if (!scope_->IsFileScope() &&
@@ -2051,36 +2046,6 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
       } else {
         decl->SetConstant(
             ParseConstantInitializer(decl->GetIdent()->GetType(), false, true));
-      }
-    }
-
-    if (flag) {
-      auto obj{decl->GetIdent()->ToObjectExpr()};
-      if (scope_->IsFileScope()) {
-        CreateGlobalVar(obj);
-      } else if (scope_->IsBlockScope() && storage_class_spec & kStatic) {
-        obj->SetName(func_def_->GetName() + "." + obj->GetName());
-        obj->SetGlobalPtr(
-            CreateLocalStaticVar(obj->GetQualType(), obj->GetName()));
-      }
-    }
-
-    if (scope_->IsFileScope() ||
-        (scope_->IsBlockScope() && storage_class_spec & kStatic)) {
-      auto obj{decl->GetIdent()->ToObjectExpr()};
-      assert(obj != nullptr);
-
-      if (!obj->IsStatic() && !obj->IsExtern() && !decl->HasConstantInit()) {
-        obj->GetGlobalPtr()->setLinkage(llvm::GlobalVariable::CommonLinkage);
-      }
-
-      if (decl->HasConstantInit()) {
-        obj->GetGlobalPtr()->setInitializer(decl->GetConstant());
-      } else {
-        if (!obj->IsExtern()) {
-          obj->GetGlobalPtr()->setInitializer(
-              GetConstantZero(obj->GetType()->GetLLVMType()));
-        }
       }
     }
   }

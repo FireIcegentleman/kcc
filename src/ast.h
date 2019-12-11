@@ -39,6 +39,8 @@ inline std::unordered_map<std::string,
                           std::pair<llvm::Constant*, llvm::Constant*>>
     StringMap;
 
+inline std::unordered_map<std::string, llvm::GlobalVariable*> GlobalVarMap;
+
 class AstNodeTypes : public QObject {
   Q_OBJECT
  public:
@@ -306,10 +308,9 @@ class StringLiteralExpr : public Expr {
 
  private:
   StringLiteralExpr(Type* type, const std::string& val);
+  std::pair<llvm::Constant*, llvm::Constant*> Create() const;
 
   std::string str_;
-  llvm::Constant* arr_{};
-  llvm::Constant* ptr_{};
 };
 
 enum Linkage { kNone, kInternal, kExternal };
@@ -403,14 +404,14 @@ class ObjectExpr : public IdentifierExpr {
   std::int32_t GetOffset() const;
   void SetOffset(std::int32_t offset);
 
-  Declaration* GetDecl();
+  Declaration* GetDecl() const;
   void SetDecl(Declaration* decl);
 
   bool IsAnonymous() const;
-  bool InGlobal() const;
+  bool IsGlobalVar() const;
+  bool IsLocalStaticVar() const;
 
   void SetLocalPtr(llvm::AllocaInst* local_ptr);
-  void SetGlobalPtr(llvm::GlobalVariable* global_ptr);
   llvm::AllocaInst* GetLocalPtr() const;
   llvm::GlobalVariable* GetGlobalPtr() const;
   bool HasGlobalPtr() const;
@@ -425,6 +426,8 @@ class ObjectExpr : public IdentifierExpr {
   void SetType(Type* type);
   llvm::Type* GetLLVMType();
   std::int32_t GetLLVMTypeSizeInBits();
+
+  void SetFuncName(const std::string& func_name);
 
  private:
   ObjectExpr(const std::string& name, QualType type,
@@ -446,7 +449,9 @@ class ObjectExpr : public IdentifierExpr {
   std::list<std::pair<Type*, std::int32_t>> indexs_;
 
   llvm::AllocaInst* local_ptr_{};
-  llvm::GlobalVariable* global_ptr_{};
+  mutable llvm::GlobalVariable* global_ptr_{};
+
+  std::string func_name_;
 };
 
 // GNU 扩展, 语句表达式, 它可以是常量表达式, 不是左值表达式
@@ -789,7 +794,7 @@ class Declaration : public Stmt {
 
   bool IsObjDecl() const;
   ObjectExpr* GetObject() const;
-  bool IsObjDeclInGlobal() const;
+  bool IsObjDeclInGlobalOrLocalStatic() const;
 
  private:
   explicit Declaration(IdentifierExpr* ident);

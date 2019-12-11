@@ -737,14 +737,27 @@ AstNodeType StringLiteralExpr::Kind() const {
 
 void StringLiteralExpr::Accept(Visitor& visitor) const { visitor.Visit(this); }
 
-void StringLiteralExpr::Check() {
+void StringLiteralExpr::Check() {}
+
+bool StringLiteralExpr::IsLValue() const { return false; }
+
+const std::string& StringLiteralExpr::GetStr() const { return str_; }
+
+llvm::Constant* StringLiteralExpr::GetArr() const { return Create().first; }
+
+llvm::Constant* StringLiteralExpr::GetPtr() const { return Create().second; }
+
+StringLiteralExpr::StringLiteralExpr(Type* type, const std::string& val)
+    : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth() + 1)},
+      str_{val} {}
+
+std::pair<llvm::Constant*, llvm::Constant*> StringLiteralExpr::Create() const {
   auto iter{StringMap.find(str_)};
   if (iter != std::end(StringMap)) {
-    arr_ = iter->second.first;
-    ptr_ = iter->second.second;
-    return;
+    return {iter->second.first, iter->second.second};
   }
 
+  llvm::Constant *arr{}, *ptr{};
   auto width{type_->ArrayGetElementType()->GetWidth()};
   // 类型已经包含了空字符
   auto size{type_->ArrayGetNumElements() - 1};
@@ -754,64 +767,45 @@ void StringLiteralExpr::Check() {
     case 1: {
       std::vector<std::uint8_t> values;
       for (std::int64_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint8_t*>(str)};
-        values.push_back(*ptr);
+        values.push_back(*reinterpret_cast<const std::uint8_t*>(str));
         str += 1;
       }
       // 空字符
       values.push_back(0);
-      arr_ = llvm::ConstantDataArray::get(Context, values);
+      arr = llvm::ConstantDataArray::get(Context, values);
     } break;
     case 2: {
       std::vector<std::uint16_t> values;
       for (std::int64_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint16_t*>(str)};
-        values.push_back(*ptr);
+        values.push_back(*reinterpret_cast<const std::uint16_t*>(str));
         str += 2;
       }
       values.push_back(0);
-      arr_ = llvm::ConstantDataArray::get(Context, values);
+      arr = llvm::ConstantDataArray::get(Context, values);
     } break;
     case 4: {
       std::vector<std::uint32_t> values;
       for (std::int64_t i{}; i < size; ++i) {
-        auto ptr{reinterpret_cast<const std::uint32_t*>(str)};
-        values.push_back(*ptr);
+        values.push_back(*reinterpret_cast<const std::uint32_t*>(str));
         str += 4;
       }
       values.push_back(0);
-      arr_ = llvm::ConstantDataArray::get(Context, values);
+      arr = llvm::ConstantDataArray::get(Context, values);
     } break;
     default:
       assert(false);
   }
 
-  auto string{CreateGlobalString(arr_, width)};
+  auto string{CreateGlobalString(arr, width)};
 
   auto zero{llvm::ConstantInt::get(Builder.getInt64Ty(), 0)};
-  ptr_ = llvm::ConstantExpr::getInBoundsGetElementPtr(
-      nullptr, string, llvm::ArrayRef<llvm::Constant*>{zero, zero});
+  llvm::Constant* indices[]{zero, zero};
+  ptr = llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, string, indices);
 
-  StringMap[str_] = {arr_, ptr_};
+  StringMap[str_] = {arr, ptr};
+
+  return {arr, ptr};
 }
-
-bool StringLiteralExpr::IsLValue() const { return false; }
-
-const std::string& StringLiteralExpr::GetStr() const { return str_; }
-
-llvm::Constant* StringLiteralExpr::GetArr() const {
-  assert(arr_ != nullptr);
-  return arr_;
-}
-
-llvm::Constant* StringLiteralExpr::GetPtr() const {
-  assert(ptr_ != nullptr);
-  return ptr_;
-}
-
-StringLiteralExpr::StringLiteralExpr(Type* type, const std::string& val)
-    : Expr{ArrayType::Get(type, std::size(val) / type->GetWidth() + 1)},
-      str_{val} {}
 
 /*
  * Identifier
@@ -916,24 +910,21 @@ std::int32_t ObjectExpr::GetOffset() const { return offset_; }
 
 void ObjectExpr::SetOffset(std::int32_t offset) { offset_ = offset; }
 
-Declaration* ObjectExpr::GetDecl() { return decl_; }
+Declaration* ObjectExpr::GetDecl() const { return decl_; }
 
 void ObjectExpr::SetDecl(Declaration* decl) { decl_ = decl; }
 
 bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
-bool ObjectExpr::InGlobal() const {
-  return linkage_ != kNone || (linkage_ == kNone && IsStatic());
+bool ObjectExpr::IsGlobalVar() const { return linkage_ != kNone; }
+
+bool ObjectExpr::IsLocalStaticVar() const {
+  return linkage_ == kNone && IsStatic();
 }
 
 void ObjectExpr::SetLocalPtr(llvm::AllocaInst* local_ptr) {
   assert(local_ptr_ == nullptr && global_ptr_ == nullptr);
   local_ptr_ = local_ptr;
-}
-
-void ObjectExpr::SetGlobalPtr(llvm::GlobalVariable* global_ptr) {
-  assert(local_ptr_ == nullptr && global_ptr_ == nullptr);
-  global_ptr_ = global_ptr;
 }
 
 llvm::AllocaInst* ObjectExpr::GetLocalPtr() const {
@@ -942,8 +933,67 @@ llvm::AllocaInst* ObjectExpr::GetLocalPtr() const {
 }
 
 llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() const {
-  assert(global_ptr_ != nullptr);
-  return global_ptr_;
+  llvm::GlobalVariable* ptr{};
+
+  if (IsAnonymous()) {
+    ptr = new llvm::GlobalVariable(
+        *Module, GetType()->GetLLVMType(), GetQualType().IsConst(),
+        llvm::GlobalValue::InternalLinkage, GetDecl()->GetConstant(),
+        ".compoundliteral");
+  } else if (IsGlobalVar()) {
+    auto linkage{llvm::GlobalVariable::ExternalLinkage};
+
+    if (IsStatic()) {
+      linkage = llvm::GlobalVariable::InternalLinkage;
+    } else if (IsExtern()) {
+      linkage = llvm::GlobalVariable::ExternalLinkage;
+    } else {
+      if (!GetDecl()->HasConstantInit()) {
+        linkage = llvm::GlobalVariable::CommonLinkage;
+      }
+    }
+
+    if (auto iter{GlobalVarMap.find(name_)}; iter != std::end(GlobalVarMap)) {
+      ptr = iter->second;
+    } else {
+      ptr = new llvm::GlobalVariable(*Module, GetType()->GetLLVMType(),
+                                     GetQualType().IsConst(), linkage, nullptr,
+                                     name_);
+      GlobalVarMap[name_] = ptr;
+    }
+
+    if (!IsStatic() && !IsExtern()) {
+      ptr->setDSOLocal(true);
+    }
+  } else if (IsLocalStaticVar()) {
+    assert(!std::empty(func_name_));
+    auto name{func_name_ + "." + name_};
+
+    if (auto iter{GlobalVarMap.find(name)}; iter != std::end(GlobalVarMap)) {
+      ptr = iter->second;
+    } else {
+      ptr = new llvm::GlobalVariable(
+          *Module, GetType()->GetLLVMType(), QualType().IsConst(),
+          llvm::GlobalValue::InternalLinkage,
+          GetConstantZero(GetType()->GetLLVMType()), name);
+      GlobalVarMap[name] = ptr;
+    }
+
+  } else {
+    assert(false);
+  }
+
+  ptr->setAlignment(GetType()->GetAlign());
+
+  if (GetDecl()->HasConstantInit()) {
+    ptr->setInitializer(GetDecl()->GetConstant());
+  } else {
+    if (!IsExtern()) {
+      ptr->setInitializer(GetConstantZero(GetType()->GetLLVMType()));
+    }
+  }
+
+  return ptr;
 }
 
 bool ObjectExpr::HasGlobalPtr() const { return global_ptr_; }
@@ -976,6 +1026,10 @@ llvm::Type* ObjectExpr::GetLLVMType() {
 
 std::int32_t ObjectExpr::GetLLVMTypeSizeInBits() {
   return Module->getDataLayout().getTypeAllocSizeInBits(GetLLVMType());
+}
+
+void ObjectExpr::SetFuncName(const std::string& func_name) {
+  func_name_ = func_name;
 }
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
@@ -1504,9 +1558,10 @@ ObjectExpr* Declaration::GetObject() const {
   return dynamic_cast<ObjectExpr*>(ident_);
 }
 
-bool Declaration::IsObjDeclInGlobal() const {
+bool Declaration::IsObjDeclInGlobalOrLocalStatic() const {
   assert(IsObjDecl());
-  return dynamic_cast<ObjectExpr*>(ident_)->InGlobal();
+  auto obj{ident_->ToObjectExpr()};
+  return obj->IsGlobalVar() || obj->IsLocalStaticVar();
 }
 
 Declaration::Declaration(IdentifierExpr* ident) : ident_{ident} {}

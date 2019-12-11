@@ -63,15 +63,37 @@ void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
       val_ = LogicNotOp(
           Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr())));
       break;
-    case Tag::kAmp: {
-      // 运算对象只能是一个全局变量
-      auto p{dynamic_cast<const ObjectExpr*>(node->GetExpr())};
-      if (p == nullptr) {
-        Throw();
+    case Tag::kAmp:
+      // 运算对象可以是一个全局变量
+      // 也可以是
+      // int a[3];
+      // int *p = &a[0];
+      if (auto global{dynamic_cast<const ObjectExpr*>(node->GetExpr())}) {
+        val_ = global->GetGlobalPtr();
+      } else if (auto unary{
+                     dynamic_cast<const UnaryOpExpr*>(node->GetExpr())}) {
+        if (unary->GetOp() != Tag::kStar) {
+          Throw();
+        }
+
+        auto binary{dynamic_cast<const BinaryOpExpr*>(unary->GetExpr())};
+
+        if (!binary || binary->GetOp() != Tag::kPlus) {
+          Throw();
+        }
+
+        auto lhs{
+            Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetLHS()))};
+        auto rhs{
+            Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetRHS()))};
+
+        llvm::Constant* index[]{rhs};
+        val_ =
+            llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, lhs, index);
       } else {
-        val_ = p->GetGlobalPtr();
+        Throw();
       }
-    } break;
+      break;
     default:
       Throw();
   }
@@ -330,8 +352,7 @@ llvm::Constant* CalcConstantExpr::SubOp(llvm::Constant* lhs,
     return llvm::ConstantExpr::getFSub(lhs, rhs);
   } else if (IsPointerTy(lhs) && IsIntegerTy(rhs)) {
     return llvm::ConstantExpr::getInBoundsGetElementPtr(
-        lhs->getType(), lhs,
-        llvm::ArrayRef<llvm::Constant*>{NegOp(rhs, is_unsigned)});
+        nullptr, lhs, llvm::ArrayRef<llvm::Constant*>{NegOp(rhs, is_unsigned)});
   } else if (IsPointerTy(lhs) && IsPointerTy(rhs)) {
     auto type{lhs->getType()->getPointerElementType()};
 

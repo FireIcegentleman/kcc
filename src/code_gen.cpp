@@ -276,7 +276,7 @@ llvm::Value* CodeGen::GetPtr(const AstNode* node) {
     auto obj{dynamic_cast<const ObjectExpr*>(node)};
     is_volatile_ = obj->GetQualType().IsVolatile();
 
-    if (obj->InGlobal()) {
+    if (obj->IsGlobalVar() || obj->IsLocalStaticVar()) {
       return obj->GetGlobalPtr();
     } else {
       return obj->GetLocalPtr();
@@ -646,7 +646,7 @@ void CodeGen::Visit(const EnumeratorExpr* node) {
 
 void CodeGen::Visit(const ObjectExpr* node) {
   llvm::Value* ptr;
-  if (node->InGlobal()) {
+  if (node->IsGlobalVar() || node->IsLocalStaticVar()) {
     ptr = node->GetGlobalPtr();
   } else {
     ptr = node->GetLocalPtr();
@@ -980,7 +980,37 @@ void CodeGen::Visit(const Declaration* node) {
   // 对于全局变量和局部静态变量, 在语法分析时已经处理完了
   if (!node->IsObjDecl()) {
     return;
-  } else if (node->IsObjDeclInGlobal()) {
+  } else if (node->IsObjDeclInGlobalOrLocalStatic()) {
+    if (node->IsObjDecl()) {
+      auto obj{node->GetIdent()->ToObjectExpr()};
+      if (obj->IsGlobalVar() && !obj->IsStatic()) {
+        auto linkage{llvm::GlobalVariable::ExternalLinkage};
+
+        auto ptr{Module->getGlobalVariable(obj->GetName())};
+        if (!ptr) {
+          ptr = new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(),
+                                         obj->GetQualType().IsConst(), linkage,
+                                         nullptr, obj->GetName());
+        }
+
+        if (!obj->IsStatic() && !obj->IsExtern()) {
+          ptr->setDSOLocal(true);
+        }
+
+        ptr->setAlignment(obj->GetType()->GetAlign());
+
+        if (node->HasConstantInit()) {
+          ptr->setInitializer(node->GetConstant());
+        } else {
+          if (!obj->IsExtern()) {
+            ptr->setInitializer(GetConstantZero(obj->GetType()->GetLLVMType()));
+          }
+        }
+
+        GlobalVarMap[obj->GetName()] = ptr;
+      }
+    }
+
     TryEmitGlobalVar(node);
     return;
   }
