@@ -547,7 +547,12 @@ void ConditionOpExpr::Check() {
     }
     type_ = lhs_type;
   } else if (lhs_type->IsPointerTy() && rhs_type->IsPointerTy()) {
-    EnsureCompatibleConvertVoidPtr(lhs_, rhs_);
+    // 这里放松了限制
+    if (lhs_type->PointerGetElementType()->IsVoidTy()) {
+      lhs_ = Expr::MayCastTo(lhs_, rhs_type);
+    } else if (rhs_type->PointerGetElementType()->IsVoidTy()) {
+      rhs_ = Expr::MayCastTo(rhs_, lhs_type);
+    }
     type_ = lhs_->GetType();
   } else if (lhs_type->IsVoidTy() && rhs_type->IsVoidTy()) {
     type_ = VoidType::Get();

@@ -72,7 +72,7 @@ void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
       // 也可以是
       // int a[3];
       // int *p = &a[0];
-      // 还是以是函数
+      // 还是以是函数 / a.b
       if (auto global{dynamic_cast<const ObjectExpr*>(node->GetExpr())}) {
         val_ = global->GetGlobalPtr();
       } else if (auto unary{
@@ -97,6 +97,16 @@ void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
             llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, lhs, index);
       } else if (node->GetExpr()->Kind() == AstNodeType::kIdentifierExpr) {
         val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr()));
+      } else if (auto binary{
+                     dynamic_cast<const BinaryOpExpr*>(node->GetExpr())}) {
+        auto lhs{
+            Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetLHS()))};
+
+        auto obj{dynamic_cast<const ObjectExpr*>(binary->GetRHS())};
+        assert(obj != nullptr);
+
+        val_ = llvm::ConstantExpr::getInBoundsGetElementPtr(
+            nullptr, lhs, Builder.getInt64(obj->GetIndexs().back().second));
       } else {
         Throw();
       }
@@ -264,7 +274,7 @@ void CalcConstantExpr::Visit(const IdentifierExpr* node) {
 
 void CalcConstantExpr::Visit(const ObjectExpr* node) {
   if ((node->IsGlobalVar() || node->IsLocalStaticVar()) &&
-      node->GetType()->IsArrayTy()) {
+      (node->GetType()->IsArrayTy() || node->GetType()->IsStructOrUnionTy())) {
     val_ = node->GetGlobalPtr();
   } else {
     Throw();

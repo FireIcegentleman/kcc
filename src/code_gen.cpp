@@ -35,15 +35,6 @@ namespace kcc {
   load_struct_ = backup; \
   }
 
-#define DO_NOT_Load_Struct_Obj() \
-  {                              \
-    auto backup{load_struct_};   \
-    load_struct_ = false;
-
-#define Finish_DO_NOT_Load() \
-  load_struct_ = backup;     \
-  }
-
 /*
  * BreakContinue
  */
