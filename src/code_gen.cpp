@@ -302,7 +302,7 @@ llvm::Value* CodeGen::GetPtr(const AstNode* node) {
         is_volatile_ = true;
       }
 
-      if (obj->BitFieldWidth()) {
+      if (obj->GetBitFieldWidth()) {
         is_bit_field_ = true;
         bit_field_ = const_cast<ObjectExpr*>(obj);
       }
@@ -387,7 +387,7 @@ void CodeGen::TryEmitLocalVar(const Declaration* node) {
 }
 
 void CodeGen::TryEmitGlobalVar(const Declaration* node) {
-  if (debug_info_ && node->GetIdent()->ToObjectExpr()->HasGlobalPtr()) {
+  if (debug_info_) {
     debug_info_->EmitGlobalVar(node);
   }
 }
@@ -642,8 +642,9 @@ void CodeGen::Visit(const IdentifierExpr* node) {
   if (!func) {
     func = llvm::Function::Create(
         llvm::cast<llvm::FunctionType>(type->GetLLVMType()),
-        node->GetLinkage() == kInternal ? llvm::Function::InternalLinkage
-                                        : llvm::Function::ExternalLinkage,
+        node->GetLinkage() == Linkage::kInternal
+            ? llvm::Function::InternalLinkage
+            : llvm::Function::ExternalLinkage,
         name, Module.get());
   }
 
@@ -1073,15 +1074,15 @@ llvm::Value* CodeGen::IncOrDec(const Expr* expr, bool is_inc, bool is_postfix) {
   if (is_bit_field_) {
     auto size{bit_field_->GetType()->IsCharacterTy() ? 8 : 32};
 
-    lhs_value = Builder.CreateShl(
-        lhs_value,
-        size - (bit_field_->GetBitFieldBegin() + bit_field_->BitFieldWidth()));
+    lhs_value =
+        Builder.CreateShl(lhs_value, size - (bit_field_->GetBitFieldBegin() +
+                                             bit_field_->GetBitFieldWidth()));
     if (bit_field_->GetType()->IsUnsigned()) {
       lhs_value =
-          Builder.CreateLShr(lhs_value, size - bit_field_->BitFieldWidth());
+          Builder.CreateLShr(lhs_value, size - bit_field_->GetBitFieldWidth());
     } else {
       lhs_value =
-          Builder.CreateAShr(lhs_value, size - bit_field_->BitFieldWidth());
+          Builder.CreateAShr(lhs_value, size - bit_field_->GetBitFieldWidth());
     }
   }
 
@@ -1490,13 +1491,15 @@ llvm::Value* CodeGen::MemberRef(const BinaryOpExpr* node) {
 
     result_ = Builder.CreateLoad(ptr, is_volatile_);
 
-    result_ = Builder.CreateShl(
-        result_,
-        size - (bit_field_->GetBitFieldBegin() + bit_field_->BitFieldWidth()));
+    result_ =
+        Builder.CreateShl(result_, size - (bit_field_->GetBitFieldBegin() +
+                                           bit_field_->GetBitFieldWidth()));
     if (bit_field_->GetType()->IsUnsigned()) {
-      result_ = Builder.CreateLShr(result_, size - bit_field_->BitFieldWidth());
+      result_ =
+          Builder.CreateLShr(result_, size - bit_field_->GetBitFieldWidth());
     } else {
-      result_ = Builder.CreateAShr(result_, size - bit_field_->BitFieldWidth());
+      result_ =
+          Builder.CreateAShr(result_, size - bit_field_->GetBitFieldWidth());
     }
 
     is_bit_field_ = false;
@@ -1532,12 +1535,12 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
 
       // 111.....
       std::uint8_t high_one;
-      if (auto bit{bit_field_->BitFieldWidth() +
+      if (auto bit{bit_field_->GetBitFieldWidth() +
                    bit_field_->GetBitFieldBegin()};
           bit == size) {
         high_one = 0;
       } else {
-        high_one = ~zero << (bit_field_->BitFieldWidth() +
+        high_one = ~zero << (bit_field_->GetBitFieldWidth() +
                              bit_field_->GetBitFieldBegin());
       }
 
@@ -1553,12 +1556,12 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
 
       // 111.....
       std::uint32_t high_one;
-      if (auto bit{bit_field_->BitFieldWidth() +
+      if (auto bit{bit_field_->GetBitFieldWidth() +
                    bit_field_->GetBitFieldBegin()};
           bit == size) {
         high_one = 0;
       } else {
-        high_one = ~0U << (bit_field_->BitFieldWidth() +
+        high_one = ~0U << (bit_field_->GetBitFieldWidth() +
                            bit_field_->GetBitFieldBegin());
       }
 
@@ -1576,13 +1579,13 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
 
       result_ =
           Builder.CreateShl(result_, size - (bit_field_->GetBitFieldBegin() +
-                                             bit_field_->BitFieldWidth()));
+                                             bit_field_->GetBitFieldWidth()));
       if (bit_field_->GetType()->IsUnsigned()) {
         result_ =
-            Builder.CreateLShr(result_, size - bit_field_->BitFieldWidth());
+            Builder.CreateLShr(result_, size - bit_field_->GetBitFieldWidth());
       } else {
         result_ =
-            Builder.CreateAShr(result_, size - bit_field_->BitFieldWidth());
+            Builder.CreateAShr(result_, size - bit_field_->GetBitFieldWidth());
       }
 
       is_bit_field_ = false;
@@ -2003,7 +2006,7 @@ void CodeGen::StartFunction(const FuncDef* node) {
   auto func_type{node->GetFuncType()};
 
   // TODO Attribute DSOLocal 用法
-  if (node->GetLinkage() != kInternal) {
+  if (node->GetLinkage() != Linkage::kInternal) {
     func_->setDSOLocal(true);
   }
 

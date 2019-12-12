@@ -5,7 +5,6 @@
 #include "ast.h"
 
 #include <algorithm>
-#include <cstddef>
 
 #include "error.h"
 #include "llvm_common.h"
@@ -41,20 +40,12 @@ const Type* Expr::GetType() const { return type_.GetType(); }
 
 bool Expr::IsConst() const { return type_.IsConst(); }
 
+bool Expr::IsVolatile() const { return type_.IsVolatile(); }
+
 void Expr::EnsureCompatible(QualType lhs, QualType rhs) const {
   if (!lhs->Compatible(rhs.GetType())) {
     Error(loc_, "incompatible types: '{}' vs '{}'", lhs.ToString(),
           rhs.ToString());
-  }
-}
-
-void Expr::EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const {
-  if ((lhs->IsPointerTy() && rhs->IsPointerTy()) &&
-      (lhs->PointerGetElementType()->IsVoidTy() ||
-       rhs->PointerGetElementType()->IsVoidTy())) {
-    return;
-  } else {
-    return EnsureCompatible(lhs, rhs);
   }
 }
 
@@ -189,7 +180,7 @@ void UnaryOpExpr::UnaryAddSubOpCheck() {
     Error(this, "expect operand of arithmetic type");
   }
 
-  if (expr_->GetType()->IsIntegerTy() || expr_->GetType()->IsBoolTy()) {
+  if (expr_->GetType()->IsIntegerOrBoolTy()) {
     expr_ = Expr::MayCastTo(expr_,
                             ArithmeticType::IntegerPromote(expr_->GetType()));
   }
@@ -655,13 +646,7 @@ void FuncCallExpr::Check() {
 
 bool FuncCallExpr::IsLValue() const { return false; }
 
-Type* FuncCallExpr::GetFuncType() const {
-  if (callee_->GetType()->IsPointerTy()) {
-    return callee_->GetType()->PointerGetElementType().GetType();
-  } else {
-    return callee_->GetType();
-  }
-}
+Type* FuncCallExpr::GetFuncType() const { return callee_->GetType(); }
 
 Expr* FuncCallExpr::GetCallee() const { return callee_; }
 
@@ -701,9 +686,9 @@ void ConstantExpr::Check() {}
 
 bool ConstantExpr::IsLValue() const { return false; }
 
-llvm::APInt ConstantExpr::GetIntegerVal() const { return integer_val_; }
+const llvm::APInt& ConstantExpr::GetIntegerVal() const { return integer_val_; }
 
-llvm::APFloat ConstantExpr::GetFloatPointVal() const {
+const llvm::APFloat& ConstantExpr::GetFloatPointVal() const {
   return float_point_val_;
 }
 
@@ -715,8 +700,9 @@ ConstantExpr::ConstantExpr(std::int32_t val)
 
 ConstantExpr::ConstantExpr(Type* type, std::uint64_t val)
     : Expr(type), float_point_val_{llvm::APFloat{0.0}} {
-  integer_val_ = llvm::APInt{type_->GetLLVMType()->getIntegerBitWidth(),
-                             static_cast<std::uint64_t>(val), true};
+  integer_val_ =
+      llvm::APInt{type_->GetLLVMType()->getIntegerBitWidth(),
+                  static_cast<std::uint64_t>(val), !type->IsUnsigned()};
 }
 
 ConstantExpr::ConstantExpr(Type* type, const std::string& str)
@@ -835,8 +821,6 @@ enum Linkage IdentifierExpr::GetLinkage() const { return linkage_; }
 
 const std::string& IdentifierExpr::GetName() const { return name_; }
 
-void IdentifierExpr::SetName(const std::string& name) { name_ = name; }
-
 bool IdentifierExpr::IsTypeName() const { return is_type_name_; }
 
 bool IdentifierExpr::IsObject() const {
@@ -875,7 +859,7 @@ bool EnumeratorExpr::IsLValue() const { return false; }
 std::int32_t EnumeratorExpr::GetVal() const { return val_; }
 
 EnumeratorExpr::EnumeratorExpr(const std::string& name, std::int32_t val)
-    : IdentifierExpr{name, ArithmeticType::Get(kInt), kNone, false},
+    : IdentifierExpr{name, ArithmeticType::Get(kInt), Linkage::kNone, false},
       val_{val} {}
 
 /*
@@ -884,7 +868,7 @@ EnumeratorExpr::EnumeratorExpr(const std::string& name, std::int32_t val)
 ObjectExpr* ObjectExpr::Get(const std::string& name, QualType type,
                             std::uint32_t storage_class_spec,
                             enum Linkage linkage, bool anonymous,
-                            std::int8_t bit_field_width) {
+                            std::int32_t bit_field_width) {
   return new (ObjectExprPool.Allocate()) ObjectExpr{
       name, type, storage_class_spec, linkage, anonymous, bit_field_width};
 }
@@ -921,14 +905,14 @@ void ObjectExpr::SetDecl(Declaration* decl) { decl_ = decl; }
 
 bool ObjectExpr::IsAnonymous() const { return anonymous_; }
 
-bool ObjectExpr::IsGlobalVar() const { return linkage_ != kNone; }
+bool ObjectExpr::IsGlobalVar() const { return linkage_ != Linkage::kNone; }
 
 bool ObjectExpr::IsLocalStaticVar() const {
-  return linkage_ == kNone && IsStatic();
+  return linkage_ == Linkage::kNone && IsStatic();
 }
 
 void ObjectExpr::SetLocalPtr(llvm::AllocaInst* local_ptr) {
-  assert(local_ptr_ == nullptr && global_ptr_ == nullptr);
+  assert(local_ptr_ == nullptr);
   local_ptr_ = local_ptr;
 }
 
@@ -983,7 +967,6 @@ llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() const {
           GetConstantZero(GetType()->GetLLVMType()), name);
       GlobalVarMap[name] = ptr;
     }
-
   } else {
     assert(false);
   }
@@ -1001,8 +984,6 @@ llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() const {
   return ptr;
 }
 
-bool ObjectExpr::HasGlobalPtr() const { return global_ptr_; }
-
 std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() {
   return indexs_;
 }
@@ -1011,27 +992,15 @@ const std::list<std::pair<Type*, std::int32_t>>& ObjectExpr::GetIndexs() const {
   return indexs_;
 }
 
-std::int8_t ObjectExpr::BitFieldWidth() const { return bit_field_width_; }
+std::int32_t ObjectExpr::GetBitFieldWidth() const { return bit_field_width_; }
 
-std::int8_t ObjectExpr::GetBitFieldBegin() const { return bit_field_begin_; }
+std::int32_t ObjectExpr::GetBitFieldBegin() const { return bit_field_begin_; }
 
-void ObjectExpr::SetBitFieldBegin(std::int8_t bit_field_begin) {
+void ObjectExpr::SetBitFieldBegin(std::int32_t bit_field_begin) {
   bit_field_begin_ = bit_field_begin;
 }
 
 void ObjectExpr::SetType(Type* type) { type_ = type; }
-
-llvm::Type* ObjectExpr::GetLLVMType() {
-  if (bit_field_width_ == 0) {
-    return GetType()->GetLLVMType();
-  } else {
-    return GetBitFieldSpace(bit_field_width_);
-  }
-}
-
-std::int32_t ObjectExpr::GetLLVMTypeSizeInBits() {
-  return Module->getDataLayout().getTypeAllocSizeInBits(GetLLVMType());
-}
 
 void ObjectExpr::SetFuncName(const std::string& func_name) {
   func_name_ = func_name;
@@ -1039,7 +1008,7 @@ void ObjectExpr::SetFuncName(const std::string& func_name) {
 
 ObjectExpr::ObjectExpr(const std::string& name, QualType type,
                        std::uint32_t storage_class_spec, enum Linkage linkage,
-                       bool anonymous, std::int8_t bit_field_width)
+                       bool anonymous, std::int32_t bit_field_width)
     : IdentifierExpr{name, type, linkage, false},
       anonymous_{anonymous},
       storage_class_spec_{storage_class_spec},
@@ -1462,7 +1431,7 @@ const std::vector<ExtDecl*>& TranslationUnit::GetExtDecl() const {
  */
 Initializer::Initializer(
     Type* type, Expr* expr,
-    std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>
+    std::vector<std::tuple<Type*, std::int32_t, std::int32_t, std::int32_t>>
         indexs)
     : type_(type), expr_(expr), indexs_{std::move(indexs)} {
   assert(type != nullptr && expr != nullptr);
@@ -1483,7 +1452,7 @@ const Expr* Initializer::GetExpr() const {
   return expr_;
 }
 
-const std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>&
+const std::vector<std::tuple<Type*, std::int32_t, std::int32_t, std::int32_t>>&
 Initializer::GetIndexs() const {
   return indexs_;
 }
@@ -1513,7 +1482,7 @@ void Declaration::AddInits(std::vector<Initializer> inits) {
 
   if (ident_->GetType()->IsScalarTy()) {
     assert(std::size(inits_) == 1);
-    auto& init{*std::begin(inits_)};
+    auto& init{inits_.front()};
 
     auto type{init.GetType()};
     auto& expr{init.GetExpr()};

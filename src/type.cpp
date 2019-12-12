@@ -1063,11 +1063,11 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 // 4) 拥有零 width 的特殊无名位域打破填充:
 // 它指定下个位域在始于下个分配单元的起点
 void StructType::AddBitField(ObjectExpr* member) {
-  if (member->BitFieldWidth() == 0 || member->BitFieldWidth() > 8) {
+  if (member->GetBitFieldWidth() == 0 || member->GetBitFieldWidth() > 8) {
     align_ = std::max(member->GetAlign(), align_);
   }
 
-  auto bit_width{member->BitFieldWidth()};
+  auto bit_width{member->GetBitFieldWidth()};
 
   // 该成员是第一个字段或上一个字段不是位域或已经没有位置可以打包了
   if (bit_field_used_width_ == 0) {
@@ -1082,7 +1082,7 @@ void StructType::AddBitField(ObjectExpr* member) {
     // [3 x i8], i8, i32
     if (is_struct_ && !std::empty(members_)) {
       auto last{members_.back()};
-      if (!last->BitFieldWidth()) {
+      if (!last->GetBitFieldWidth()) {
         width_ = MakeAlign(offset_, align_);
         if (auto space_width{(width_ - offset_) * 8}) {
           auto space{GetBitFieldSpace(space_width)};
@@ -1254,7 +1254,7 @@ void StructType::AddBitField(ObjectExpr* member) {
         }
       }
 
-      bit_field_used_width_ += member->BitFieldWidth();
+      bit_field_used_width_ += member->GetBitFieldWidth();
 
       assert(bit_field_used_width_ <= bit_field_base_type_width_);
       if (bit_field_used_width_ == bit_field_base_type_width_) {
@@ -1292,7 +1292,7 @@ void StructType::Finish() {
   members_.erase(std::remove_if(std::begin(members_), std::end(members_),
                                 [](ObjectExpr* obj) {
                                   return obj->IsAnonymous() &&
-                                         obj->BitFieldWidth();
+                                         obj->GetBitFieldWidth();
                                 }),
                  std::end(members_));
 
@@ -1306,7 +1306,7 @@ void StructType::Print() const {
     fmt::print(
         "name: {}, offset: {}, begin: {}, width: {}, index: {}, type: {}\n",
         item->GetName(), item->GetOffset(), item->GetBitFieldBegin(),
-        item->BitFieldWidth(), item->GetIndexs().front().second,
+        item->GetBitFieldWidth(), item->GetIndexs().front().second,
         item->GetType()->ToString());
   }
   fmt::print("llvm type: {}\n", LLVMTypeToStr(llvm_type_));

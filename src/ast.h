@@ -18,7 +18,6 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/Type.h>
 #include <QMetaEnum>
 #include <QObject>
 #include <QString>
@@ -112,16 +111,16 @@ class Expr : public AstNode {
   const Type* GetType() const;
 
   bool IsConst() const;
+  bool IsVolatile() const;
 
   void EnsureCompatible(QualType lhs, QualType rhs) const;
-  void EnsureCompatibleOrVoidPtr(QualType lhs, QualType rhs) const;
   void EnsureCompatibleConvertVoidPtr(Expr*& lhs, Expr*& rhs);
   // 数组函数隐式转换
   static Expr* MayCast(Expr* expr);
   static Expr* MayCastTo(Expr* expr, QualType to);
   // 通常算术转换
   static Type* Convert(Expr*& lhs, Expr*& rhs);
-  // 判断是否是 0
+  // 判断是否是 int 0
   static bool IsZero(const Expr* expr);
 
  protected:
@@ -273,6 +272,7 @@ class ConstantExpr : public Expr {
  public:
   static ConstantExpr* Get(std::int32_t val);
   static ConstantExpr* Get(Type* type, std::uint64_t val);
+  // for float point
   static ConstantExpr* Get(Type* type, const std::string& str);
 
   virtual AstNodeType Kind() const override;
@@ -280,8 +280,8 @@ class ConstantExpr : public Expr {
   virtual void Check() override;
   virtual bool IsLValue() const override;
 
-  llvm::APInt GetIntegerVal() const;
-  llvm::APFloat GetFloatPointVal() const;
+  const llvm::APInt& GetIntegerVal() const;
+  const llvm::APFloat& GetFloatPointVal() const;
 
  private:
   ConstantExpr(std::int32_t val);
@@ -308,12 +308,13 @@ class StringLiteralExpr : public Expr {
 
  private:
   StringLiteralExpr(Type* type, const std::string& val);
+
   std::pair<llvm::Constant*, llvm::Constant*> Create() const;
 
   std::string str_;
 };
 
-enum Linkage { kNone, kInternal, kExternal };
+enum class Linkage { kNone, kInternal, kExternal };
 
 // 标识符能指代下列类型的实体：
 // 对象
@@ -339,7 +340,6 @@ class IdentifierExpr : public Expr {
 
   enum Linkage GetLinkage() const;
   const std::string& GetName() const;
-  void SetName(const std::string& name);
   bool IsTypeName() const;
   bool IsObject() const;
 
@@ -386,8 +386,9 @@ class ObjectExpr : public IdentifierExpr {
  public:
   static ObjectExpr* Get(const std::string& name, QualType type,
                          std::uint32_t storage_class_spec = 0,
-                         enum Linkage linkage = kNone, bool anonymous = false,
-                         std::int8_t bit_field_width = 0);
+                         enum Linkage linkage = Linkage::kNone,
+                         bool anonymous = false,
+                         std::int32_t bit_field_width = 0);
 
   virtual AstNodeType Kind() const override;
   virtual void Accept(Visitor& visitor) const override;
@@ -414,33 +415,32 @@ class ObjectExpr : public IdentifierExpr {
   void SetLocalPtr(llvm::AllocaInst* local_ptr);
   llvm::AllocaInst* GetLocalPtr() const;
   llvm::GlobalVariable* GetGlobalPtr() const;
-  bool HasGlobalPtr() const;
 
   std::list<std::pair<Type*, std::int32_t>>& GetIndexs();
   const std::list<std::pair<Type*, std::int32_t>>& GetIndexs() const;
 
-  std::int8_t BitFieldWidth() const;
-  std::int8_t GetBitFieldBegin() const;
-  void SetBitFieldBegin(std::int8_t bit_field_begin);
+  std::int32_t GetBitFieldWidth() const;
+  std::int32_t GetBitFieldBegin() const;
+  void SetBitFieldBegin(std::int32_t bit_field_begin);
 
   void SetType(Type* type);
-  llvm::Type* GetLLVMType();
-  std::int32_t GetLLVMTypeSizeInBits();
 
   void SetFuncName(const std::string& func_name);
 
  private:
   ObjectExpr(const std::string& name, QualType type,
-             std::uint32_t storage_class_spec = 0, enum Linkage linkage = kNone,
-             bool anonymous = false, std::int8_t bit_field_width = 0);
+             std::uint32_t storage_class_spec = 0,
+             enum Linkage linkage = Linkage::kNone, bool anonymous = false,
+             std::int32_t bit_field_width = 0);
 
   bool anonymous_{};
+
   std::uint32_t storage_class_spec_{};
   std::int32_t align_{};
   std::int32_t offset_{};
 
-  std::int8_t bit_field_width_{};
-  std::int8_t bit_field_begin_{};
+  std::int32_t bit_field_width_{};
+  std::int32_t bit_field_begin_{};
 
   // 当遇到重复声明时使用
   Declaration* decl_{};
@@ -449,7 +449,6 @@ class ObjectExpr : public IdentifierExpr {
   std::list<std::pair<Type*, std::int32_t>> indexs_;
 
   llvm::AllocaInst* local_ptr_{};
-  mutable llvm::GlobalVariable* global_ptr_{};
 
   std::string func_name_;
 };
@@ -757,19 +756,22 @@ class Initializer {
  public:
   Initializer(
       Type* type, Expr* expr,
-      std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>
+      std::vector<std::tuple<Type*, std::int32_t, std::int32_t, std::int32_t>>
           indexs);
 
   Type* GetType() const;
+
   Expr*& GetExpr();
   const Expr* GetExpr() const;
-  const std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>&
+
+  const std::vector<
+      std::tuple<Type*, std::int32_t, std::int32_t, std::int32_t>>&
   GetIndexs() const;
 
  private:
   Type* type_;
   Expr* expr_;
-  std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>
+  std::vector<std::tuple<Type*, std::int32_t, std::int32_t, std::int32_t>>
       indexs_;
 };
 
@@ -783,8 +785,10 @@ class Declaration : public Stmt {
 
   void AddInits(std::vector<Initializer> inits);
   const std::vector<Initializer>& GetLocalInits() const;
+
   void SetConstant(llvm::Constant* constant);
   llvm::Constant* GetConstant() const;
+
   bool ValueInit() const;
 
   bool HasLocalInit() const;
@@ -816,6 +820,7 @@ class FuncDef : public ExtDecl {
   virtual void Check() override;
 
   void SetBody(CompoundStmt* body);
+
   const std::string& GetName() const;
   enum Linkage GetLinkage() const;
   Type* GetFuncType() const;

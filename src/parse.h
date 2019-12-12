@@ -217,7 +217,7 @@ class Parser {
   std::stack<CompoundStmt*> compound_stmt_;
 
   // 非常量初始化时记录索引
-  std::vector<std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>
+  std::vector<std::tuple<Type*, std::int32_t, std::int32_t, std::int32_t>>
       indexs_;
 };
 

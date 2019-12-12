@@ -172,8 +172,8 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
         return nullptr;
       }
     } else {
-      scope_->InsertUsual(
-          name, MakeAstNode<IdentifierExpr>(token, name, type, kNone, true));
+      scope_->InsertUsual(name, MakeAstNode<IdentifierExpr>(
+                                    token, name, type, Linkage::kNone, true));
 
       // 如果没有名字, 将 typedef 的名字给该 struct / union
       if (type->IsStructOrUnionTy() && !type->StructHasName()) {
@@ -197,12 +197,12 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
   Linkage linkage;
   if (scope_->IsFileScope()) {
     if (storage_class_spec & kStatic) {
-      linkage = kInternal;
+      linkage = Linkage::kInternal;
     } else {
-      linkage = kExternal;
+      linkage = Linkage::kExternal;
     }
   } else {
-    linkage = kNone;
+    linkage = Linkage::kNone;
   }
 
   auto ident{scope_->FindUsualInCurrScope(name)};
@@ -213,17 +213,17 @@ Declaration* Parser::MakeDeclaration(const Token& token, QualType type,
             ident->GetType()->ToString());
     }
 
-    if (linkage == kNone) {
+    if (linkage == Linkage::kNone) {
       Error(token, "redefinition of '{}'", name);
-    } else if (linkage == kExternal) {
+    } else if (linkage == Linkage::kExternal) {
       // static int a = 1;
       // extern int a;
       // 这种情况是可以的
-      if (ident->GetLinkage() == kNone) {
+      if (ident->GetLinkage() == Linkage::kNone) {
         Error(token, "conflicting linkage '{}'", name);
       }
     } else {
-      if (ident->GetLinkage() != kInternal) {
+      if (ident->GetLinkage() != Linkage::kInternal) {
         Error(token, "conflicting linkage '{}'", name);
       }
     }
@@ -755,7 +755,8 @@ Expr* Parser::TryParseCompoundLiteral() {
 
 Expr* Parser::ParseCompoundLiteral(QualType type) {
   if (scope_->IsFileScope()) {
-    auto obj{MakeAstNode<ObjectExpr>(Peek(), "", type, 0, kInternal, true)};
+    auto obj{
+        MakeAstNode<ObjectExpr>(Peek(), "", type, 0, Linkage::kInternal, true)};
     auto decl{MakeAstNode<Declaration>(Peek(), obj)};
 
     decl->SetConstant(
@@ -765,8 +766,8 @@ Expr* Parser::ParseCompoundLiteral(QualType type) {
 
     return obj;
   } else {
-    auto obj{MakeAstNode<ObjectExpr>(Peek(), ".compoundliteral", type, 0, kNone,
-                                     true)};
+    auto obj{MakeAstNode<ObjectExpr>(Peek(), ".compoundliteral", type, 0,
+                                     Linkage::kNone, true)};
     auto decl{MakeAstNode<Declaration>(Peek(), obj)};
 
     ParseInitDeclaratorSub(decl);
@@ -861,13 +862,14 @@ Expr* Parser::ParseMemberRefExpr(Expr* expr) {
   }
 
   if (expr->Kind() == AstNodeType::kFuncCallExpr) {
-    auto obj{MakeAstNode<ObjectExpr>(Peek(), "", type, 0, kNone, true)};
+    auto obj{
+        MakeAstNode<ObjectExpr>(Peek(), "", type, 0, Linkage::kNone, true)};
     auto decl{MakeAstNode<Declaration>(Peek(), obj)};
     std::vector<Initializer> inits;
     inits.emplace_back(
         type.GetType(), expr,
         std::vector<
-            std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>{});
+            std::tuple<Type*, std::int32_t, std::int32_t, std::int32_t>>{});
     decl->AddInits(inits);
     compound_stmt_.top()->AddStmt(decl);
     expr = obj;
@@ -1826,8 +1828,8 @@ void Parser::ParseStructDeclList(StructType* type) {
         if (std::empty(tok.GetStr())) {
           // 此时该 struct / union 不能有名字
           if (copy->IsStructOrUnionTy() && !copy->StructHasName()) {
-            auto anonymous{
-                MakeAstNode<ObjectExpr>(tok, "", copy, 0, kNone, true)};
+            auto anonymous{MakeAstNode<ObjectExpr>(tok, "", copy, 0,
+                                                   Linkage::kNone, true)};
             type->MergeAnonymous(anonymous);
             continue;
           } else {
@@ -2064,7 +2066,7 @@ Declaration* Parser::ParseInitDeclarator(QualType& base_type,
 void Parser::ParseInitDeclaratorSub(Declaration* decl) {
   auto ident{decl->GetIdent()};
 
-  if (!scope_->IsFileScope() && ident->GetLinkage() == kExternal) {
+  if (!scope_->IsFileScope() && ident->GetLinkage() == Linkage::kExternal) {
     Error(ident->GetLoc(), "{} has both 'extern' and initializer",
           ident->GetName());
   }
@@ -2246,7 +2248,7 @@ ObjectExpr* Parser::ParseParamDecl() {
   base_type = Type::MayCast(base_type);
 
   if (std::empty(tok.GetStr())) {
-    return MakeAstNode<ObjectExpr>(tok, "", base_type, 0, kNone, true);
+    return MakeAstNode<ObjectExpr>(tok, "", base_type, 0, Linkage::kNone, true);
   }
 
   auto decl{MakeDeclaration(tok, base_type, 0, 0, 0)};
@@ -2486,13 +2488,13 @@ void Parser::ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
 
       indexs_.push_back({type, (*member_iter)->GetIndexs().back().second,
                          (*member_iter)->GetBitFieldBegin(),
-                         (*member_iter)->BitFieldWidth()});
+                         (*member_iter)->GetBitFieldWidth()});
       ParseInitializer(inits, (*member_iter)->GetType(), designated, false);
       indexs_.pop_back();
     } else {
       indexs_.push_back({type, (*member_iter)->GetIndexs().back().second,
                          (*member_iter)->GetBitFieldBegin(),
-                         (*member_iter)->BitFieldWidth()});
+                         (*member_iter)->GetBitFieldWidth()});
       ParseInitializer(inits, (*member_iter)->GetType(), designated, false);
       indexs_.pop_back();
     }
@@ -2740,7 +2742,7 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
     }
 
     auto begin{(*member_iter)->GetBitFieldBegin()};
-    auto width{(*member_iter)->BitFieldWidth()};
+    auto width{(*member_iter)->GetBitFieldWidth()};
     auto index{is_struct ? (*member_iter)->GetIndexs().back().second : 0};
     auto member_type{type->GetLLVMType()->getStructElementType(index)};
 
@@ -3031,7 +3033,7 @@ Expr* Parser::ParseOffsetof() {
     auto name{token.GetIdentifier()};
     auto obj{type->StructGetMember(name)};
 
-    if (obj->BitFieldWidth()) {
+    if (obj->GetBitFieldWidth()) {
       Error(token, "cannot compute offset of bit-field '{}'", obj->GetName());
     }
 
@@ -3081,8 +3083,9 @@ void Parser::AddBuiltin() {
       loc, "reg_save_area", PointerType::Get(VoidType::Get())));
   va_list->SetComplete(true);
 
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
-      loc, "__builtin_va_list", ArrayType::Get(va_list, 1), kNone, true));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_list",
+                                                  ArrayType::Get(va_list, 1),
+                                                  Linkage::kNone, true));
 
   auto va_list_ptr{MakeAstNode<ObjectExpr>(loc, "", va_list->GetPointerTo())};
   auto integer{MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kInt))};
@@ -3096,62 +3099,62 @@ void Parser::AddBuiltin() {
   auto copy{FunctionType::Get(VoidType::Get(), {va_list_ptr, va_list_ptr})};
   copy->SetName("__builtin_va_copy");
 
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_start",
-                                                  start, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_va_start", start, Linkage::kExternal, false));
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_end", end,
-                                                  kExternal, false));
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_arg_sub",
-                                                  arg, kExternal, false));
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_va_copy",
-                                                  copy, kExternal, false));
+                                                  Linkage::kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_va_arg_sub", arg, Linkage::kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_va_copy", copy, Linkage::kExternal, false));
 
   auto sync_synchronize{FunctionType::Get(VoidType::Get(), {})};
   sync_synchronize->FuncSetName("__sync_synchronize");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
-      loc, "__sync_synchronize", sync_synchronize, kExternal, false));
+      loc, "__sync_synchronize", sync_synchronize, Linkage::kExternal, false));
 
   auto ulong{
       MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kLong | kUnsigned))};
   auto alloca{
       FunctionType::Get(ArithmeticType::Get(kChar)->GetPointerTo(), {ulong})};
   alloca->FuncSetName("__builtin_alloca");
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_alloca",
-                                                  alloca, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_alloca", alloca, Linkage::kExternal, false));
 
   auto popcount{FunctionType::Get(ArithmeticType::Get(kInt), {integer})};
   popcount->FuncSetName("__builtin_popcount");
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_popcount",
-                                                  popcount, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_popcount", popcount, Linkage::kExternal, false));
 
   auto clz{FunctionType::Get(ArithmeticType::Get(kInt), {integer})};
   clz->FuncSetName("__builtin_clz");
-  scope_->InsertUsual(
-      MakeAstNode<IdentifierExpr>(loc, "__builtin_clz", clz, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_clz", clz,
+                                                  Linkage::kExternal, false));
 
   auto ctz{FunctionType::Get(ArithmeticType::Get(kInt), {integer})};
   ctz->FuncSetName("__builtin_ctz");
-  scope_->InsertUsual(
-      MakeAstNode<IdentifierExpr>(loc, "__builtin_ctz", ctz, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_ctz", ctz,
+                                                  Linkage::kExternal, false));
 
   auto long_integer{
       MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kLong))};
   auto expect{FunctionType::Get(ArithmeticType::Get(kLong),
                                 {long_integer, long_integer})};
   expect->FuncSetName("__builtin_expect");
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_expect",
-                                                  expect, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_expect", expect, Linkage::kExternal, false));
 
   auto float_param{
       MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kFloat))};
   auto isinf_sign{FunctionType::Get(ArithmeticType::Get(kInt), {float_param})};
   isinf_sign->FuncSetName("__builtin_isinf_sign");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
-      loc, "__builtin_isinf_sign", isinf_sign, kExternal, false));
+      loc, "__builtin_isinf_sign", isinf_sign, Linkage::kExternal, false));
 
   auto isfinite{FunctionType::Get(ArithmeticType::Get(kInt), {float_param})};
   isfinite->FuncSetName("__builtin_isfinite");
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_isfinite",
-                                                  isfinite, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_isfinite", isfinite, Linkage::kExternal, false));
 
   auto int8ptr_param{MakeAstNode<ObjectExpr>(
       loc, "", ArithmeticType::Get(kChar)->GetPointerTo())};
@@ -3159,8 +3162,8 @@ void Parser::AddBuiltin() {
   auto memset{
       FunctionType::Get(VoidType::Get(), {int8ptr_param, int8_param, ulong})};
   memset->FuncSetName("__builtin_memset");
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(loc, "__builtin_memset",
-                                                  memset, kExternal, false));
+  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
+      loc, "__builtin_memset", memset, Linkage::kExternal, false));
 }
 
 }  // namespace kcc
