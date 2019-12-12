@@ -765,7 +765,8 @@ Expr* Parser::ParseCompoundLiteral(QualType type) {
 
     return obj;
   } else {
-    auto obj{MakeAstNode<ObjectExpr>(Peek(), "", type, 0, kNone, true)};
+    auto obj{MakeAstNode<ObjectExpr>(Peek(), ".compoundliteral", type, 0, kNone,
+                                     true)};
     auto decl{MakeAstNode<Declaration>(Peek(), obj)};
 
     ParseInitDeclaratorSub(decl);

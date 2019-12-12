@@ -72,6 +72,7 @@ void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
       // 也可以是
       // int a[3];
       // int *p = &a[0];
+      // 还是以是函数
       if (auto global{dynamic_cast<const ObjectExpr*>(node->GetExpr())}) {
         val_ = global->GetGlobalPtr();
       } else if (auto unary{
@@ -94,6 +95,8 @@ void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
         llvm::Constant* index[]{rhs};
         val_ =
             llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, lhs, index);
+      } else if (node->GetExpr()->Kind() == AstNodeType::kIdentifierExpr) {
+        val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr()));
       } else {
         Throw();
       }

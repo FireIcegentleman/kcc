@@ -262,13 +262,16 @@ bool CodeGen::IsCheapEnoughToEvaluateUnconditionally(const Expr* expr) {
 }
 
 llvm::AllocaInst* CodeGen::CreateEntryBlockAlloca(llvm::Type* type,
+                                                  std::int32_t align,
                                                   const std::string& name) {
   (void)name;
 #ifdef NDEBUG
-  return new llvm::AllocaInst{type, 0, "", alloc_insert_point_};
+  auto ptr{new llvm::AllocaInst{type, 0, "", alloc_insert_point_}};
 #else
-  return new llvm::AllocaInst{type, 0, name, alloc_insert_point_};
+  auto ptr{new llvm::AllocaInst{type, 0, name, alloc_insert_point_}};
 #endif
+  ptr->setAlignment(align);
+  return ptr;
 }
 
 llvm::Value* CodeGen::GetPtr(const AstNode* node) {
@@ -1030,7 +1033,8 @@ void CodeGen::Visit(const FuncDef* node) {
     auto type{obj->GetType()};
     auto name{obj->GetName()};
 
-    auto ptr{CreateEntryBlockAlloca(type->GetLLVMType(), name)};
+    auto ptr{
+        CreateEntryBlockAlloca(type->GetLLVMType(), (*iter)->GetAlign(), name)};
     (*iter)->SetLocalPtr(ptr);
 
     TryEmitParamVar(name, type, ptr, obj->GetLoc());
@@ -1816,8 +1820,7 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
   auto type{obj->GetType()};
   auto name{obj->GetName()};
 
-  auto ptr{CreateEntryBlockAlloca(type->GetLLVMType(), name)};
-  ptr->setAlignment(obj->GetAlign());
+  auto ptr{CreateEntryBlockAlloca(type->GetLLVMType(), obj->GetAlign(), name)};
   obj->SetLocalPtr(ptr);
 
   is_volatile_ = obj->GetQualType().IsVolatile();
@@ -1850,12 +1853,14 @@ void CodeGen::DealLocaleDecl(const Declaration* node) {
 }
 
 void CodeGen::InitLocalAggregate(const Declaration* node) {
+  EnsureInsertPoint();
+
   auto obj{node->GetObject()};
   auto width{obj->GetType()->GetWidth()};
 
-  Builder.CreateMemSet(
-      Builder.CreateBitCast(obj->GetLocalPtr(), Builder.getInt8PtrTy()),
-      Builder.getInt8(0), width, obj->GetAlign(), is_volatile_);
+  result_ = Builder.CreateBitCast(obj->GetLocalPtr(), Builder.getInt8PtrTy());
+  Builder.CreateMemSet(result_, Builder.getInt8(0), width, obj->GetAlign(),
+                       is_volatile_);
 
   for (const auto& item : node->GetLocalInits()) {
     Load_Struct_Obj();
@@ -1982,8 +1987,8 @@ void CodeGen::StartFunction(const FuncDef* node) {
 
   auto return_type{func_type->FuncGetReturnType()};
   if (!return_type->IsVoidTy()) {
-    return_value_ =
-        CreateEntryBlockAlloca(return_type->GetLLVMType(), "ret.val");
+    return_value_ = CreateEntryBlockAlloca(return_type->GetLLVMType(),
+                                           return_type->GetAlign(), "ret.val");
   }
 
   Builder.SetInsertPoint(entry);
