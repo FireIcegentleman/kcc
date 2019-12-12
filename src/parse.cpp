@@ -860,6 +860,19 @@ Expr* Parser::ParseMemberRefExpr(Expr* expr) {
           type->StructGetName());
   }
 
+  if (expr->Kind() == AstNodeType::kFuncCallExpr) {
+    auto obj{MakeAstNode<ObjectExpr>(Peek(), "", type, 0, kNone, true)};
+    auto decl{MakeAstNode<Declaration>(Peek(), obj)};
+    std::vector<Initializer> inits;
+    inits.emplace_back(
+        type.GetType(), expr,
+        std::vector<
+            std::tuple<Type*, std::int32_t, std::int8_t, std::int8_t>>{});
+    decl->AddInits(inits);
+    compound_stmt_.top()->AddStmt(decl);
+    expr = obj;
+  }
+
   return MakeAstNode<BinaryOpExpr>(token, Tag::kPeriod, expr, rhs);
 }
 
@@ -2161,6 +2174,15 @@ void Parser::ParseDirectDeclaratorTail(QualType& base_type) {
 }
 
 std::int64_t Parser::ParseArrayLength() {
+  while (true) {
+    if (Try(Tag::kTypedef) || Try(Tag::kExtern) || Try(Tag::kStatic) ||
+        Try(Tag::kThreadLocal) || Try(Tag::kAuto) || Try(Tag::kRegister)) {
+    } else if (ParseTypeQualList()) {
+    } else {
+      break;
+    }
+  }
+
   if (Test(Tag::kRightSquare)) {
     return -1;
   }
