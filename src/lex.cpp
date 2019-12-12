@@ -59,18 +59,18 @@ std::vector<Token> Scanner::Tokenize() {
 }
 
 std::string Scanner::HandleIdentifier() {
-  std::string s;
+  std::string ident;
 
   while (HasNext()) {
     std::int32_t ch{Next(false)};
     if (IsUCN(ch)) {
-      AppendUCN(s, HandleEscape());
+      AppendUCN(ident, HandleEscape());
     } else {
-      s.push_back(ch);
+      ident.push_back(ch);
     }
   }
 
-  return s;
+  return ident;
 }
 
 std::pair<std::int32_t, Encoding> Scanner::HandleCharacter() {
@@ -105,7 +105,7 @@ std::pair<std::int32_t, Encoding> Scanner::HandleCharacter() {
 std::pair<std::string, Encoding> Scanner::HandleStringLiteral(
     bool handle_escape) {
   auto encoding{HandleEncoding()};
-  std::string s;
+  std::string str;
   // eat "
   Next(false);
 
@@ -118,13 +118,13 @@ std::pair<std::string, Encoding> Scanner::HandleStringLiteral(
     }
 
     if (handle_escape && is_ucn) {
-      AppendUCN(s, ch);
+      AppendUCN(str, ch);
     } else {
-      s.push_back(ch);
+      str.push_back(ch);
     }
   }
 
-  return {s, encoding};
+  return {str, encoding};
 }
 
 bool Scanner::HasNext() { return index_ < std::size(source_); }
@@ -356,7 +356,7 @@ const Token& Scanner::Scan() {
       if (Test('u') || Test('U')) {
         return SkipIdentifier();
       } else {
-        Error(loc_, "Invalid input: {}", static_cast<char>(ch));
+        Error(loc_, "Invalid input: '{}'", static_cast<char>(ch));
       }
     case '_':
       // 扩展
@@ -370,7 +370,7 @@ const Token& Scanner::Scan() {
       if (std::isalpha(ch) || (ch >= 0x80 && ch <= 0xfd)) {
         return SkipIdentifier();
       } else {
-        Error(loc_, "Invalid input: {}", static_cast<char>(ch));
+        Error(loc_, "Invalid input: '{}'", static_cast<char>(ch));
       }
     }
   }
@@ -585,7 +585,7 @@ std::int32_t Scanner::HandleEscape() {
       return '\t';
     case 'v':
       return '\v';
-      // gcc 扩展
+      // GNU 扩展
     case 'e':
       return '\033';
     case 'X':

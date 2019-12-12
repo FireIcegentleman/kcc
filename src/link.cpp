@@ -6,14 +6,11 @@
 
 #include <lld/Common/Driver.h>
 
+#include "util.h"
+
 namespace kcc {
 
-bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
-          const std::string &output_file, bool shared,
-          const std::vector<std::string> &r_path,
-          const std::vector<std::string> &so_file,
-          const std::vector<std::string> &a_file,
-          const std::vector<std::string> &libs) {
+bool Link() {
   /*
    * Platform Specific Code
    */
@@ -45,7 +42,7 @@ bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
       "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/9.2.0/../../../../lib64/"
       "crtn.o"};
 
-  if (shared) {
+  if (Shared) {
     args.push_back("-shared");
   } else {
     args.push_back("-pie");
@@ -59,30 +56,30 @@ bool Link(const std::vector<std::string> &obj_file, OptLevel opt_level,
    * End of Platform Specific Code
    */
 
-  for (const auto &item : obj_file) {
+  for (const auto &item : ObjFile) {
     args.push_back(item.c_str());
   }
 
-  for (const auto &item : r_path) {
+  for (const auto &item : RPath) {
     args.push_back(item.c_str());
   }
 
-  for (const auto &item : so_file) {
+  for (const auto &item : SoFile) {
     args.push_back(item.c_str());
   }
 
-  for (const auto &item : a_file) {
+  for (const auto &item : AFile) {
     args.push_back(item.c_str());
   }
 
-  for (const auto &item : libs) {
+  for (const auto &item : Libs) {
     args.push_back(item.c_str());
   }
 
-  std::string str{"-o" + output_file};
+  std::string str{"-o" + OutputFilePath};
   args.push_back(str.c_str());
 
-  auto level{static_cast<std::uint32_t>(opt_level)};
+  auto level{static_cast<std::int32_t>(OptimizationLevel.getValue())};
   std::string level_str{"-plugin-opt=O" + std::to_string(level)};
   if (level != 0) {
     args.push_back("-plugin=/usr/bin/../lib/LLVMgold.so");

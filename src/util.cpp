@@ -21,42 +21,6 @@
 
 namespace kcc {
 
-std::string GetPath() {
-  constexpr std::size_t kBufSize{256};
-  char buf[kBufSize];
-  // 将符号链接的内容读入buf,不超过kBufSize字节.
-  // 内容不以空字符终止,返回读取的字符数,返回-1表示错误
-  // /proc/self/exe代表当前程序
-  auto count{readlink("/proc/self/exe", buf, kBufSize)};
-  if (count == -1) {
-    Error("readlink error");
-  }
-
-  auto end{std::strrchr(buf, '/')};
-  return std::string(buf, end - buf);
-}
-
-decltype(std::chrono::system_clock::now()) T0;
-
-void TimingStart() { T0 = std::chrono::system_clock::now(); }
-
-void TimingEnd(const std::string &str) {
-  auto time{std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::system_clock::now() - T0)
-                .count()};
-  std::cout << str << ": ";
-
-  if (time > 10000000) {
-    time /= 1000000;
-    std::cout << time << " s" << std::endl;
-  } else if (time > 10000) {
-    time /= 1000;
-    std::cout << time << " ms" << std::endl;
-  } else {
-    std::cout << time << " μs" << std::endl;
-  }
-}
-
 void InitCommandLine(int argc, char *argv[]) {
   llvm::cl::HideUnrelatedOptions(Category);
 
@@ -112,7 +76,7 @@ void CommandLineCheck() {
       } else if (path.filename().extension().string() == ".o") {
         ObjFile.push_back(item);
       } else {
-        Error("the file extension must be '.c' or '.so': {}", item);
+        Error("the file extension must be '.c', '.so', '.a' or '.o': {}", item);
       }
     } else {
       Error("no such file: {}", item);
@@ -138,8 +102,7 @@ void CommandLineCheck() {
   }
 
   if (!std::empty(OutputFilePath) && std::size(InputFilePaths) > 1 &&
-      (Preprocess || OutputAssembly || OutputObjectFile || EmitTokens ||
-       EmitAST || EmitLLVM)) {
+      DoNotLink()) {
     Error("Cannot specify -o when generating multiple output files");
   }
 
@@ -154,6 +117,52 @@ void CommandLineCheck() {
   for (auto &&item : Libs) {
     item = "-l" + item;
   }
+
+  for (const auto &item : InputFilePaths) {
+    ObjFile.push_back(GetObjFile(item));
+  }
+
+  for (const auto &item : InputFilePaths) {
+    RemoveFile.push_back(GetObjFile(item));
+  }
+}
+
+std::string GetPath() {
+  constexpr std::size_t kBufSize{256};
+  char buf[kBufSize];
+  // 将符号链接的内容读入buf,不超过kBufSize字节.
+  // 内容不以空字符终止,返回读取的字符数,返回-1表示错误
+  // /proc/self/exe代表当前程序
+  auto count{readlink("/proc/self/exe", buf, kBufSize)};
+  if (count == -1) {
+    Error("readlink error");
+  }
+
+  auto end{std::strrchr(buf, '/')};
+  return std::string(buf, end - buf);
+}
+
+decltype(std::chrono::system_clock::now()) T0;
+
+void TimingStart() { T0 = std::chrono::system_clock::now(); }
+
+void TimingEnd(const std::string &str) {
+  if (Timing) {
+    auto time{std::chrono::duration_cast<std::chrono::microseconds>(
+                  std::chrono::system_clock::now() - T0)
+                  .count()};
+    std::cout << str << ": ";
+
+    if (time > 10000000) {
+      time /= 1000000;
+      std::cout << time << " s" << std::endl;
+    } else if (time > 10000) {
+      time /= 1000;
+      std::cout << time << " ms" << std::endl;
+    } else {
+      std::cout << time << " μs" << std::endl;
+    }
+  }
 }
 
 void EnsureFileExists(const std::string &file_name) {
@@ -167,30 +176,23 @@ std::string GetObjFile(const std::string &name) {
   return ("/tmp" / file_name).string();
 }
 
-const std::vector<std::string> &GetObjFiles() {
-  for (const auto &item : InputFilePaths) {
-    ObjFile.push_back(GetObjFile(item));
-  }
-
-  for (const auto &item : InputFilePaths) {
-    RemoveFile.push_back(GetObjFile(item));
-  }
-
-  return ObjFile;
-}
-
 std::string GetFileName(const std::string &name, std::string_view extension) {
   return std::filesystem::path{name}.replace_extension(extension).string();
 }
 
-void RemoveAllFiles(const std::vector<std::string> &files) {
-  for (const auto &item : files) {
+void RemoveFiles() {
+  for (const auto &item : RemoveFile) {
     std::filesystem::remove(item);
   }
 }
 
 bool CommandSuccess(std::int32_t status) {
   return status != -1 && WIFEXITED(status) && !WEXITSTATUS(status);
+}
+
+bool DoNotLink() {
+  return Preprocess || OutputAssembly || OutputObjectFile || EmitTokens ||
+         EmitAST || EmitLLVM;
 }
 
 }  // namespace kcc

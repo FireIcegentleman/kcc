@@ -8,7 +8,6 @@
 
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include "error.h"
@@ -18,9 +17,6 @@ namespace kcc {
 
 void ObjGen(const std::string& obj_file,
             llvm::TargetMachine::CodeGenFileType file_type) {
-  llvm::InitializeAllAsmPrinters();
-  llvm::InitializeAllAsmParsers();
-
   std::error_code error_code;
   llvm::raw_fd_ostream dest{obj_file, error_code, llvm::sys::fs::F_None};
 

@@ -11,10 +11,7 @@
 
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/Value.h>
 
 #include "ast.h"
 #include "location.h"
@@ -26,7 +23,7 @@ namespace kcc {
 // 它是一种广泛使用的标准化调试数据格式
 class DebugInfo {
  public:
-  explicit DebugInfo(const std::string& file_name);
+  DebugInfo();
   // 代码生成完毕之后调用它
   void Finalize();
 

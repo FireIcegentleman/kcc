@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <wait.h>
 
-#include <cstdlib>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -22,6 +22,7 @@
 #include "json_gen.h"
 #include "lex.h"
 #include "link.h"
+#include "llvm_common.h"
 #include "obj_gen.h"
 #include "opt.h"
 #include "parse.h"
@@ -30,11 +31,15 @@
 using namespace kcc;
 
 void RunKcc(const std::string &file_name);
+
 #ifdef DEV
+#include <cstdlib>
 void RunDev();
 #endif
 
 int main(int argc, char *argv[]) try {
+  InitLLVM();
+
   InitCommandLine(argc, argv);
   CommandLineCheck();
 
@@ -53,7 +58,7 @@ int main(int argc, char *argv[]) try {
     } else if (pid == 0) {
       RunKcc(item);
       PrintWarnings();
-      std::exit(EXIT_SUCCESS);
+      return EXIT_SUCCESS;
     }
   }
 
@@ -68,11 +73,8 @@ int main(int argc, char *argv[]) try {
     }
   }
 
-  if (Preprocess || OutputAssembly || OutputObjectFile || EmitTokens ||
-      EmitAST || EmitLLVM) {
-    if (Timing) {
-      TimingEnd("Timing");
-    }
+  if (DoNotLink()) {
+    TimingEnd("Timing");
     return EXIT_SUCCESS;
   }
 
@@ -80,49 +82,22 @@ int main(int argc, char *argv[]) try {
     OutputFilePath = "a.out";
   }
 
-  auto obj_files{GetObjFiles()};
-
-  if (Static) {
-    std::string cmd{"ar qc " + OutputFilePath + ' '};
-    for (const auto &item : obj_files) {
-      cmd += item + ' ';
-    }
-    if (!CommandSuccess(std::system(cmd.c_str()))) {
-      Error("ar error");
-    }
-
-    cmd = "ranlib " + OutputFilePath;
-    if (!CommandSuccess(std::system(cmd.c_str()))) {
-      Error("ranlib error");
-    }
-
-    RemoveAllFiles(RemoveFile);
-    if (Timing) {
-      TimingEnd("Timing");
-    }
-
-    return EXIT_SUCCESS;
-  }
-
-  if (!Link(obj_files, OptimizationLevel, OutputFilePath, Shared, RPath, SoFile,
-            AFile, Libs)) {
-    RemoveAllFiles(RemoveFile);
+  if (!Link()) {
+    RemoveFiles();
     Error("Link Failed");
   } else {
-    RemoveAllFiles(RemoveFile);
+    RemoveFiles();
   }
 
-  if (Timing) {
-    TimingEnd("Timing");
-  }
+  TimingEnd("Timing");
 } catch (const std::exception &error) {
   Error("{}", error.what());
 }
 
 void RunKcc(const std::string &file_name) {
   Preprocessor preprocessor;
-  preprocessor.SetIncludePaths(IncludePaths);
-  preprocessor.SetMacroDefinitions(MacroDefines);
+  preprocessor.AddIncludePaths(IncludePaths);
+  preprocessor.AddMacroDefinitions(MacroDefines);
 
   auto preprocessed_code{preprocessor.Cpp(file_name)};
 
@@ -151,10 +126,10 @@ void RunKcc(const std::string &file_name) {
       std::ofstream ofs{OutputFilePath};
       for (const auto &tok : tokens) {
         if (tok.GetLoc().GetFileName() == file_name) {
-          std::cout << tok.ToString() << '\n';
+          ofs << tok.ToString() << '\n';
         }
       }
-      std::cout << std::endl;
+      ofs << std::endl;
     }
     return;
   }
@@ -174,7 +149,7 @@ void RunKcc(const std::string &file_name) {
 
   CodeGen code_gen;
   code_gen.GenCode(unit);
-  Optimization(OptimizationLevel);
+  Optimization();
 
   if (EmitLLVM) {
     std::error_code error_code;
@@ -214,8 +189,8 @@ void RunKcc(const std::string &file_name) {
 #ifdef DEV
 void Run(const std::string &file) {
   Preprocessor preprocessor;
-  preprocessor.SetIncludePaths(IncludePaths);
-  preprocessor.SetMacroDefinitions(MacroDefines);
+  preprocessor.AddIncludePaths(IncludePaths);
+  preprocessor.AddMacroDefinitions(MacroDefines);
 
   auto preprocessed_code{preprocessor.Cpp(file)};
   std::ofstream preprocess_file{GetFileName(file, ".i")};
@@ -235,59 +210,54 @@ void Run(const std::string &file) {
   auto unit{parser.ParseTranslationUnit()};
   JsonGen{file}.GenJson(unit, GetFileName(file, ".html"));
 
-  if (StandardIR) {
-    std::string cmd{"clang -std=gnu17 -S -emit-llvm -O0 " + file + " -o " +
-                    GetFileName(file, ".std.ll")};
-    std::system(cmd.c_str());
+  std::string cmd{"clang -std=gnu17 -S -emit-llvm -O0 -g " + file + " -o " +
+                  GetFileName(file, ".std.ll")};
+  std::system(cmd.c_str());
 
-    cmd = "./clang -std=gnu99 -S -emit-llvm -O0 " + file + " -o " +
-          GetFileName(file, ".old.ll");
-    std::system(cmd.c_str());
+  cmd = "./clang -std=gnu99 -S -emit-llvm -O0 -g " + file + " -o " +
+        GetFileName(file, ".old.ll");
+  std::system(cmd.c_str());
+
+  CodeGen code_gen;
+  code_gen.GenCode(unit);
+
+  Optimization();
+
+  std::error_code error_code;
+  llvm::raw_fd_ostream ir_file{GetFileName(file, ".ll"), error_code};
+  ir_file << *Module;
+
+  cmd = "llc " + GetFileName(file, ".ll");
+  if (!CommandSuccess(std::system(cmd.c_str()))) {
+    Error("emit asm fail");
   }
 
-  if (!ParseOnly) {
-    CodeGen code_gen;
-    code_gen.GenCode(unit);
-
-    Optimization(OptimizationLevel);
-
-    std::error_code error_code;
-    llvm::raw_fd_ostream ir_file{GetFileName(file, ".ll"), error_code};
-    ir_file << *Module;
-
-    std::string cmd{"llc " + GetFileName(file, ".ll")};
-    if (!CommandSuccess(std::system(cmd.c_str()))) {
-      Error("emit asm fail");
-    }
-
-    ObjGen(GetFileName(file, ".o"));
-  }
+  ObjGen(GetObjFile(file));
 }
 
 void RunDev() {
+  assert(std::size(InputFilePaths) == 1);
   auto file{InputFilePaths.front()};
   Run(file);
 
-  if (!ParseOnly) {
-    std::cout << "link\n";
-    if (!Link({GetFileName(file, ".o")}, OptimizationLevel,
-              GetFileName(file, ".out"))) {
-      Error("link fail");
-    }
-    EnsureFileExists(GetFileName(file, ".out"));
+  std::cout << "link\n";
+  OutputFilePath = GetFileName(file, ".out");
+  if (!Link()) {
+    Error("link fail");
+  }
+  EnsureFileExists(GetFileName(file, ".out"));
 
-    std::string cmd{"./" + GetFileName(file, ".out")};
-    if (!CommandSuccess(std::system(cmd.c_str()))) {
-      Error("run fail");
-    }
+  std::string cmd{"./" + GetFileName(file, ".out")};
+  if (!CommandSuccess(std::system(cmd.c_str()))) {
+    Error("run fail");
+  }
 
-    std::cout << "-----------------------------\n";
+  std::cout << "-----------------------------\n";
 
-    std::cout << "lli\n";
-    cmd = "lli " + GetFileName(file, ".ll");
-    if (!CommandSuccess(std::system(cmd.c_str()))) {
-      Error("run fail");
-    }
+  std::cout << "lli\n";
+  cmd = "lli " + GetFileName(file, ".ll");
+  if (!CommandSuccess(std::system(cmd.c_str()))) {
+    Error("run fail");
   }
 
   PrintWarnings();

@@ -19,6 +19,9 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
+#include "llvm_common.h"
+#include "util.h"
+
 namespace kcc {
 
 void AddOptimizationPasses(llvm::legacy::PassManagerBase &mpm,
@@ -58,8 +61,8 @@ void AddStandardLinkPasses(llvm::legacy::PassManagerBase &pm) {
   builder.populateLTOPassManager(pm);
 }
 
-void Optimization(OptLevel opt_level) {
-  auto level{static_cast<std::uint32_t>(opt_level)};
+void Optimization() {
+  auto level{static_cast<std::int32_t>(OptimizationLevel.getValue())};
 
   if (level != 0) {
     llvm::PassRegistry &registry{*llvm::PassRegistry::getPassRegistry()};

@@ -9,6 +9,7 @@
 #include <string>
 
 #include <clang/Basic/TargetInfo.h>
+#include <clang/Frontend/CompilerInstance.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/IRBuilder.h>
@@ -17,9 +18,6 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
 #include <llvm/Target/TargetMachine.h>
-
-#include "ast.h"
-#include "type.h"
 
 namespace kcc {
 
@@ -33,6 +31,10 @@ inline std::unique_ptr<llvm::Module> Module;
 inline clang::TargetInfo *TargetInfo;
 
 inline std::unique_ptr<llvm::TargetMachine> TargetMachine;
+
+inline clang::CompilerInstance Ci;
+
+void InitLLVM();
 
 std::string LLVMTypeToStr(llvm::Type *type);
 
@@ -59,24 +61,14 @@ llvm::Constant *ConstantCastToBool(llvm::Constant *value);
 llvm::Constant *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
                                bool is_unsigned);
 
-llvm::ConstantInt *GetInt32Constant(std::int32_t value);
-
 llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned);
 
 llvm::Value *CastToBool(llvm::Value *value);
 
 llvm::Value *GetZero(llvm::Type *type);
 
-llvm::GlobalVariable *CreateGlobalCompoundLiteral(QualType type,
-                                                  llvm::Constant *init);
-
 llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
                                          std::int32_t align);
-
-void CreateGlobalVar(ObjectExpr *obj);
-
-llvm::GlobalVariable *CreateLocalStaticVar(QualType type,
-                                           const std::string &name);
 
 const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type);
 

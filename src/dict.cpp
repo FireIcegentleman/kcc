@@ -57,10 +57,7 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"__builtin_huge_val", Tag::kHugeVal});
   keywords_.insert({"__builtin_inff", Tag::kInff});
 
-  // 一个显示表达式类型名称的扩展
-  keywords_.insert({"typeid", Tag::kTypeid});
-
-  // gcc 扩展
+  // GNU 扩展
   keywords_.insert({"typeof", Tag::kTypeof});
   keywords_.insert({"__typeof__", Tag::kTypeof});
   keywords_.insert({"__attribute__", Tag::kAttribute});
@@ -78,6 +75,9 @@ KeywordsDictionary::KeywordsDictionary() {
   keywords_.insert({"asm", Tag::kAsm});
   keywords_.insert({"__asm__", Tag::kAsm});
   keywords_.insert({"__asm", Tag::kAsm});
+
+  // 一个显示表达式类型名称的扩展
+  keywords_.insert({"typeid", Tag::kTypeid});
 }
 
 Tag KeywordsDictionary::Find(const std::string& name) const {

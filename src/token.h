@@ -132,12 +132,13 @@ class TokenTag : public QObject {
     kInff,      // __builtin_inff
 
     kFuncName,       // __func__ / __FUNCTION__
-    kTypeid,         // typeid
     kAsm,            // asm
     kAttribute,      // __attribute__
     kFuncSignature,  // __PRETTY_FUNCTION__
     kExtension,      // __extension__
     kTypeof,         // typeof
+
+    kTypeid,  // typeid
 
     kNone,
     kEof

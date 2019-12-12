@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include <clang/Frontend/CompilerInstance.h>
 #include <clang/Lex/HeaderSearch.h>
 #include <clang/Lex/Preprocessor.h>
 
@@ -17,9 +16,11 @@ namespace kcc {
 class Preprocessor {
  public:
   Preprocessor();
-  void SetIncludePaths(const std::vector<std::string> &include_paths);
-  // 输入形式为 name=value
-  void SetMacroDefinitions(const std::vector<std::string> &macro_definitions);
+
+  void AddIncludePaths(const std::vector<std::string> &include_paths);
+  // 输入形式为 name=value 或 name
+  void AddMacroDefinitions(const std::vector<std::string> &macro_definitions);
+
   std::string Cpp(const std::string &input_file);
 
  private:
@@ -27,7 +28,6 @@ class Preprocessor {
 
   constexpr static std::size_t StrReserve{4096};
 
-  clang::CompilerInstance ci_;
   clang::Preprocessor *pp_;
   clang::HeaderSearch *header_search_;
 };

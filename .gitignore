@@ -39,8 +39,6 @@ compile_commands.json
 
 # Dev files
 dev
-test/8cc/8cc
-test/lua/lua
 *.html
 *.i
 *.txt

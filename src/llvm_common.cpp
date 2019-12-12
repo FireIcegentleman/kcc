@@ -6,11 +6,79 @@
 
 #include <cassert>
 
+#include <clang/Basic/LangOptions.h>
+#include <clang/Basic/TargetOptions.h>
+#include <clang/Frontend/FrontendOptions.h>
+#include <clang/Frontend/LangStandard.h>
+#include <llvm/ADT/Optional.h>
+#include <llvm/Support/Casting.h>
+#include <llvm/Support/CodeGen.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Target/TargetOptions.h>
 
 #include "error.h"
 
 namespace kcc {
+
+void InitLLVM() {
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeAllAsmPrinters();
+  llvm::InitializeAllAsmParsers();
+
+  Ci.createDiagnostics();
+
+  auto pto{std::make_shared<clang::TargetOptions>()};
+  auto target_triple{llvm::sys::getDefaultTargetTriple()};
+  pto->Triple = target_triple;
+
+  TargetInfo = clang::TargetInfo::CreateTargetInfo(Ci.getDiagnostics(), pto);
+
+  Ci.setTarget(TargetInfo);
+  Ci.getInvocation().setLangDefaults(
+      Ci.getLangOpts(), clang::InputKind::C, TargetInfo->getTriple(),
+      Ci.getPreprocessorOpts(), clang::LangStandard::lang_c17);
+
+  auto &lang_opt{Ci.getLangOpts()};
+  lang_opt.C17 = true;
+  lang_opt.Digraphs = true;
+  lang_opt.Trigraphs = true;
+  lang_opt.GNUMode = true;
+  lang_opt.GNUKeywords = true;
+
+  Ci.createFileManager();
+  Ci.createSourceManager(Ci.getFileManager());
+
+  Ci.createPreprocessor(clang::TranslationUnitKind::TU_Complete);
+
+  Module = std::make_unique<llvm::Module>("", Context);
+  Module->addModuleFlag(llvm::Module::Error, "wchar_size", 4);
+  Module->addModuleFlag(llvm::Module::Max, "PIC Level", llvm::PICLevel::BigPIC);
+  Module->addModuleFlag(llvm::Module::Max, "PIE Level", llvm::PIELevel::Large);
+
+  std::string error;
+  auto target{llvm::TargetRegistry::lookupTarget(target_triple, error)};
+
+  if (!target) {
+    Error(error);
+  }
+
+  // 使用通用CPU, 生成位置无关目标文件
+  std::string cpu("generic");
+  std::string features;
+  llvm::TargetOptions opt;
+  llvm::Optional<llvm::Reloc::Model> rm{llvm::Reloc::Model::PIC_};
+  TargetMachine = std::unique_ptr<llvm::TargetMachine>{
+      target->createTargetMachine(target_triple, cpu, features, opt, rm)};
+
+  // 配置模块以指定目标机器和数据布局
+  Module->setTargetTriple(target_triple);
+  Module->setDataLayout(TargetMachine->createDataLayout());
+}
 
 std::string LLVMTypeToStr(llvm::Type *type) {
   assert(type != nullptr);
@@ -91,10 +159,12 @@ bool IsPointerTy(llvm::Value *value) {
 }
 
 bool IsFuncPointer(llvm::Type *type) {
+  assert(type != nullptr);
   return type->isPointerTy() && type->getPointerElementType()->isFunctionTy();
 }
 
 bool IsArrayPointer(llvm::Type *type) {
+  assert(type != nullptr);
   return type->isPointerTy() && type->getPointerElementType()->isArrayTy();
 }
 
@@ -142,8 +212,8 @@ llvm::Constant *ConstantCastTo(llvm::Constant *value, llvm::Type *to,
     return value;
   } else if (IsArrCastToPtr(value, to)) {
     auto zero{llvm::ConstantInt::get(Builder.getInt64Ty(), 0)};
-    return llvm::ConstantExpr::getInBoundsGetElementPtr(
-        nullptr, value, llvm::ArrayRef<llvm::Constant *>{zero, zero});
+    llvm::Constant *index[]{zero, zero};
+    return llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, value, index);
   } else if (IsPointerTy(value) && to->isPointerTy()) {
     return llvm::ConstantExpr::getPointerCast(value, to);
   } else {
@@ -169,10 +239,6 @@ llvm::Constant *ConstantCastToBool(llvm::Constant *value) {
     Error("this constant expression can not cast to bool: '{}'",
           LLVMTypeToStr(value->getType()));
   }
-}
-
-llvm::ConstantInt *GetInt32Constant(std::int32_t value) {
-  return llvm::ConstantInt::get(Builder.getInt32Ty(), value);
 }
 
 llvm::Value *CastTo(llvm::Value *value, llvm::Type *to, bool is_unsigned) {
@@ -269,6 +335,7 @@ llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
 
 const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type) {
   assert(type->isFloatingPointTy());
+
   if (type->isFloatTy()) {
     return TargetInfo->getFloatFormat();
   } else if (type->isDoubleTy()) {

@@ -20,7 +20,8 @@ class CalcConstantExpr : public Visitor {
   explicit CalcConstantExpr(const Location& loc = {});
 
   llvm::Constant* Calc(const Expr* expr);
-  std::optional<std::int64_t> CalcInteger(const Expr* expr);
+  std::optional<std::int64_t> CalcInteger(const Expr* expr,
+                                          bool as_error = true);
 
  private:
   static llvm::Constant* Throw(llvm::Constant* value = nullptr);
@@ -59,6 +60,7 @@ class CalcConstantExpr : public Visitor {
 
   static llvm::Constant* NegOp(llvm::Constant* value, bool is_unsigned);
   static llvm::Constant* LogicNotOp(llvm::Constant* value);
+  static llvm::Constant* Addr(const UnaryOpExpr* node);
 
   static llvm::Constant* AddOp(llvm::Constant* lhs, llvm::Constant* rhs,
                                bool is_unsigned);

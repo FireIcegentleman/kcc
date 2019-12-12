@@ -18,12 +18,12 @@
 
 namespace kcc {
 
-DebugInfo::DebugInfo(const std::string& file_name) {
+DebugInfo::DebugInfo() {
   optimize_ = OptimizationLevel != OptLevel::kO0;
 
   builder_ = new llvm::DIBuilder{*Module};
 
-  std::filesystem::path path{file_name};
+  std::filesystem::path path{Module->getSourceFileName()};
   file_ = builder_->createFile(path.filename().string(),
                                path.parent_path().string());
 
@@ -51,11 +51,9 @@ void DebugInfo::EmitLocation(const AstNode* node) {
     return Builder.SetCurrentDebugLocation(llvm::DebugLoc{});
   }
 
-  auto scope{GetScope()};
-
   auto loc{node->GetLoc()};
   Builder.SetCurrentDebugLocation(
-      llvm::DebugLoc::get(loc.GetRow(), loc.GetColumn(), scope));
+      llvm::DebugLoc::get(loc.GetRow(), loc.GetColumn(), GetScope()));
 }
 
 void DebugInfo::EmitFuncStart(const FuncDef* node) {
@@ -89,7 +87,7 @@ void DebugInfo::EmitParamVar(const std::string& name, Type* type,
   assert(subprogram_ != nullptr);
 
   auto line_no{loc.GetRow()};
-  auto param{builder_->createParameterVariable(subprogram_, name, ++arg_index_,
+  auto param{builder_->createParameterVariable(subprogram_, name, arg_index_++,
                                                file_, line_no,
                                                GetOrCreateType(type), true)};
 
@@ -247,7 +245,6 @@ llvm::DIType* DebugInfo::CreateStructType(Type* type, const Location& loc) {
   llvm::SmallVector<llvm::Metadata*, 16> ele_types;
   for (const auto& [name, ident] : *type->StructGetScope()) {
     auto member_type{GetOrCreateType(ident->GetType(), ident->GetLoc())};
-    auto member_name{name};
 
     if (std::empty(name)) {
       continue;

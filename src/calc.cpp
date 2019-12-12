@@ -7,6 +7,8 @@
 #include <cassert>
 #include <stdexcept>
 
+#include <llvm/Support/Casting.h>
+
 #include "error.h"
 #include "llvm_common.h"
 
@@ -26,11 +28,16 @@ llvm::Constant* CalcConstantExpr::Calc(const Expr* expr) {
   return val_;
 }
 
-std::optional<std::int64_t> CalcConstantExpr::CalcInteger(const Expr* expr) {
+std::optional<std::int64_t> CalcConstantExpr::CalcInteger(const Expr* expr,
+                                                          bool as_error) {
   auto val{Calc(expr)};
 
   if (!val) {
-    return {};
+    if (as_error) {
+      Error(expr->GetLoc(), "expect constant expression");
+    } else {
+      return {};
+    }
   }
 
   if (auto p{llvm::dyn_cast<llvm::ConstantInt>(val)}) {
@@ -50,66 +57,25 @@ llvm::Constant* CalcConstantExpr::Throw(llvm::Constant* value) {
 }
 
 void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
+  auto expr{node->GetExpr()};
+
   switch (node->GetOp()) {
     case Tag::kPlus:
-      val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr()));
+      val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(expr));
       break;
     case Tag::kMinus:
-      val_ =
-          NegOp(Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr())),
-                node->GetExpr()->GetType()->IsUnsigned());
+      val_ = NegOp(Throw(CalcConstantExpr{node->GetLoc()}.Calc(expr)),
+                   expr->GetType()->IsUnsigned());
       break;
     case Tag::kTilde:
       val_ = llvm::ConstantExpr::getNot(
-          Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr())));
+          Throw(CalcConstantExpr{node->GetLoc()}.Calc(expr)));
       break;
     case Tag::kExclaim:
-      val_ = LogicNotOp(
-          Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr())));
+      val_ = LogicNotOp(Throw(CalcConstantExpr{node->GetLoc()}.Calc(expr)));
       break;
     case Tag::kAmp:
-      // 运算对象可以是一个全局变量
-      // 也可以是
-      // int a[3];
-      // int *p = &a[0];
-      // 还是以是函数 / a.b
-      if (auto global{dynamic_cast<const ObjectExpr*>(node->GetExpr())}) {
-        val_ = global->GetGlobalPtr();
-      } else if (auto unary{
-                     dynamic_cast<const UnaryOpExpr*>(node->GetExpr())}) {
-        if (unary->GetOp() != Tag::kStar) {
-          Throw();
-        }
-
-        auto binary{dynamic_cast<const BinaryOpExpr*>(unary->GetExpr())};
-
-        if (!binary || binary->GetOp() != Tag::kPlus) {
-          Throw();
-        }
-
-        auto lhs{
-            Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetLHS()))};
-        auto rhs{
-            Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetRHS()))};
-
-        llvm::Constant* index[]{rhs};
-        val_ =
-            llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, lhs, index);
-      } else if (node->GetExpr()->Kind() == AstNodeType::kIdentifierExpr) {
-        val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr()));
-      } else if (auto binary{
-                     dynamic_cast<const BinaryOpExpr*>(node->GetExpr())}) {
-        auto lhs{
-            Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetLHS()))};
-
-        auto obj{dynamic_cast<const ObjectExpr*>(binary->GetRHS())};
-        assert(obj != nullptr);
-
-        val_ = llvm::ConstantExpr::getInBoundsGetElementPtr(
-            nullptr, lhs, Builder.getInt64(obj->GetIndexs().back().second));
-      } else {
-        Throw();
-      }
+      val_ = Addr(node);
       break;
     default:
       Throw();
@@ -117,10 +83,10 @@ void CalcConstantExpr::Visit(const UnaryOpExpr* node) {
 }
 
 void CalcConstantExpr::Visit(const TypeCastExpr* node) {
-  val_ = ConstantCastTo(
-      Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetExpr())),
-      node->GetCastToType()->GetLLVMType(),
-      node->GetExpr()->GetType()->IsUnsigned());
+  auto expr{node->GetExpr()};
+  val_ = ConstantCastTo(Throw(CalcConstantExpr{node->GetLoc()}.Calc(expr)),
+                        node->GetCastToType()->GetLLVMType(),
+                        expr->GetType()->IsUnsigned());
 }
 
 void CalcConstantExpr::Visit(const BinaryOpExpr* node) {
@@ -131,7 +97,7 @@ void CalcConstantExpr::Visit(const BinaryOpExpr* node) {
   Throw(R);
 
   // 有时左右两边符号性可能不同
-  // 如指针 + 整数
+  // 如指针 + 整数(指针视为无符号）
   auto is_unsigned{node->GetLHS()->GetType()->IsUnsigned()};
 
   switch (node->GetOp()) {
@@ -212,9 +178,9 @@ void CalcConstantExpr::Visit(const BinaryOpExpr* node) {
 }
 
 void CalcConstantExpr::Visit(const ConditionOpExpr* node) {
-  auto flag{Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetCond()))};
+  auto cond{Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetCond()))};
 
-  if (flag->isZeroValue()) {
+  if (cond->isZeroValue()) {
     val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetRHS()));
   } else {
     val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(node->GetLHS()));
@@ -222,12 +188,12 @@ void CalcConstantExpr::Visit(const ConditionOpExpr* node) {
 }
 
 void CalcConstantExpr::Visit(const ConstantExpr* node) {
-  if (node->GetType()->IsIntegerTy()) {
-    val_ = llvm::ConstantInt::get(node->GetType()->GetLLVMType(),
-                                  node->GetIntegerVal());
-  } else if (node->GetType()->IsFloatPointTy()) {
-    val_ = llvm::ConstantFP::get(node->GetType()->GetLLVMType(),
-                                 node->GetFloatPointVal());
+  auto type{node->GetType()};
+
+  if (type->IsIntegerTy()) {
+    val_ = llvm::ConstantInt::get(type->GetLLVMType(), node->GetIntegerVal());
+  } else if (type->IsFloatPointTy()) {
+    val_ = llvm::ConstantFP::get(type->GetLLVMType(), node->GetFloatPointVal());
   } else {
     assert(false);
   }
@@ -241,6 +207,7 @@ void CalcConstantExpr::Visit(const StmtExpr* node) {
   if (!node->GetType()->IsVoidTy()) {
     auto last{node->GetBlock()->GetStmts().back()};
     assert(last->Kind() == AstNodeType::kExprStmt);
+
     val_ = Throw(CalcConstantExpr{node->GetLoc()}.Calc(
         dynamic_cast<ExprStmt*>(last)->GetExpr()));
   } else {
@@ -264,8 +231,9 @@ void CalcConstantExpr::Visit(const IdentifierExpr* node) {
   if (!func) {
     func = llvm::Function::Create(
         llvm::cast<llvm::FunctionType>(type->GetLLVMType()),
-        node->GetLinkage() == kInternal ? llvm::Function::InternalLinkage
-                                        : llvm::Function::ExternalLinkage,
+        node->GetLinkage() == Linkage::kInternal
+            ? llvm::Function::InternalLinkage
+            : llvm::Function::ExternalLinkage,
         name, Module.get());
   }
 
@@ -273,8 +241,10 @@ void CalcConstantExpr::Visit(const IdentifierExpr* node) {
 }
 
 void CalcConstantExpr::Visit(const ObjectExpr* node) {
+  auto type{node->GetType()};
+
   if ((node->IsGlobalVar() || node->IsLocalStaticVar()) &&
-      (node->GetType()->IsArrayTy() || node->GetType()->IsStructOrUnionTy())) {
+      (type->IsArrayTy() || type->IsStructOrUnionTy())) {
     val_ = node->GetGlobalPtr();
   } else {
     Throw();
@@ -317,13 +287,13 @@ void CalcConstantExpr::Visit(const FuncDef*) { assert(false); }
 
 llvm::Constant* CalcConstantExpr::NegOp(llvm::Constant* value,
                                         bool is_unsigned) {
-  if (value->getType()->isIntegerTy()) {
+  if (IsIntegerTy(value)) {
     if (is_unsigned) {
       return llvm::ConstantExpr::getNeg(value);
     } else {
       return llvm::ConstantExpr::getNSWNeg(value);
     }
-  } else if (value->getType()->isFloatingPointTy()) {
+  } else if (IsFloatingPointTy(value)) {
     return llvm::ConstantExpr::getFNeg(value);
   } else {
     assert(false);
@@ -336,7 +306,52 @@ llvm::Constant* CalcConstantExpr::LogicNotOp(llvm::Constant* value) {
   value =
       llvm::ConstantExpr::getXor(value, llvm::ConstantInt::getTrue(Context));
 
-  return ConstantCastTo(value, Builder.getInt32Ty(), true);
+  return llvm::ConstantExpr::getZExt(value, Builder.getInt32Ty());
+}
+
+// 运算对象可以是:
+// 静态存储期的变量
+// 函数
+// &a[0]
+// a.b
+llvm::Constant* CalcConstantExpr::Addr(const UnaryOpExpr* node) {
+  auto expr{node->GetExpr()};
+  assert(expr != nullptr);
+
+  if (auto obj{dynamic_cast<const ObjectExpr*>(expr)}) {
+    assert(obj->IsGlobalVar() || obj->IsLocalStaticVar());
+    return obj->GetGlobalPtr();
+  } else if (expr->Kind() == AstNodeType::kIdentifierExpr) {
+    return Throw(CalcConstantExpr{node->GetLoc()}.Calc(expr));
+  } else if (auto unary{dynamic_cast<const UnaryOpExpr*>(expr)}) {
+    if (unary->GetOp() != Tag::kStar) {
+      Throw();
+    }
+
+    auto binary{dynamic_cast<const BinaryOpExpr*>(unary->GetExpr())};
+
+    if (!binary || binary->GetOp() != Tag::kPlus) {
+      Throw();
+    }
+
+    assert(binary != nullptr);
+    auto lhs{Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetLHS()))};
+    auto rhs{Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetRHS()))};
+
+    llvm::Constant* index[]{rhs};
+    return llvm::ConstantExpr::getInBoundsGetElementPtr(nullptr, lhs, index);
+  } else if (auto binary{dynamic_cast<const BinaryOpExpr*>(expr)}) {
+    auto lhs{Throw(CalcConstantExpr{node->GetLoc()}.Calc(binary->GetLHS()))};
+
+    auto member{dynamic_cast<const ObjectExpr*>(binary->GetRHS())};
+    assert(member != nullptr);
+
+    return llvm::ConstantExpr::getInBoundsGetElementPtr(
+        nullptr, lhs, Builder.getInt64(member->GetIndexs().back().second));
+  } else {
+    Throw();
+    return nullptr;
+  }
 }
 
 llvm::Constant* CalcConstantExpr::AddOp(llvm::Constant* lhs,
@@ -469,7 +484,7 @@ llvm::Constant* CalcConstantExpr::LessEqualOp(llvm::Constant* lhs,
       value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_SLE, lhs, rhs);
     }
   } else if (IsFloatingPointTy(lhs)) {
-    value = llvm::ConstantExpr::getICmp(llvm::CmpInst::FCMP_OLE, lhs, rhs);
+    value = llvm::ConstantExpr::getFCmp(llvm::CmpInst::FCMP_OLE, lhs, rhs);
   } else if (IsPointerTy(lhs)) {
     value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_ULE, lhs, rhs);
   } else {
@@ -477,7 +492,7 @@ llvm::Constant* CalcConstantExpr::LessEqualOp(llvm::Constant* lhs,
     return nullptr;
   }
 
-  return ConstantCastTo(value, Builder.getInt32Ty(), true);
+  return llvm::ConstantExpr::getZExt(value, Builder.getInt32Ty());
 }
 
 llvm::Constant* CalcConstantExpr::LessOp(llvm::Constant* lhs,
@@ -492,7 +507,7 @@ llvm::Constant* CalcConstantExpr::LessOp(llvm::Constant* lhs,
       value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_SLT, lhs, rhs);
     }
   } else if (IsFloatingPointTy(lhs)) {
-    value = llvm::ConstantExpr::getICmp(llvm::CmpInst::FCMP_OLT, lhs, rhs);
+    value = llvm::ConstantExpr::getFCmp(llvm::CmpInst::FCMP_OLT, lhs, rhs);
   } else if (IsPointerTy(lhs)) {
     value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_ULT, lhs, rhs);
   } else {
@@ -500,7 +515,7 @@ llvm::Constant* CalcConstantExpr::LessOp(llvm::Constant* lhs,
     return nullptr;
   }
 
-  return ConstantCastTo(value, Builder.getInt32Ty(), true);
+  return llvm::ConstantExpr::getZExt(value, Builder.getInt32Ty());
 }
 
 llvm::Constant* CalcConstantExpr::GreaterEqualOp(llvm::Constant* lhs,
@@ -515,7 +530,7 @@ llvm::Constant* CalcConstantExpr::GreaterEqualOp(llvm::Constant* lhs,
       value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_SGE, lhs, rhs);
     }
   } else if (IsFloatingPointTy(lhs)) {
-    value = llvm::ConstantExpr::getICmp(llvm::CmpInst::FCMP_OGE, lhs, rhs);
+    value = llvm::ConstantExpr::getFCmp(llvm::CmpInst::FCMP_OGE, lhs, rhs);
   } else if (IsPointerTy(lhs)) {
     value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_UGE, lhs, rhs);
   } else {
@@ -523,7 +538,7 @@ llvm::Constant* CalcConstantExpr::GreaterEqualOp(llvm::Constant* lhs,
     return nullptr;
   }
 
-  return ConstantCastTo(value, Builder.getInt32Ty(), true);
+  return llvm::ConstantExpr::getZExt(value, Builder.getInt32Ty());
 }
 
 llvm::Constant* CalcConstantExpr::GreaterOp(llvm::Constant* lhs,
@@ -538,7 +553,7 @@ llvm::Constant* CalcConstantExpr::GreaterOp(llvm::Constant* lhs,
       value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_SGT, lhs, rhs);
     }
   } else if (IsFloatingPointTy(lhs)) {
-    value = llvm::ConstantExpr::getICmp(llvm::CmpInst::FCMP_OGT, lhs, rhs);
+    value = llvm::ConstantExpr::getFCmp(llvm::CmpInst::FCMP_OGT, lhs, rhs);
   } else if (IsPointerTy(lhs)) {
     value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_UGT, lhs, rhs);
   } else {
@@ -546,7 +561,7 @@ llvm::Constant* CalcConstantExpr::GreaterOp(llvm::Constant* lhs,
     return nullptr;
   }
 
-  return ConstantCastTo(value, Builder.getInt32Ty(), true);
+  return llvm::ConstantExpr::getZExt(value, Builder.getInt32Ty());
 }
 
 llvm::Constant* CalcConstantExpr::EqualOp(llvm::Constant* lhs,
@@ -556,13 +571,13 @@ llvm::Constant* CalcConstantExpr::EqualOp(llvm::Constant* lhs,
   if (IsIntegerTy(lhs) || IsPointerTy(lhs)) {
     value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_EQ, lhs, rhs);
   } else if (IsFloatingPointTy(lhs)) {
-    value = llvm::ConstantExpr::getICmp(llvm::CmpInst::FCMP_OEQ, lhs, rhs);
+    value = llvm::ConstantExpr::getFCmp(llvm::CmpInst::FCMP_OEQ, lhs, rhs);
   } else {
     assert(false);
     return nullptr;
   }
 
-  return ConstantCastTo(value, Builder.getInt32Ty(), true);
+  return llvm::ConstantExpr::getZExt(value, Builder.getInt32Ty());
 }
 
 llvm::Constant* CalcConstantExpr::NotEqualOp(llvm::Constant* lhs,
@@ -572,13 +587,13 @@ llvm::Constant* CalcConstantExpr::NotEqualOp(llvm::Constant* lhs,
   if (IsIntegerTy(lhs) || IsPointerTy(lhs)) {
     value = llvm::ConstantExpr::getICmp(llvm::CmpInst::ICMP_NE, lhs, rhs);
   } else if (IsFloatingPointTy(lhs)) {
-    value = llvm::ConstantExpr::getICmp(llvm::CmpInst::FCMP_ONE, lhs, rhs);
+    value = llvm::ConstantExpr::getFCmp(llvm::CmpInst::FCMP_ONE, lhs, rhs);
   } else {
     assert(false);
     return nullptr;
   }
 
-  return ConstantCastTo(value, Builder.getInt32Ty(), true);
+  return llvm::ConstantExpr::getZExt(value, Builder.getInt32Ty());
 }
 
 llvm::Constant* CalcConstantExpr::LogicOrOp(const BinaryOpExpr* node) {
@@ -586,9 +601,9 @@ llvm::Constant* CalcConstantExpr::LogicOrOp(const BinaryOpExpr* node) {
 
   if (lhs->isZeroValue()) {
     auto rhs{Throw(CalcConstantExpr{}.Calc(node->GetRHS()))};
-    return GetInt32Constant(!rhs->isZeroValue());
+    return llvm::ConstantInt::get(Builder.getInt32Ty(), !rhs->isZeroValue());
   } else {
-    return GetInt32Constant(1);
+    return llvm::ConstantInt::get(Builder.getInt32Ty(), 1);
   }
 }
 
@@ -596,10 +611,10 @@ llvm::Constant* CalcConstantExpr::LogicAndOp(const BinaryOpExpr* node) {
   auto lhs{Throw(CalcConstantExpr{}.Calc(node->GetLHS()))};
 
   if (lhs->isZeroValue()) {
-    return GetInt32Constant(0);
+    return llvm::ConstantInt::get(Builder.getInt32Ty(), 0);
   } else {
     auto rhs{Throw(CalcConstantExpr{}.Calc(node->GetRHS()))};
-    return GetInt32Constant(!rhs->isZeroValue());
+    return llvm::ConstantInt::get(Builder.getInt32Ty(), !rhs->isZeroValue());
   }
 }
 

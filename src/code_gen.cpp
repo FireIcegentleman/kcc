@@ -47,12 +47,8 @@ CodeGen::BreakContinue::BreakContinue(llvm::BasicBlock* break_block,
  */
 void CodeGen::GenCode(const TranslationUnit* root) {
   if (Debug) {
-    debug_info_ = std::make_unique<DebugInfo>(root->GetLoc().GetFileName());
+    debug_info_ = std::make_unique<DebugInfo>();
   }
-
-  Module->addModuleFlag(llvm::Module::Error, "wchar_size", 4);
-  Module->addModuleFlag(llvm::Module::Max, "PIC Level", llvm::PICLevel::BigPIC);
-  Module->addModuleFlag(llvm::Module::Max, "PIE Level", llvm::PIELevel::Large);
 
   root->Accept(*this);
 

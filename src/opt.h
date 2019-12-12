@@ -4,10 +4,8 @@
 
 #pragma once
 
-#include "util.h"
-
 namespace kcc {
 
-void Optimization(OptLevel opt_level);
+void Optimization();
 
 }  // namespace kcc

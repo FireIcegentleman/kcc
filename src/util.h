@@ -5,36 +5,33 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include <llvm/Support/CommandLine.h>
 
-#include "llvm_common.h"
-
 namespace kcc {
 
 enum class OptLevel { kO0, kO1, kO2, kO3 };
 
-enum class Langs { kC, kCpp };
+enum class Langs { kC };
 
 enum class LangStds { kC89, kC99, kC11, kC17, kGnu89, kGnu99, kGnu11, kGnu17 };
+
+inline std::vector<std::string> ObjFile;
 
 inline std::vector<std::string> SoFile;
 
 inline std::vector<std::string> AFile;
 
-inline std::vector<std::string> ObjFile;
-
 inline std::vector<std::string> RemoveFile;
 
 inline llvm::cl::OptionCategory Category{"Compiler Options"};
 
-inline llvm::cl::list<std::string> InputFilePaths{
-    llvm::cl::desc{"<input files>"}, llvm::cl::Positional,
-    llvm::cl::cat{Category}};
+inline llvm::cl::list<std::string> InputFilePaths{llvm::cl::desc{"input files"},
+                                                  llvm::cl::Positional,
+                                                  llvm::cl::cat{Category}};
 
 inline llvm::cl::opt<bool> OutputObjectFile{
     "c", llvm::cl::desc{"Only run preprocess, compile, and assemble steps"},
@@ -45,7 +42,7 @@ inline llvm::cl::list<std::string> MacroDefines{
     llvm::cl::value_desc{"macro"}, llvm::cl::Prefix, llvm::cl::cat{Category}};
 
 inline llvm::cl::opt<bool> EmitTokens{
-    "emit-tokens",
+    "emit-token",
     llvm::cl::desc{"Run preprocessor, dump internal rep of tokens"},
     llvm::cl::cat{Category}};
 
@@ -91,10 +88,6 @@ inline llvm::cl::opt<bool> Shared{"shared",
                                   llvm::cl::desc{"Generate dynamic library"},
                                   llvm::cl::cat{Category}};
 
-inline llvm::cl::opt<bool> Static{"static",
-                                  llvm::cl::desc{"Generate static library"},
-                                  llvm::cl::cat{Category}};
-
 inline llvm::cl::list<std::string> RPath{
     "rpath", llvm::cl::desc{"Add a DT_RUNPATH to the output"},
     llvm::cl::value_desc{"directory"}, llvm::cl::Prefix,
@@ -134,8 +127,7 @@ inline llvm::cl::opt<Langs> Lang{
     llvm::cl::desc{"Specify language"},
     llvm::cl::init(Langs::kC),
     llvm::cl::Prefix,
-    llvm::cl::values(clEnumValN(Langs::kC, "c", "C"),
-                     clEnumValN(Langs::kCpp, "c++", "C++")),
+    llvm::cl::values(clEnumValN(Langs::kC, "c", "C")),
     llvm::cl::cat{Category}};
 
 inline llvm::cl::opt<bool> FPic{
@@ -156,13 +148,11 @@ inline llvm::cl::opt<bool> DD{
 #ifdef DEV
 inline llvm::cl::opt<bool> DevMode{"dev", llvm::cl::desc{"Dev Mode"},
                                    llvm::cl::cat{Category}};
-
-inline llvm::cl::opt<bool> ParseOnly{"p", llvm::cl::desc{"Parse Only"},
-                                     llvm::cl::cat{Category}};
-
-inline llvm::cl::opt<bool> StandardIR{"ir", llvm::cl::desc{"emit Standard IR"},
-                                      llvm::cl::cat{Category}};
 #endif
+
+void InitCommandLine(int argc, char *argv[]);
+
+void CommandLineCheck();
 
 std::string GetPath();
 
@@ -170,20 +160,16 @@ void TimingStart();
 
 void TimingEnd(const std::string &str = "");
 
-void InitCommandLine(int argc, char *argv[]);
-
-void CommandLineCheck();
-
 void EnsureFileExists(const std::string &file_name);
 
 std::string GetObjFile(const std::string &name);
 
-const std::vector<std::string> &GetObjFiles();
-
 std::string GetFileName(const std::string &name, std::string_view extension);
 
-void RemoveAllFiles(const std::vector<std::string> &files);
+void RemoveFiles();
 
 bool CommandSuccess(std::int32_t status);
+
+bool DoNotLink();
 
 }  // namespace kcc
