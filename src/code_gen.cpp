@@ -35,6 +35,15 @@ namespace kcc {
   load_struct_ = backup; \
   }
 
+#define DO_NOT_Load_Struct_Obj() \
+  {                              \
+    auto backup{load_struct_};   \
+    load_struct_ = false;
+
+#define Finish_DO_NOT_Load() \
+  load_struct_ = backup;     \
+  }
+
 /*
  * BreakContinue
  */
@@ -333,6 +342,10 @@ llvm::Value* CodeGen::GetPtr(const AstNode* node) {
       }
 
       return lhs_ptr;
+    } else if (binary->GetOp() == Tag::kEqual) {
+      SetIgnoreAssignResult();
+      binary->Accept(*this);
+      return result_;
     }
   }
 
@@ -346,6 +359,14 @@ void CodeGen::PushBlock(llvm::BasicBlock* break_stack,
 }
 
 void CodeGen::PopBlock() { break_continue_stack_.pop(); }
+
+bool CodeGen::TestAndClearIgnoreAssignResult() {
+  auto ret{ignore_assign_result_};
+  ignore_assign_result_ = false;
+  return ret;
+}
+
+void CodeGen::SetIgnoreAssignResult() { ignore_assign_result_ = true; }
 
 void CodeGen::TryEmitLocation(const AstNode* node) {
   if (debug_info_) {
@@ -1561,29 +1582,43 @@ llvm::Value* CodeGen::Assign(llvm::Value* lhs_ptr, llvm::Value* rhs,
 
     Builder.CreateStore(result_, lhs_ptr, is_volatile_);
 
-    result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
+    if (!TestAndClearIgnoreAssignResult()) {
+      result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
 
-    result_ = Builder.CreateShl(
-        result_,
-        size - (bit_field_->GetBitFieldBegin() + bit_field_->BitFieldWidth()));
-    if (bit_field_->GetType()->IsUnsigned()) {
-      result_ = Builder.CreateLShr(result_, size - bit_field_->BitFieldWidth());
+      result_ =
+          Builder.CreateShl(result_, size - (bit_field_->GetBitFieldBegin() +
+                                             bit_field_->BitFieldWidth()));
+      if (bit_field_->GetType()->IsUnsigned()) {
+        result_ =
+            Builder.CreateLShr(result_, size - bit_field_->BitFieldWidth());
+      } else {
+        result_ =
+            Builder.CreateAShr(result_, size - bit_field_->BitFieldWidth());
+      }
+
+      is_bit_field_ = false;
+      bit_field_ = nullptr;
+      is_volatile_ = false;
+
+      return result_;
     } else {
-      result_ = Builder.CreateAShr(result_, size - bit_field_->BitFieldWidth());
+      is_bit_field_ = false;
+      bit_field_ = nullptr;
+      is_volatile_ = false;
+
+      return lhs_ptr;
     }
-
-    is_bit_field_ = false;
-    bit_field_ = nullptr;
-
-    is_volatile_ = false;
-
-    return result_;
   } else {
     Builder.CreateStore(rhs, lhs_ptr, is_volatile_);
-    result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
-    is_volatile_ = false;
 
-    return result_;
+    if (!TestAndClearIgnoreAssignResult()) {
+      result_ = Builder.CreateLoad(lhs_ptr, is_volatile_);
+      is_volatile_ = false;
+      return result_;
+    } else {
+      is_volatile_ = false;
+      return lhs_ptr;
+    }
   }
 }
 

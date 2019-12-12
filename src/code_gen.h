@@ -60,6 +60,8 @@ class CodeGen : public Visitor {
   void PushBlock(llvm::BasicBlock *break_stack,
                  llvm::BasicBlock *continue_block);
   void PopBlock();
+  bool TestAndClearIgnoreAssignResult();
+  void SetIgnoreAssignResult();
 
   void TryEmitLocation(const AstNode *node);
   void TryEmitFuncStart(const FuncDef *node);
@@ -173,6 +175,7 @@ class CodeGen : public Visitor {
   ObjectExpr *bit_field_{nullptr};
 
   bool is_volatile_{false};
+  bool ignore_assign_result_{false};
 
   std::unique_ptr<DebugInfo> debug_info_;
 };
