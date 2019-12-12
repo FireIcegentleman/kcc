@@ -5,7 +5,7 @@
 
 #include "riscv_nodes_attr.h"
 
-#include <panic.h>
+#include "panic.h"
 
 char const *riscv_get_cond_name(riscv_cond_t const cond)
 {

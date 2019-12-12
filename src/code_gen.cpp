@@ -1156,7 +1156,9 @@ llvm::Value* CodeGen::Deref(const UnaryOpExpr* node) {
   } else {
     node->GetExpr()->Accept(*this);
     TryEmitLocation(node);
-    result_ = Builder.CreateLoad(result_, is_volatile_);
+    if (!node->GetType()->IsArrayTy()) {
+      result_ = Builder.CreateLoad(result_, is_volatile_);
+    }
     is_volatile_ = false;
   }
 
@@ -1774,6 +1776,22 @@ bool CodeGen::MayCallBuiltinFunc(const FuncCallExpr* node) {
                               llvm::APFloat::getInf(GetFloatTypeSemantics(
                                   Builder.getFloatTy()))));
     result_ = Builder.CreateZExt(result_, Builder.getInt32Ty());
+
+    return true;
+  } else if (func_name == "__builtin_memset") {
+    auto args{node->GetArgs()};
+
+    args[0]->Accept(*this);
+    auto ptr{result_};
+
+    args[1]->Accept(*this);
+    auto value{result_};
+
+    args[2]->Accept(*this);
+    auto size{result_};
+
+    // FIXME align 不正确
+    result_ = Builder.CreateMemSet(ptr, value, size, 8);
 
     return true;
   } else {
