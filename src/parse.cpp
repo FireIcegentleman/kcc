@@ -633,15 +633,6 @@ void Parser::AddBuiltin() {
   isfinite->FuncSetName("__builtin_isfinite");
   scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
       loc, "__builtin_isfinite", isfinite, Linkage::kExternal, false));
-
-  auto int8ptr_param{MakeAstNode<ObjectExpr>(
-      loc, "", ArithmeticType::Get(kChar)->GetPointerTo())};
-  auto int8_param{MakeAstNode<ObjectExpr>(loc, "", ArithmeticType::Get(kChar))};
-  auto memset{
-      FunctionType::Get(VoidType::Get(), {int8ptr_param, int8_param, ulong})};
-  memset->FuncSetName("__builtin_memset");
-  scope_->InsertUsual(MakeAstNode<IdentifierExpr>(
-      loc, "__builtin_memset", memset, Linkage::kExternal, false));
 }
 
 }  // namespace kcc

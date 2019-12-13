@@ -19,6 +19,8 @@
 #include <llvm/IR/Value.h>
 #include <llvm/Target/TargetMachine.h>
 
+#include "ast.h"
+
 namespace kcc {
 
 // 拥有许多 LLVM 核心数据结构, 如类型和常量值表
@@ -70,13 +72,22 @@ llvm::Value *GetZero(llvm::Type *type);
 llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
                                          std::int32_t align);
 
+llvm::GlobalVariable* CreateGlobalVar(const ObjectExpr *obj);
+
 const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type);
 
 llvm::Type *GetBitFieldSpace(std::int8_t width);
 
 std::int32_t GetLLVMTypeSize(llvm::Type *type);
 
-llvm::Constant *GetBitFieldValue(llvm::Constant *value, std::int32_t size,
-                                 std::int32_t width, std::int32_t begin);
+llvm::Constant *GetBitField(llvm::Constant *value, std::int32_t size,
+                            std::int32_t width, std::int32_t begin);
+
+llvm::Value *GetBitField(llvm::Value *value, std::int32_t size,
+                         std::int32_t width, std::int32_t begin);
+
+llvm::Value *GetBitFieldValue(llvm::Value *value, std::int32_t size,
+                              std::int32_t width, std::int32_t begin,
+                              bool is_unsigned);
 
 }  // namespace kcc

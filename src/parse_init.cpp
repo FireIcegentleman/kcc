@@ -411,7 +411,7 @@ llvm::Constant* Parser::ParseConstantStructInitializer(Type* type,
       }
 
       auto size{member_type->isIntegerTy(8) ? 8 : 32};
-      old_value = GetBitFieldValue(old_value, size, width, begin);
+      old_value = GetBitField(old_value, size, width, begin);
 
       auto new_value{ParseConstantInitializer((*member_iter)->GetType(),
                                               designated, false)};

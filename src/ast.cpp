@@ -930,30 +930,8 @@ llvm::GlobalVariable* ObjectExpr::GetGlobalPtr() const {
         llvm::GlobalValue::InternalLinkage, GetDecl()->GetConstant(),
         ".compoundliteral");
   } else if (IsGlobalVar()) {
-    auto linkage{llvm::GlobalVariable::ExternalLinkage};
-
-    if (IsStatic()) {
-      linkage = llvm::GlobalVariable::InternalLinkage;
-    } else if (IsExtern()) {
-      linkage = llvm::GlobalVariable::ExternalLinkage;
-    } else {
-      if (!GetDecl()->HasConstantInit()) {
-        linkage = llvm::GlobalVariable::CommonLinkage;
-      }
-    }
-
-    if (auto iter{GlobalVarMap.find(name_)}; iter != std::end(GlobalVarMap)) {
-      ptr = iter->second;
-    } else {
-      ptr = new llvm::GlobalVariable(*Module, GetType()->GetLLVMType(),
-                                     GetQualType().IsConst(), linkage, nullptr,
-                                     name_);
-      GlobalVarMap[name_] = ptr;
-    }
-
-    if (!IsStatic() && !IsExtern()) {
-      ptr->setDSOLocal(true);
-    }
+    ptr = CreateGlobalVar(this);
+    return ptr;
   } else if (IsLocalStaticVar()) {
     assert(!std::empty(func_name_));
     auto name{func_name_ + "." + name_};

@@ -333,6 +333,52 @@ llvm::GlobalVariable *CreateGlobalString(llvm::Constant *init,
   return var;
 }
 
+llvm::GlobalVariable *CreateGlobalVar(const ObjectExpr *obj) {
+  llvm::GlobalVariable *ptr;
+
+  auto decl{obj->GetDecl()};
+  assert(decl != nullptr);
+
+  auto linkage{llvm::GlobalVariable::ExternalLinkage};
+
+  if (obj->IsStatic()) {
+    linkage = llvm::GlobalVariable::InternalLinkage;
+  } else if (obj->IsExtern()) {
+    linkage = llvm::GlobalVariable::ExternalLinkage;
+  } else {
+    if (!decl->HasConstantInit()) {
+      linkage = llvm::GlobalVariable::CommonLinkage;
+    }
+  }
+
+  auto name{obj->GetName()};
+
+  if (auto iter{GlobalVarMap.find(name)}; iter != std::end(GlobalVarMap)) {
+    ptr = iter->second;
+  } else {
+    ptr = new llvm::GlobalVariable(*Module, obj->GetType()->GetLLVMType(),
+                                   obj->GetQualType().IsConst(), linkage,
+                                   nullptr, name);
+    GlobalVarMap[name] = ptr;
+  }
+
+  if (!obj->IsStatic() && !obj->IsExtern()) {
+    ptr->setDSOLocal(true);
+  }
+
+  ptr->setAlignment(obj->GetType()->GetAlign());
+
+  if (decl->HasConstantInit()) {
+    ptr->setInitializer(decl->GetConstant());
+  } else {
+    if (!obj->IsExtern()) {
+      ptr->setInitializer(GetConstantZero(obj->GetType()->GetLLVMType()));
+    }
+  }
+
+  return ptr;
+}
+
 const llvm::fltSemantics &GetFloatTypeSemantics(llvm::Type *type) {
   assert(type->isFloatingPointTy());
 
@@ -360,8 +406,8 @@ std::int32_t GetLLVMTypeSize(llvm::Type *type) {
   return Module->getDataLayout().getTypeAllocSize(type);
 }
 
-llvm::Constant *GetBitFieldValue(llvm::Constant *value, std::int32_t size,
-                                 std::int32_t width, std::int32_t begin) {
+llvm::Constant *GetBitField(llvm::Constant *value, std::int32_t size,
+                            std::int32_t width, std::int32_t begin) {
   if (size == 8) {
     std::uint8_t zero{};
 
@@ -405,6 +451,62 @@ llvm::Constant *GetBitFieldValue(llvm::Constant *value, std::int32_t size,
   } else {
     assert(false);
     return nullptr;
+  }
+}
+
+llvm::Value *GetBitField(llvm::Value *value, std::int32_t size,
+                         std::int32_t width, std::int32_t begin) {
+  if (size == 8) {
+    std::uint8_t zero{};
+
+    // ....11111
+    std::uint8_t low_one;
+    if (begin) {
+      low_one = ~zero >> (size - begin);
+    } else {
+      low_one = 0;
+    }
+
+    // 111.....
+    std::uint8_t high_one;
+    if (auto bit{begin + width}; bit == size) {
+      high_one = 0;
+    } else {
+      high_one = ~zero << bit;
+    }
+
+    return Builder.CreateAnd(value, low_one | high_one);
+  } else if (size == 32) {
+    std::uint32_t low_one;
+    if (begin) {
+      low_one = ~0U >> (size - begin);
+    } else {
+      low_one = 0;
+    }
+
+    std::uint32_t high_one;
+    if (auto bit{begin + width}; bit == size) {
+      high_one = 0;
+    } else {
+      high_one = ~0U << bit;
+    }
+
+    return Builder.CreateAnd(value, low_one | high_one);
+  } else {
+    assert(false);
+    return nullptr;
+  }
+}
+
+llvm::Value *GetBitFieldValue(llvm::Value *value, std::int32_t size,
+                              std::int32_t width, std::int32_t begin,
+                              bool is_unsigned) {
+  value = Builder.CreateShl(value, size - (begin + width));
+
+  if (is_unsigned) {
+    return Builder.CreateLShr(value, size - width);
+  } else {
+    return Builder.CreateAShr(value, size - width);
   }
 }
 

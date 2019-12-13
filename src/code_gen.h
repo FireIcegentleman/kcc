@@ -24,6 +24,15 @@
 
 namespace kcc {
 
+#define Load_Struct_Obj()      \
+  {                            \
+    auto backup{load_struct_}; \
+    load_struct_ = true;
+
+#define Finish_Load()    \
+  load_struct_ = backup; \
+  }
+
 class CodeGen : public Visitor {
  public:
   void GenCode(const TranslationUnit *root);
@@ -140,7 +149,17 @@ class CodeGen : public Visitor {
   llvm::Value *Assign(llvm::Value *lhs_ptr, llvm::Value *rhs, bool is_unsigned);
 
   bool MayCallBuiltinFunc(const FuncCallExpr *node);
-  llvm::Value *VaArg(llvm::Value *ptr, llvm::Type *type);
+  llvm::Value *VaStart(Expr *arg);
+  llvm::Value *VaEnd(Expr *arg);
+  llvm::Value *VaArg(Expr *arg, llvm::Type *type);
+  llvm::Value *VaCopy(Expr *arg, Expr *arg2);
+  llvm::Value *SyncSynchronize();
+  llvm::Value *Alloc(Expr *arg);
+  llvm::Value *PopCount(Expr *arg);
+  llvm::Value *Clz(Expr *arg);
+  llvm::Value *Ctz(Expr *arg);
+  llvm::Value *IsInfSign(Expr *arg);
+  llvm::Value *IsFinite(Expr *arg);
 
   void DealLocaleDecl(const Declaration *node);
   void InitLocalAggregate(const Declaration *node);
@@ -162,14 +181,6 @@ class CodeGen : public Visitor {
   llvm::Function *func_{};
   llvm::BasicBlock *return_block_{};
   llvm::Value *return_value_{};
-
-  llvm::Function *va_start_{};
-  llvm::Function *va_end_{};
-  llvm::Function *va_copy_{};
-  llvm::Function *ctpop_i32_{};
-  llvm::Function *ctlz_i32_{};
-  llvm::Function *cttz_i32_{};
-  llvm::Function *fabs_f32_{};
 
   bool is_bit_field_{false};
   ObjectExpr *bit_field_{nullptr};
