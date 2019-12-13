@@ -1693,8 +1693,10 @@ QualType Parser::ParseDeclSpec(std::uint32_t* storage_class_spec,
           //  A b = {3, 4, 5};
           // 防止类型被修改
           if (type->IsArrayTy() && !type->IsComplete()) {
-            type = ArrayType::Get(type->ArrayGetElementType(),
-                                  type->ArrayGetNumElements());
+            auto size{type->ArrayGetNumElements()};
+            type =
+                ArrayType::Get(type->ArrayGetElementType(),
+                               size == 0 ? std::optional<std::size_t>{} : size);
           }
         } else {
           goto finish;
@@ -2175,7 +2177,7 @@ void Parser::ParseDirectDeclaratorTail(QualType& base_type) {
   }
 }
 
-std::int64_t Parser::ParseArrayLength() {
+std::optional<std::size_t> Parser::ParseArrayLength() {
   while (true) {
     if (Try(Tag::kTypedef) || Try(Tag::kExtern) || Try(Tag::kStatic) ||
         Try(Tag::kThreadLocal) || Try(Tag::kAuto) || Try(Tag::kRegister)) {
@@ -2186,7 +2188,7 @@ std::int64_t Parser::ParseArrayLength() {
   }
 
   if (Test(Tag::kRightSquare)) {
-    return -1;
+    return {};
   }
 
   auto expr{ParseAssignExpr()};
@@ -2199,8 +2201,7 @@ std::int64_t Parser::ParseArrayLength() {
   auto len{CalcConstantExpr{}.CalcInteger(expr)};
 
   if (!len) {
-    // FIXME
-    Warning(expr->GetLoc(), "not support VLA");
+    Error(expr->GetLoc(), "not support VLA");
   } else if (*len < 0) {
     Error(expr, "Array size must be greater than zero: '{}'", *len);
   }

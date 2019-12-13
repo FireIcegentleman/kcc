@@ -28,7 +28,7 @@ DebugInfo::DebugInfo() {
                                path.parent_path().string());
 
   cu_ = builder_->createCompileUnit(
-      llvm::dwarf::DW_LANG_C99, file_, "kcc " KCC_VERSION, optimize_, "", 0, "",
+      llvm::dwarf::DW_LANG_C11, file_, "kcc " KCC_VERSION, optimize_, "", 0, "",
       llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false,
       llvm::DICompileUnit::DebugNameTableKind::None);
 

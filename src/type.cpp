@@ -9,7 +9,7 @@
 #include <limits>
 
 #include <llvm/IR/DerivedTypes.h>
-#include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/Casting.h>
 
 #include "ast.h"
 #include "error.h"
@@ -38,7 +38,7 @@ std::string QualType::ToString() const {
     str += "volatile ";
   }
   if (type_qual_ & kAtomic) {
-    str += "atomic ";
+    assert(false);
   }
 
   return str + type_->ToString();
@@ -81,7 +81,7 @@ QualType Type::MayCast(QualType type) {
   if (type->IsFunctionTy()) {
     return type->GetPointerTo();
   } else if (type->IsArrayTy()) {
-    return PointerType::Get(type->ArrayGetElementType());
+    return type->ArrayGetElementType()->GetPointerTo();
   } else {
     return type;
   }
@@ -90,29 +90,20 @@ QualType Type::MayCast(QualType type) {
 std::string Type::ToString() const {
   assert(llvm_type_ != nullptr);
 
-  auto s{LLVMTypeToStr(llvm_type_)};
+  std::string prefix;
 
-  if (IsLongTy()) {
-    s = "l" + s;
-  } else if (IsLongLongTy()) {
-    s = "ll" + s;
+  if (IsIntegerTy()) {
+    prefix = IsUnsigned() ? "u" : "";
+  } else if (IsPointerTy()) {
+    prefix = PointerGetElementType()->IsUnsigned() ? "u" : "";
   }
 
-  if (IsUnsigned()) {
-    s = "u" + s;
-  }
-
-  return s;
+  return prefix + LLVMTypeToStr(llvm_type_);
 }
 
 llvm::Type* Type::GetLLVMType() const {
   assert(llvm_type_ != nullptr);
   return llvm_type_;
-}
-
-void Type::SetLLVMType(llvm::Type* type) {
-  assert(type != nullptr);
-  llvm_type_ = type;
 }
 
 VoidType* Type::ToVoidType() { return dynamic_cast<VoidType*>(this); }
@@ -180,52 +171,47 @@ bool Type::IsUnsigned() const {
 bool Type::IsVoidTy() const { return ToVoidType(); }
 
 bool Type::IsBoolTy() const {
-  auto p{ToArithmeticType()};
-  return p && (p->type_spec_ == kBool);
+  auto type{ToArithmeticType()};
+  return type && (type->type_spec_ == kBool);
 }
 
 bool Type::IsShortTy() const {
-  auto p{ToArithmeticType()};
-  return p &&
-         ((p->type_spec_ == kShort) || (p->type_spec_ == (kShort | kUnsigned)));
+  auto type{ToArithmeticType()};
+  return type && ((type->type_spec_ == kShort) ||
+                  (type->type_spec_ == (kShort | kUnsigned)));
 }
 
 bool Type::IsIntTy() const {
-  auto p{ToArithmeticType()};
-  return p &&
-         ((p->type_spec_ == kInt) || (p->type_spec_ == (kInt | kUnsigned)));
+  auto type{ToArithmeticType()};
+  return type && ((type->type_spec_ == kInt) ||
+                  (type->type_spec_ == (kInt | kUnsigned)));
 }
 
 bool Type::IsLongTy() const {
-  auto p{ToArithmeticType()};
-  return p &&
-         ((p->type_spec_ == kLong) || (p->type_spec_ == (kLong | kUnsigned)));
+  auto type{ToArithmeticType()};
+  return type && ((type->type_spec_ == kLong) ||
+                  (type->type_spec_ == (kLong | kUnsigned)));
 }
 
 bool Type::IsLongLongTy() const {
-  auto p{ToArithmeticType()};
-  return p && ((p->type_spec_ == kLongLong) ||
-               (p->type_spec_ == (kLongLong | kUnsigned)));
+  auto type{ToArithmeticType()};
+  return type && ((type->type_spec_ == kLongLong) ||
+                  (type->type_spec_ == (kLongLong | kUnsigned)));
 }
 
 bool Type::IsFloatTy() const {
-  auto p{ToArithmeticType()};
-  return p && (p->type_spec_ == kFloat);
+  auto type{ToArithmeticType()};
+  return type && (type->type_spec_ == kFloat);
 }
 
 bool Type::IsDoubleTy() const {
-  auto p{ToArithmeticType()};
-  return p && (p->type_spec_ == kDouble);
+  auto type{ToArithmeticType()};
+  return type && (type->type_spec_ == kDouble);
 }
 
 bool Type::IsLongDoubleTy() const {
-  auto p{ToArithmeticType()};
-  return p && (p->type_spec_ == (kLong | kDouble));
-}
-
-bool Type::IsTypeName() const {
-  auto p{ToArithmeticType()};
-  return p && (p->type_spec_ & kTypedefName);
+  auto type{ToArithmeticType()};
+  return type && (type->type_spec_ == (kLong | kDouble));
 }
 
 bool Type::IsPointerTy() const { return ToPointerType(); }
@@ -233,13 +219,13 @@ bool Type::IsPointerTy() const { return ToPointerType(); }
 bool Type::IsArrayTy() const { return ToArrayType(); }
 
 bool Type::IsStructTy() const {
-  auto p{ToStructType()};
-  return p && p->is_struct_;
+  auto type{ToStructType()};
+  return type && type->is_struct_;
 }
 
 bool Type::IsUnionTy() const {
-  auto p{ToStructType()};
-  return p && !p->IsStructTy();
+  auto type{ToStructType()};
+  return type && !type->is_struct_;
 }
 
 bool Type::IsStructOrUnionTy() const { return IsStructTy() || IsUnionTy(); }
@@ -247,8 +233,8 @@ bool Type::IsStructOrUnionTy() const { return IsStructTy() || IsUnionTy(); }
 bool Type::IsFunctionTy() const { return ToFunctionType(); }
 
 bool Type::IsCharacterTy() const {
-  auto p{ToArithmeticType()};
-  return p && (p->type_spec_ & kChar);
+  auto type{ToArithmeticType()};
+  return type && (type->type_spec_ & kChar);
 }
 
 bool Type::IsIntegerTy() const {
@@ -328,6 +314,11 @@ std::vector<ObjectExpr*>& Type::StructGetMembers() {
   return ToStructType()->GetMembers();
 }
 
+const std::vector<ObjectExpr*>& Type::FuncGetParams() const {
+  assert(IsStructOrUnionTy());
+  return ToStructType()->GetMembers();
+}
+
 void Type::StructSetMembers(std::vector<ObjectExpr*>& members) {
   assert(IsStructOrUnionTy());
   ToStructType()->SetMembers(members);
@@ -368,11 +359,6 @@ void Type::StructFinish() {
   ToStructType()->Finish();
 }
 
-bool Type::StructHasFlexibleArray() const {
-  assert(IsStructTy());
-  return ToStructType()->HasFlexibleArray();
-}
-
 bool Type::FuncIsVarArgs() const {
   assert(IsFunctionTy());
   return ToFunctionType()->IsVarArgs();
@@ -388,6 +374,11 @@ std::vector<ObjectExpr*>& Type::FuncGetParams() {
   return ToFunctionType()->GetParams();
 }
 
+const std::vector<ObjectExpr*>& Type::StructGetMembers() const {
+  assert(IsFunctionTy());
+  return ToFunctionType()->GetParams();
+}
+
 void Type::FuncSetFuncSpec(std::uint32_t func_spec) {
   assert(IsFunctionTy());
   return ToFunctionType()->SetFuncSpec(func_spec);
@@ -396,11 +387,6 @@ void Type::FuncSetFuncSpec(std::uint32_t func_spec) {
 bool Type::FuncIsInline() const {
   assert(IsFunctionTy());
   return ToFunctionType()->IsInline();
-}
-
-bool Type::FuncIsNoreturn() const {
-  assert(IsFunctionTy());
-  return ToFunctionType()->IsNoreturn();
 }
 
 void Type::FuncSetName(const std::string& name) {
@@ -424,7 +410,7 @@ VoidType* VoidType::Get() {
 }
 
 std::int32_t VoidType::GetWidth() const {
-  // GCC 扩展
+  // GNU 扩展
   return 1;
 }
 
@@ -586,7 +572,7 @@ std::int32_t ArithmeticType::GetWidth() const {
 std::int32_t ArithmeticType::GetAlign() const { return GetWidth(); }
 
 // 它们是同一类型(同名或由 typedef 引入的别名)
-// 类型 char 不与 signed char 兼容, 且不与 unsigned char 兼容
+// 类型 char 不与 signed char 兼容, 且不与 unsigned char 兼容(未实现)
 bool ArithmeticType::Compatible(const Type* other) const {
   assert(other != nullptr);
   return Equal(other);
@@ -716,7 +702,7 @@ bool PointerType::Compatible(const Type* other) const {
 
   if (other->IsPointerTy()) {
     return element_type_->Compatible(
-        dynamic_cast<const PointerType*>(other)->element_type_.GetType());
+        other->ToPointerType()->element_type_.GetType());
   } else {
     return false;
   }
@@ -727,7 +713,7 @@ bool PointerType::Equal(const Type* other) const {
 
   if (other->IsPointerTy()) {
     return element_type_->Equal(
-        dynamic_cast<const PointerType*>(other)->element_type_.GetType());
+        other->ToPointerType()->element_type_.GetType());
   } else {
     return false;
   }
@@ -747,12 +733,14 @@ PointerType::PointerType(QualType element_type)
 /*
  * ArrayType
  */
-ArrayType* ArrayType::Get(QualType contained_type, std::int64_t num_elements) {
+ArrayType* ArrayType::Get(QualType contained_type,
+                          std::optional<std::size_t> num_elements) {
   return new (ArrayTypePool.Allocate()) ArrayType{contained_type, num_elements};
 }
 
 std::int32_t ArrayType::GetWidth() const {
-  return contained_type_->GetWidth() * num_elements_;
+  assert(num_elements_);
+  return contained_type_->GetWidth() * *num_elements_;
 }
 
 std::int32_t ArrayType::GetAlign() const { return contained_type_->GetAlign(); }
@@ -802,20 +790,27 @@ void ArrayType::SetNumElements(std::int64_t num_elements) {
   // 在对元素数量未知的全局或静态数组初始化时, 如果不及时更新 LLVM 类型,
   // 将会导致用于初始化的 llvm::Constant 类型不正确
   llvm_type_ =
-      llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
+      llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements);
 }
 
-std::int64_t ArrayType::GetNumElements() const { return num_elements_; }
+std::int64_t ArrayType::GetNumElements() const {
+  if (num_elements_) {
+    return *num_elements_;
+  } else {
+    return 0;
+  }
+}
 
 QualType ArrayType::GetElementType() const { return contained_type_; }
 
-ArrayType::ArrayType(QualType contained_type, std::int64_t num_elements)
-    : Type{num_elements >= 0},
+ArrayType::ArrayType(QualType contained_type,
+                     std::optional<std::size_t> num_elements)
+    : Type{num_elements.has_value()},
       contained_type_{contained_type},
       num_elements_{num_elements} {
-  if (IsComplete()) {
+  if (num_elements.has_value()) {
     llvm_type_ =
-        llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements_);
+        llvm::ArrayType::get(contained_type_->GetLLVMType(), *num_elements_);
   } else {
     llvm_type_ = llvm::ArrayType::get(contained_type_->GetLLVMType(), 0);
   }
@@ -915,6 +910,10 @@ std::int32_t StructType::GetNumMembers() const { return std::size(members_); }
 
 std::vector<ObjectExpr*>& StructType::GetMembers() { return members_; }
 
+const std::vector<ObjectExpr*>& StructType::GetMembers() const {
+  return members_;
+}
+
 void StructType::SetMembers(std::vector<ObjectExpr*>& members) {
   members_ = members;
 }
@@ -939,73 +938,42 @@ std::int32_t StructType::GetOffset() const { return offset_; }
 
 void StructType::AddMember(ObjectExpr* member) {
   align_ = std::max(align_, member->GetAlign());
-
   // 上一个字段是位域并且尚未将类型添加
-  if (bit_field_used_width_ != 0) {
-    assert(bit_field_base_type_width_ != 0);
-    DoAddBitField();
-  }
-  bit_field_used_width_ = 0;
-  bit_field_base_type_width_ = 0;
+  AddBitFieldBeforeMember();
 
+  auto type{member->GetType()};
   // 柔性数组
-  if (member->GetType()->IsArrayTy() && !member->GetType()->IsComplete()) {
-    has_flexible_array_ = true;
-    auto type{member->GetType()};
-    member->SetType(ArrayType::Get(type->ArrayGetElementType(), 0));
+  if (type->IsArrayTy() && !type->IsComplete()) {
+    type = ArrayType::Get(type->ArrayGetElementType(), 0);
+    member->SetType(type);
   }
 
   auto offset{MakeAlign(offset_, member->GetAlign())};
-  member->SetOffset(offset - count_);
+  // bit field 前后的对齐空间不包括在 offset 中
+  member->SetOffset(offset - bit_field_space_count_);
 
   member->GetIndexs().push_front({this, index_++});
 
   members_.push_back(member);
   scope_->InsertUsual(member);
 
+  AddLLVMType(type);
   if (is_struct_) {
-    offset_ = offset + member->GetType()->GetWidth();
+    offset_ = offset + type->GetWidth();
     width_ = MakeAlign(offset_, align_);
-
-    llvm_types_.push_back(member->GetType()->GetLLVMType());
   } else {
     assert(offset_ == 0);
-    width_ = std::max(width_, member->GetType()->GetWidth());
+    width_ = std::max(width_, type->GetWidth());
     width_ = MakeAlign(width_, align_);
-
-    assert(std::size(llvm_types_) == 0 || std::size(llvm_types_) == 1);
-
-    if (std::empty(llvm_types_)) {
-      llvm_types_.push_back(member->GetType()->GetLLVMType());
-    } else {
-      if (GetLLVMTypeSize(llvm_types_.back()) <
-          GetLLVMTypeSize(member->GetType()->GetLLVMType())) {
-        llvm_types_.back() = member->GetType()->GetLLVMType();
-      } else if (GetLLVMTypeSize(llvm_types_.back()) ==
-                 GetLLVMTypeSize(member->GetType()->GetLLVMType())) {
-        if (llvm_types_.back()->isStructTy() &&
-            !member->GetType()->IsStructOrUnionTy()) {
-          llvm_types_.back() = member->GetType()->GetLLVMType();
-        }
-      }
-    }
   }
 }
 
 // 匿名 struct / union
 void StructType::MergeAnonymous(ObjectExpr* anonymous) {
   align_ = std::max(align_, anonymous->GetAlign());
-
-  // 上一个字段是位域并且尚未将类型添加
-  if (bit_field_used_width_ != 0) {
-    assert(bit_field_base_type_width_ != 0);
-    DoAddBitField();
-  }
-  bit_field_used_width_ = 0;
-  bit_field_base_type_width_ = 0;
+  AddBitFieldBeforeMember();
 
   assert(anonymous->GetType()->IsStructOrUnionTy());
-
   auto anonymous_type{anonymous->GetType()->ToStructType()};
 
   auto offset{MakeAlign(offset_, anonymous->GetAlign())};
@@ -1032,26 +1000,14 @@ void StructType::MergeAnonymous(ObjectExpr* anonymous) {
 
   ++index_;
 
+  AddLLVMType(anonymous_type);
   if (is_struct_) {
     offset_ = offset + anonymous->GetType()->GetWidth();
     width_ = MakeAlign(offset_, align_);
-    llvm_types_.push_back(anonymous->GetType()->GetLLVMType());
   } else {
     assert(offset_ == 0);
     width_ = std::max(width_, anonymous->GetType()->GetWidth());
     width_ = MakeAlign(width_, align_);
-
-    assert(std::size(llvm_types_) == 0 || std::size(llvm_types_) == 1);
-
-    if (std::empty(llvm_types_)) {
-      llvm_types_.push_back(anonymous->GetType()->GetLLVMType());
-    } else {
-      auto last{llvm_types_.back()};
-      if (GetLLVMTypeSize(last) <
-          GetLLVMTypeSize(anonymous->GetType()->GetLLVMType())) {
-        llvm_types_.back() = anonymous->GetType()->GetLLVMType();
-      }
-    }
   }
 }
 
@@ -1084,14 +1040,7 @@ void StructType::AddBitField(ObjectExpr* member) {
       auto last{members_.back()};
       if (!last->GetBitFieldWidth()) {
         width_ = MakeAlign(offset_, align_);
-        if (auto space_width{(width_ - offset_) * 8}) {
-          auto space{GetBitFieldSpace(space_width)};
-          llvm_types_.push_back(space);
-          ++index_;
-
-          offset_ = offset_ + GetLLVMTypeSize(space);
-          width_ = MakeAlign(offset_, align_);
-        }
+        AddSpace(width_ - offset_);
       }
     }
 
@@ -1112,21 +1061,9 @@ void StructType::AddBitField(ObjectExpr* member) {
     members_.push_back(member);
     scope_->InsertUsual(member);
 
-    if (is_struct_) {
-      // 当打包满了或者下一个不是位域字段时再改变 offset_
-    } else {
-      if (std::empty(llvm_types_)) {
-        llvm_types_.push_back(member->GetType()->GetLLVMType());
-      } else {
-        if (GetLLVMTypeSize(member->GetType()->GetLLVMType()) >
-            GetLLVMTypeSize(llvm_types_.back())) {
-          llvm_types_.back() = member->GetType()->GetLLVMType();
-        }
-      }
-
-      assert(offset_ == 0);
-      width_ = std::max(width_, bit_field_base_type_width_ / 8);
-      width_ = MakeAlign(width_, align_);
+    // 如果是 struct , 当打包满了或者下一个不是位域字段时再改变 offset_
+    if (!is_struct_) {
+      UnionAddBitField(member->GetType());
     }
 
     bit_field_used_width_ += bit_width;
@@ -1134,43 +1071,15 @@ void StructType::AddBitField(ObjectExpr* member) {
     assert(bit_field_used_width_ <= bit_field_base_type_width_);
     // 满了
     if (bit_field_used_width_ == bit_field_base_type_width_) {
-      if (is_struct_) {
-        llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
-
-        offset_ += bit_field_base_type_width_ / 8;
-        width_ = MakeAlign(offset_, align_);
-      }
-
-      ++index_;
-
-      bit_field_used_width_ = 0;
-      bit_field_base_type_width_ = 0;
+      BitFieldPacked();
     }
   } else {
     if (bit_width == 0) {
-      if (IsUnionTy() || member->GetType()->IsBoolTy()) {
+      if (IsUnionTy() || member->GetType()->IsCharacterTy()) {
         return;
       }
 
-      assert(bit_field_base_type_width_ != 0);
-
-      llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
-      ++index_;
-
-      offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
-      width_ = MakeAlign(offset_, align_);
-
-      auto space{GetBitFieldSpace(bit_field_base_type_width_ -
-                                  MakeAlign(bit_field_used_width_, 8))};
-
-      bit_field_used_width_ = 0;
-      bit_field_base_type_width_ = 0;
-
-      llvm_types_.push_back(space);
-      ++index_;
-
-      offset_ += GetLLVMTypeSize(space);
-      width_ = MakeAlign(offset_, align_);
+      AddSpaceBetweenBitField();
     } else {
       auto new_bit_field_base_type_width{member->GetType()->GetWidth() * 8};
       if (new_bit_field_base_type_width > bit_field_base_type_width_) {
@@ -1179,25 +1088,8 @@ void StructType::AddBitField(ObjectExpr* member) {
 
       if (bit_field_used_width_ + bit_width > bit_field_base_type_width_ &&
           IsStruct()) {
-        assert(bit_field_base_type_width_ != 0);
-
-        llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
-        ++index_;
-
-        offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
-        width_ = MakeAlign(offset_, align_);
-
-        auto space{GetBitFieldSpace(bit_field_base_type_width_ -
-                                    MakeAlign(bit_field_used_width_, 8))};
-
-        bit_field_used_width_ = 0;
+        AddSpaceBetweenBitField();
         bit_field_base_type_width_ = new_bit_field_base_type_width;
-
-        llvm_types_.push_back(space);
-        ++index_;
-
-        offset_ += +GetLLVMTypeSize(space);
-        width_ = MakeAlign(offset_, align_);
       }
 
       if (bit_field_used_width_ == 0) {
@@ -1209,23 +1101,12 @@ void StructType::AddBitField(ObjectExpr* member) {
         members_.push_back(member);
         scope_->InsertUsual(member);
 
-        if (is_struct_) {
-        } else {
-          if (std::empty(llvm_types_)) {
-            llvm_types_.push_back(member->GetType()->GetLLVMType());
-          } else {
-            if (GetLLVMTypeSize(member->GetType()->GetLLVMType()) >
-                GetLLVMTypeSize(llvm_types_.back())) {
-              llvm_types_.back() = member->GetType()->GetLLVMType();
-            }
-          }
-
-          assert(offset_ == 0);
-          width_ = std::max(width_, bit_field_base_type_width_ / 8);
-          width_ = MakeAlign(width_, align_);
+        if (!is_struct_) {
+          UnionAddBitField(member->GetType());
         }
       } else {
         member->SetOffset(offset_);
+
         if (is_struct_) {
           member->SetBitFieldBegin(bit_field_used_width_);
         } else {
@@ -1237,20 +1118,8 @@ void StructType::AddBitField(ObjectExpr* member) {
         members_.push_back(member);
         scope_->InsertUsual(member);
 
-        if (is_struct_) {
-        } else {
-          if (std::empty(llvm_types_)) {
-            llvm_types_.push_back(member->GetType()->GetLLVMType());
-          } else {
-            if (GetLLVMTypeSize(member->GetType()->GetLLVMType()) >
-                GetLLVMTypeSize(llvm_types_.back())) {
-              llvm_types_.back() = member->GetType()->GetLLVMType();
-            }
-          }
-
-          assert(offset_ == 0);
-          width_ = std::max(width_, bit_field_base_type_width_ / 8);
-          width_ = MakeAlign(width_, align_);
+        if (!is_struct_) {
+          UnionAddBitField(member->GetType());
         }
       }
 
@@ -1258,17 +1127,7 @@ void StructType::AddBitField(ObjectExpr* member) {
 
       assert(bit_field_used_width_ <= bit_field_base_type_width_);
       if (bit_field_used_width_ == bit_field_base_type_width_) {
-        if (is_struct_) {
-          llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
-
-          offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
-          width_ = MakeAlign(offset_, align_);
-        }
-
-        ++index_;
-
-        bit_field_used_width_ = 0;
-        bit_field_base_type_width_ = 0;
+        BitFieldPacked();
       }
     }
   }
@@ -1277,8 +1136,7 @@ void StructType::AddBitField(ObjectExpr* member) {
 void StructType::Finish() {
   if (bit_field_used_width_ != 0) {
     align_ = std::max(align_, members_.back()->GetType()->GetAlign());
-    assert(bit_field_base_type_width_ != 0);
-    DoAddBitField();
+    AddBitFieldBeforeMember();
   }
 
   if (!is_struct_) {
@@ -1295,25 +1153,7 @@ void StructType::Finish() {
                                          obj->GetBitFieldWidth();
                                 }),
                  std::end(members_));
-
-  // Print();
 }
-
-void StructType::Print() const {
-  fmt::print("struct name: {}, sizeof: {}, align: {}\n", name_, GetWidth(),
-             GetAlign());
-  for (const auto& item : members_) {
-    fmt::print(
-        "name: {}, offset: {}, begin: {}, width: {}, index: {}, type: {}\n",
-        item->GetName(), item->GetOffset(), item->GetBitFieldBegin(),
-        item->GetBitFieldWidth(), item->GetIndexs().front().second,
-        item->GetType()->ToString());
-  }
-  fmt::print("llvm type: {}\n", LLVMTypeToStr(llvm_type_));
-  fmt::print("-----------\n");
-}
-
-bool StructType::HasFlexibleArray() const { return has_flexible_array_; }
 
 std::int32_t StructType::MakeAlign(std::int32_t offset, std::int32_t align) {
   assert(offset >= 0);
@@ -1340,7 +1180,37 @@ StructType::StructType(bool is_struct, const std::string& name, Scope* parent)
   }
 }
 
-void StructType::DoAddBitField() {
+void StructType::AddLLVMType(Type* type) {
+  if (is_struct_) {
+    llvm_types_.push_back(type->GetLLVMType());
+  } else {
+    assert(std::size(llvm_types_) == 0 || std::size(llvm_types_) == 1);
+
+    if (std::empty(llvm_types_)) {
+      llvm_types_.push_back(type->GetLLVMType());
+    } else {
+      auto& back{llvm_types_.back()};
+      auto llvm_type{type->GetLLVMType()};
+
+      if (GetLLVMTypeSize(back) < GetLLVMTypeSize(llvm_type)) {
+        back = llvm_type;
+      } else if (GetLLVMTypeSize(back) == GetLLVMTypeSize(llvm_type)) {
+        if (back->isStructTy() && !llvm_type->isStructTy()) {
+          back = llvm_type;
+        }
+      }
+    }
+  }
+}
+
+void StructType::AddBitFieldBeforeMember() {
+  if (bit_field_used_width_ == 0) {
+    bit_field_base_type_width_ = 0;
+    return;
+  }
+
+  assert(bit_field_base_type_width_ != 0);
+
   if (is_struct_) {
     llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
     ++index_;
@@ -1352,7 +1222,7 @@ void StructType::DoAddBitField() {
       auto space{GetBitFieldSpace(space_width)};
       llvm_types_.push_back(space);
       ++index_;
-      count_ += width_ - offset_;
+      bit_field_space_count_ += width_ - offset_;
 
       offset_ += GetLLVMTypeSize(space);
       width_ = MakeAlign(offset_, align_);
@@ -1372,6 +1242,71 @@ void StructType::DoAddBitField() {
     width_ = std::max(width_, MakeAlign(bit_field_used_width_, 8) / 8);
     width_ = MakeAlign(width_, align_);
   }
+
+  bit_field_used_width_ = 0;
+  bit_field_base_type_width_ = 0;
+}
+
+void StructType::AddSpace(std::int32_t width) {
+  if (auto space_width{width * 8}) {
+    auto space{GetBitFieldSpace(space_width)};
+    llvm_types_.push_back(space);
+    ++index_;
+
+    offset_ = offset_ + GetLLVMTypeSize(space);
+    width_ = MakeAlign(offset_, align_);
+  }
+}
+
+void StructType::UnionAddBitField(Type* type) {
+  if (std::empty(llvm_types_)) {
+    llvm_types_.push_back(type->GetLLVMType());
+  } else {
+    if (GetLLVMTypeSize(type->GetLLVMType()) >
+        GetLLVMTypeSize(llvm_types_.back())) {
+      llvm_types_.back() = type->GetLLVMType();
+    }
+  }
+
+  assert(offset_ == 0);
+  width_ = std::max(width_, bit_field_base_type_width_ / 8);
+  width_ = MakeAlign(width_, align_);
+}
+
+void StructType::BitFieldPacked() {
+  if (is_struct_) {
+    llvm_types_.push_back(GetBitFieldSpace(bit_field_base_type_width_));
+
+    offset_ += bit_field_base_type_width_ / 8;
+    width_ = MakeAlign(offset_, align_);
+
+    ++index_;
+  }
+
+  bit_field_used_width_ = 0;
+  bit_field_base_type_width_ = 0;
+}
+
+void StructType::AddSpaceBetweenBitField() {
+  assert(bit_field_base_type_width_ != 0);
+
+  llvm_types_.push_back(GetBitFieldSpace(bit_field_used_width_));
+  ++index_;
+
+  offset_ += MakeAlign(bit_field_used_width_, 8) / 8;
+  width_ = MakeAlign(offset_, align_);
+
+  auto space{GetBitFieldSpace(bit_field_base_type_width_ -
+                              MakeAlign(bit_field_used_width_, 8))};
+
+  bit_field_used_width_ = 0;
+  bit_field_base_type_width_ = 0;
+
+  llvm_types_.push_back(space);
+  ++index_;
+
+  offset_ += GetLLVMTypeSize(space);
+  width_ = MakeAlign(offset_, align_);
 }
 
 /*
@@ -1385,7 +1320,7 @@ FunctionType* FunctionType::Get(QualType return_type,
 }
 
 std::int32_t FunctionType::GetWidth() const {
-  // GCC 扩展
+  // GNU 扩展
   return 1;
 }
 
@@ -1453,13 +1388,15 @@ std::int32_t FunctionType::GetNumParams() const { return std::size(params_); }
 
 std::vector<ObjectExpr*>& FunctionType::GetParams() { return params_; }
 
+const std::vector<ObjectExpr*>& FunctionType::GetParams() const {
+  return params_;
+}
+
 void FunctionType::SetFuncSpec(std::uint32_t func_spec) {
   func_spec_ = func_spec;
 }
 
 bool FunctionType::IsInline() const { return func_spec_ & kInline; }
-
-bool FunctionType::IsNoreturn() const { return func_spec_ & kNoreturn; }
 
 void FunctionType::SetName(const std::string& name) { name_ = name; }
 

@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -122,7 +123,6 @@ class Type {
 
   std::string ToString() const;
   llvm::Type* GetLLVMType() const;
-  void SetLLVMType(llvm::Type* type);
 
   VoidType* ToVoidType();
   ArithmeticType* ToArithmeticType();
@@ -151,7 +151,6 @@ class Type {
   bool IsFloatTy() const;
   bool IsDoubleTy() const;
   bool IsLongDoubleTy() const;
-  bool IsTypeName() const;
 
   bool IsPointerTy() const;
   bool IsArrayTy() const;
@@ -187,6 +186,7 @@ class Type {
   void StructSetName(const std::string& name);
   const std::string& StructGetName() const;
   std::vector<ObjectExpr*>& StructGetMembers();
+  const std::vector<ObjectExpr*>& StructGetMembers() const;
   void StructSetMembers(std::vector<ObjectExpr*>& members);
   ObjectExpr* StructGetMember(const std::string& name) const;
   QualType StructGetMemberType(std::int32_t i) const;
@@ -195,19 +195,19 @@ class Type {
   void StructMergeAnonymous(ObjectExpr* anonymous);
   std::int32_t StructGetOffset() const;
   void StructFinish();
-  bool StructHasFlexibleArray() const;
 
   bool FuncIsVarArgs() const;
   QualType FuncGetReturnType() const;
   std::vector<ObjectExpr*>& FuncGetParams();
+  const std::vector<ObjectExpr*>& FuncGetParams() const;
   void FuncSetFuncSpec(std::uint32_t func_spec);
   bool FuncIsInline() const;
-  bool FuncIsNoreturn() const;
   void FuncSetName(const std::string& name);
   const std::string& FuncGetName() const;
 
  protected:
   explicit Type(bool complete);
+
   llvm::Type* llvm_type_{};
 
  private:
@@ -272,7 +272,7 @@ class PointerType : public Type {
 class ArrayType : public Type {
  public:
   static ArrayType* Get(QualType contained_type,
-                        std::int64_t num_elements = -1);
+                        std::optional<std::size_t> num_elements = {});
 
   virtual std::int32_t GetWidth() const override;
   virtual std::int32_t GetAlign() const override;
@@ -284,10 +284,10 @@ class ArrayType : public Type {
   QualType GetElementType() const;
 
  private:
-  ArrayType(QualType contained_type, std::int64_t num_elements);
+  ArrayType(QualType contained_type, std::optional<std::size_t> num_elements);
 
   QualType contained_type_;
-  std::int64_t num_elements_{};
+  std::optional<std::int64_t> num_elements_;
 };
 
 class StructType : public Type {
@@ -309,6 +309,7 @@ class StructType : public Type {
 
   std::int32_t GetNumMembers() const;
   std::vector<ObjectExpr*>& GetMembers();
+  const std::vector<ObjectExpr*>& GetMembers() const;
   void SetMembers(std::vector<ObjectExpr*>& members);
   ObjectExpr* GetMember(const std::string& name) const;
   QualType GetMemberType(std::int32_t i) const;
@@ -319,9 +320,6 @@ class StructType : public Type {
   void MergeAnonymous(ObjectExpr* anonymous);
   void AddBitField(ObjectExpr* member);
   void Finish();
-  void Print() const;
-
-  bool HasFlexibleArray() const;
 
   // 计算新成员的开始位置
   static std::int32_t MakeAlign(std::int32_t offset, std::int32_t align);
@@ -329,7 +327,12 @@ class StructType : public Type {
  private:
   StructType(bool is_struct, const std::string& name, Scope* parent);
 
-  void DoAddBitField();
+  void AddLLVMType(Type* type);
+  void AddBitFieldBeforeMember();
+  void AddSpace(std::int32_t width);
+  void UnionAddBitField(Type* type);
+  void BitFieldPacked();
+  void AddSpaceBetweenBitField();
 
   std::vector<llvm::Type*> llvm_types_;
 
@@ -345,10 +348,9 @@ class StructType : public Type {
   std::int8_t bit_field_used_width_{};
   std::int8_t bit_field_base_type_width_{};
 
-  bool has_flexible_array_{false};
   std::int32_t index_{};
 
-  std::int32_t count_{};
+  std::int32_t bit_field_space_count_{};
 };
 
 class FunctionType : public Type {
@@ -366,9 +368,9 @@ class FunctionType : public Type {
   QualType GetReturnType() const;
   std::int32_t GetNumParams() const;
   std::vector<ObjectExpr*>& GetParams();
+  const std::vector<ObjectExpr*>& GetParams() const;
   void SetFuncSpec(std::uint32_t func_spec);
   bool IsInline() const;
-  bool IsNoreturn() const;
   void SetName(const std::string& name);
   const std::string& GetName() const;
 
