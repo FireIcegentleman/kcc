@@ -76,4 +76,7 @@ llvm::Type *GetBitFieldSpace(std::int8_t width);
 
 std::int32_t GetLLVMTypeSize(llvm::Type *type);
 
+llvm::Constant *GetBitFieldValue(llvm::Constant *value, std::int32_t size,
+                                 std::int32_t width, std::int32_t begin);
+
 }  // namespace kcc

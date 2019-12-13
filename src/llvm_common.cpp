@@ -360,4 +360,52 @@ std::int32_t GetLLVMTypeSize(llvm::Type *type) {
   return Module->getDataLayout().getTypeAllocSize(type);
 }
 
+llvm::Constant *GetBitFieldValue(llvm::Constant *value, std::int32_t size,
+                                 std::int32_t width, std::int32_t begin) {
+  if (size == 8) {
+    std::uint8_t zero{};
+
+    // ....11111
+    std::uint8_t low_one;
+    if (begin) {
+      low_one = ~zero >> (size - begin);
+    } else {
+      low_one = 0;
+    }
+
+    // 111.....
+    std::uint8_t high_one;
+    if (auto bit{begin + width}; bit == size) {
+      high_one = 0;
+    } else {
+      high_one = ~zero << bit;
+    }
+
+    return llvm::ConstantExpr::getAnd(
+        value,
+        llvm::ConstantInt::get(Builder.getInt32Ty(), low_one | high_one));
+  } else if (size == 32) {
+    std::uint32_t low_one;
+    if (begin) {
+      low_one = ~0U >> (size - begin);
+    } else {
+      low_one = 0;
+    }
+
+    std::uint32_t high_one;
+    if (auto bit{begin + width}; bit == size) {
+      high_one = 0;
+    } else {
+      high_one = ~0U << bit;
+    }
+
+    return llvm::ConstantExpr::getAnd(
+        value,
+        llvm::ConstantInt::get(Builder.getInt32Ty(), low_one | high_one));
+  } else {
+    assert(false);
+    return nullptr;
+  }
+}
+
 }  // namespace kcc

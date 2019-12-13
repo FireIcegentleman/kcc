@@ -6,8 +6,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stack>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -165,8 +167,7 @@ class Parser {
                                    QualType type, bool designated,
                                    bool force_brace);
   void ParseArrayInitializer(std::vector<Initializer>& inits, Type* type,
-                             std::int32_t designated);
-  llvm::Constant* ParseLiteralInitializer(Type* type);
+                             bool designated);
   void ParseStructInitializer(std::vector<Initializer>& inits, Type* type,
                               bool designated);
 
@@ -175,10 +176,9 @@ class Parser {
    */
   llvm::Constant* ParseConstantInitializer(QualType type, bool designated,
                                            bool force_brace);
-  llvm::Constant* ParseConstantArrayInitializer(Type* type,
-                                                std::int32_t designated);
-  llvm::Constant* ParseConstantLiteralInitializer(Type* type);
+  llvm::Constant* ParseConstantArrayInitializer(Type* type, bool designated);
   llvm::Constant* ParseConstantStructInitializer(Type* type, bool designated);
+  llvm::Constant* ParseLiteralInitializer(Type* type, bool need_ptr);
 
   /*
    * GNU 扩展

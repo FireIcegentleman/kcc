@@ -279,12 +279,12 @@ QualType Type::PointerGetElementType() const {
   return ToPointerType()->GetElementType();
 }
 
-void Type::ArraySetNumElements(std::int64_t num_elements) {
+void Type::ArraySetNumElements(std::size_t num_elements) {
   assert(IsArrayTy());
   ToArrayType()->SetNumElements(num_elements);
 }
 
-std::int64_t Type::ArrayGetNumElements() const {
+std::size_t Type::ArrayGetNumElements() const {
   assert(IsArrayTy());
   return ToArrayType()->GetNumElements();
 }
@@ -784,7 +784,7 @@ bool ArrayType::Equal(const Type* other) const {
   }
 }
 
-void ArrayType::SetNumElements(std::int64_t num_elements) {
+void ArrayType::SetNumElements(std::size_t num_elements) {
   assert(num_elements > 0);
   num_elements_ = num_elements;
   // 在对元素数量未知的全局或静态数组初始化时, 如果不及时更新 LLVM 类型,
@@ -793,7 +793,7 @@ void ArrayType::SetNumElements(std::int64_t num_elements) {
       llvm::ArrayType::get(contained_type_->GetLLVMType(), num_elements);
 }
 
-std::int64_t ArrayType::GetNumElements() const {
+std::size_t ArrayType::GetNumElements() const {
   if (num_elements_) {
     return *num_elements_;
   } else {

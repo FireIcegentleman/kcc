@@ -178,8 +178,8 @@ class Type {
 
   QualType PointerGetElementType() const;
 
-  void ArraySetNumElements(std::int64_t num_elements);
-  std::int64_t ArrayGetNumElements() const;
+  void ArraySetNumElements(std::size_t num_elements);
+  std::size_t ArrayGetNumElements() const;
   QualType ArrayGetElementType() const;
 
   bool StructHasName() const;
@@ -279,8 +279,8 @@ class ArrayType : public Type {
   virtual bool Compatible(const Type* other) const override;
   virtual bool Equal(const Type* other) const override;
 
-  void SetNumElements(std::int64_t num_elements);
-  std::int64_t GetNumElements() const;
+  void SetNumElements(std::size_t num_elements);
+  std::size_t GetNumElements() const;
   QualType GetElementType() const;
 
  private:

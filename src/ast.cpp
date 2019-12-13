@@ -757,7 +757,7 @@ std::pair<llvm::Constant*, llvm::Constant*> StringLiteralExpr::Create() const {
   switch (width) {
     case 1: {
       std::vector<std::uint8_t> values;
-      for (std::int64_t i{}; i < size; ++i) {
+      for (std::size_t i{}; i < size; ++i) {
         values.push_back(*reinterpret_cast<const std::uint8_t*>(str));
         str += 1;
       }
@@ -767,7 +767,7 @@ std::pair<llvm::Constant*, llvm::Constant*> StringLiteralExpr::Create() const {
     } break;
     case 2: {
       std::vector<std::uint16_t> values;
-      for (std::int64_t i{}; i < size; ++i) {
+      for (std::size_t i{}; i < size; ++i) {
         values.push_back(*reinterpret_cast<const std::uint16_t*>(str));
         str += 2;
       }
@@ -776,7 +776,7 @@ std::pair<llvm::Constant*, llvm::Constant*> StringLiteralExpr::Create() const {
     } break;
     case 4: {
       std::vector<std::uint32_t> values;
-      for (std::int64_t i{}; i < size; ++i) {
+      for (std::size_t i{}; i < size; ++i) {
         values.push_back(*reinterpret_cast<const std::uint32_t*>(str));
         str += 4;
       }
