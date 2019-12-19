@@ -16,11 +16,12 @@ file(GLOB cppsrc src/*.cpp)
 file(GLOB cppheader src/*.h)
 file(GLOB cmakesrc CMakeLists.txt cmake/*.cmake)
 
-if(NOT (CMAKE_BUILD_TYPE MATCHES "Debug"))
-  set(sanitizer "None")
-else()
+if((CMAKE_BUILD_TYPE MATCHES "Debug") OR (CMAKE_BUILD_TYPE MATCHES
+                                          "RelWithDebInfo"))
   # Address Thread Undefined None
   set(sanitizer "Undefined")
+else()
+  set(sanitizer "None")
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -43,7 +44,8 @@ add_definitions(-DKCC_VERSION="${PROJECT_VERSION}" -DFMT_STRING_ALIAS
 
 add_executable(${PROJECT_NAME} ${cppsrc})
 
-if(CMAKE_BUILD_TYPE MATCHES "Debug")
+if((CMAKE_BUILD_TYPE MATCHES "Debug") OR (CMAKE_BUILD_TYPE MATCHES
+                                          "RelWithDebInfo"))
   add_definitions(-DDEV)
   include(format)
 endif()

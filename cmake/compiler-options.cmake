@@ -5,17 +5,22 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   add_compile_options(-Wall -Wextra -Wpedantic -Werror)
-  if(CMAKE_BUILD_TYPE MATCHES "Debug")
+  if((CMAKE_BUILD_TYPE MATCHES "Debug") OR (CMAKE_BUILD_TYPE MATCHES
+                                            "RelWithDebInfo"))
     append("--coverage" CMAKE_CXX_FLAGS)
   endif()
 else()
   add_compile_options(-Wall -Wextra -Wpedantic -Werror)
   add_link_options(-fuse-ld=lld)
-  if(CMAKE_BUILD_TYPE MATCHES "Debug")
+
+  if((CMAKE_BUILD_TYPE MATCHES "Debug") OR (CMAKE_BUILD_TYPE MATCHES
+                                            "RelWithDebInfo"))
+    append("-fstandalone-debug" CMAKE_CXX_FLAGS)
     append("-fprofile-instr-generate -fcoverage-mapping" CMAKE_CXX_FLAGS)
   endif()
 endif()
 
-if(NOT (CMAKE_BUILD_TYPE MATCHES "Debug"))
+if((CMAKE_BUILD_TYPE MATCHES "Release") OR (CMAKE_BUILD_TYPE MATCHES
+                                            "RelWithDebInfo"))
   append("-flto" CMAKE_CXX_FLAGS)
 endif()
